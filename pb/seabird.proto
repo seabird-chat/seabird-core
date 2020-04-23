@@ -1,0 +1,103 @@
+syntax = "proto3";
+
+option go_package = ".;pb";
+
+package seabird;
+
+service Seabird {
+  rpc Connect (ConnectRequest) returns (ConnectResponse) {}
+  rpc EventStream(EventStreamRequest) returns (stream SeabirdEvent) {}
+
+  rpc SendMessage(SendMessageRequest) returns (SendMessageResponse) {}
+  rpc SendReplyMessage(SendReplyMessageRequest) returns (SendReplyMessageResponse) {}
+
+  rpc GetChannel(ChannelRequest) returns (ChannelResponse) {}
+  rpc JoinChannel(JoinChannelRequest) returns (JoinChannelResponse) {}
+  rpc LeaveChannel(LeaveChannelRequest) returns (LeaveChannelResponse) {}
+}
+
+message ConnectRequest {
+  int32 protocolVersion = 1;
+}
+
+message ConnectResponse {
+  string clientId = 1;
+}
+
+message EventStreamRequest {}
+
+message SeabirdEvent {
+  oneof Event {
+    MessageEvent message = 1;
+    PrivateMessageEvent privateMessage = 2;
+    MentionEvent mention = 3;
+    CommandEvent command = 4;
+  }
+}
+
+message MessageEvent {
+  string channel = 1;
+  string sender = 2;
+  string message = 3;
+}
+
+message PrivateMessageEvent {
+  string sender = 1;
+  string message = 3;
+}
+
+message MentionEvent {
+  string channel = 1;
+  string sender = 2;
+  string message = 3;
+}
+
+message CommandEvent {
+  string channel = 1;
+  string sender = 2;
+  string command = 3;
+  string arg = 4;
+}
+
+message SendMessageRequest {
+  string channel = 1;
+  string message = 2;
+}
+
+message SendMessageResponse {}
+
+message SendReplyMessageRequest {
+  SeabirdEvent target = 1;
+  string message = 2;
+  bool mention = 3;
+}
+
+message SendReplyMessageResponse {}
+
+message ChannelRequest {
+  string name = 1;
+}
+
+message User {
+  string nick = 1;
+  string name = 2;
+  string host = 3;
+}
+
+message ChannelResponse {
+  string name = 1;
+  string topic = 2;
+  repeated User user = 3;
+}
+
+message JoinChannelRequest {
+  string name = 1;
+}
+
+message JoinChannelResponse {}
+
+message LeaveChannelRequest {
+  string name = 1;
+}
+
+message LeaveChannelResponse {}

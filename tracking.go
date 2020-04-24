@@ -94,6 +94,11 @@ func (t *Tracker) handleRplTopic(logger *logrus.Entry, client *irc.Client, msg *
 		return
 	}
 
+	logger.WithFields(logrus.Fields{
+		"channel": channel,
+		"topic":   topic,
+	}).Debug("Topic set in channel")
+
 	t.channels[channel].Topic = topic
 }
 
@@ -116,8 +121,17 @@ func (t *Tracker) handleJoin(logger *logrus.Entry, client *irc.Client, msg *irc.
 			return
 		}
 
+		logger.WithFields(logrus.Fields{
+			"channel": channel,
+		}).Debug("Tracking channel")
+
 		t.channels[channel] = &ChannelState{Name: channel, Users: make(map[string]struct{})}
 	}
+
+	logger.WithFields(logrus.Fields{
+		"nick":    user,
+		"channel": channel,
+	}).Debug("User joined channel")
 
 	state := t.channels[channel]
 	state.Users[user] = struct{}{}
@@ -140,8 +154,17 @@ func (t *Tracker) handlePart(logger *logrus.Entry, client *irc.Client, msg *irc.
 	}
 
 	if user == client.CurrentNick() {
+		logger.WithFields(logrus.Fields{
+			"channel": channel,
+		}).Debug("Done tracking channel")
+
 		delete(t.channels, channel)
 	} else {
+		logger.WithFields(logrus.Fields{
+			"nick":    user,
+			"channel": channel,
+		}).Debug("User left channel")
+
 		state := t.channels[channel]
 		delete(state.Users, user)
 	}
@@ -152,7 +175,7 @@ func (t *Tracker) handleKick(logger *logrus.Entry, client *irc.Client, msg *irc.
 		return
 	}
 
-	//actor := m.Prefix.Name
+	actor := msg.Prefix.Name
 	user := msg.Params[1]
 	channel := msg.Params[0]
 
@@ -163,6 +186,12 @@ func (t *Tracker) handleKick(logger *logrus.Entry, client *irc.Client, msg *irc.
 		logger.Warn("Got KICK message for untracked channel")
 		return
 	}
+
+	logger.WithFields(logrus.Fields{
+		"actor":   actor,
+		"nick":    user,
+		"channel": channel,
+	}).Debug("User was kicked from channel")
 
 	if user == client.CurrentNick() {
 		delete(t.channels, channel)
@@ -179,6 +208,10 @@ func (t *Tracker) handleQuit(logger *logrus.Entry, client *irc.Client, msg *irc.
 
 	user := msg.Prefix.Name
 
+	logger.WithFields(logrus.Fields{
+		"nick": user,
+	}).Debug("User has quit")
+
 	t.Lock()
 	defer t.Unlock()
 
@@ -194,6 +227,11 @@ func (t *Tracker) handleNick(logger *logrus.Entry, client *irc.Client, msg *irc.
 
 	oldUser := msg.Prefix.Name
 	newUser := msg.Params[0]
+
+	logger.WithFields(logrus.Fields{
+		"old_nick": oldUser,
+		"new_nick": newUser,
+	}).Debug("Renaming user")
 
 	t.Lock()
 	defer t.Unlock()
@@ -223,7 +261,7 @@ func (t *Tracker) handleRplNamReply(logger *logrus.Entry, client *irc.Client, ms
 	defer t.Unlock()
 
 	if _, ok := t.channels[channel]; !ok {
-		// Warning: got name info for channel we don't know about
+		logger.Warn("Got RPL_NAMREPLY message for untracked channel")
 		return
 	}
 

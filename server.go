@@ -25,16 +25,26 @@ import (
 
 // TODO: add configuration of timeouts and command prefix
 
-const COMMAND_PREFIX = ","
-
 type Server struct {
 	client     *irc.Client
 	grpcServer *grpc.Server
+
+	config ServerConfig
 
 	pluginLock sync.RWMutex
 	plugins    map[string]*pluginState
 
 	tracker *Tracker
+}
+
+type ServerConfig struct {
+	IrcHost       string
+	CommandPrefix string
+	BindHost      string
+	Nick          string
+	User          string
+	Name          string
+	Pass          string
 }
 
 type pluginState struct {
@@ -48,10 +58,16 @@ type pluginState struct {
 	droppedMessages int
 }
 
-func NewServer() (*Server, error) {
-	c, err := tls.Dial("tcp", "irc.hs.gy:9999", &tls.Config{
-		InsecureSkipVerify: true,
-	})
+func NewServer(config ServerConfig) (*Server, error) {
+	var c net.Conn
+	var err error
+
+	if strings.HasPrefix(config.IrcHost, "+") {
+		c, err = tls.Dial("tcp", config.IrcHost[1:], nil)
+	} else {
+		c, err = net.Dial("tcp", config.IrcHost)
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -59,12 +75,15 @@ func NewServer() (*Server, error) {
 	s := &Server{
 		plugins: make(map[string]*pluginState),
 		tracker: NewTracker(),
+
+		config: config,
 	}
 
 	client := irc.NewClient(c, irc.ClientConfig{
-		Nick:    "seabird51",
-		User:    "seabird",
-		Name:    "Seabird Bot",
+		Nick:    config.Nick,
+		User:    config.User,
+		Name:    config.Name,
+		Pass:    config.Pass,
 		Handler: irc.HandlerFunc(s.ircHandler),
 	})
 
@@ -110,7 +129,7 @@ func (s *Server) ircHandler(client *irc.Client, msg *irc.Message) {
 				Message: message,
 			}}
 		} else {
-			if strings.HasPrefix(lastArg, COMMAND_PREFIX) {
+			if strings.HasPrefix(lastArg, s.config.CommandPrefix) {
 				msgParts := strings.SplitN(lastArg, " ", 2)
 
 				if len(msgParts) != 2 {
@@ -119,7 +138,7 @@ func (s *Server) ircHandler(client *irc.Client, msg *irc.Message) {
 
 				channel := msg.Params[0]
 				sender := msg.Prefix.Name
-				command := strings.TrimPrefix(msgParts[0], COMMAND_PREFIX)
+				command := strings.TrimPrefix(msgParts[0], s.config.CommandPrefix)
 				arg := msgParts[1]
 
 				logger.WithFields(logrus.Fields{

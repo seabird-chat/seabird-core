@@ -2,51 +2,72 @@ package seabird
 
 import (
 	"strings"
+	"sync"
 
+	"github.com/sirupsen/logrus"
 	irc "gopkg.in/irc.v3"
 )
 
-func (s *Server) handleISupport(msg *irc.Message) {
+type ISupportTracker struct {
+	sync.RWMutex
+
+	data map[string]string
+}
+
+func NewISupportTracker() *ISupportTracker {
+	return &ISupportTracker{
+		data: map[string]string{
+			"PREFIX": "(ov)@+",
+		},
+	}
+}
+
+func (t *ISupportTracker) handleMessage(logger *logrus.Entry, msg *irc.Message) {
+	// Ensure only ISupport messages go through here
+	if msg.Command != "005" {
+		return
+	}
+
 	if len(msg.Params) < 2 {
+		logger.Warn("Malformed ISupport message")
 		return
 	}
 
 	// Check for really old servers (or servers which based 005 off of rfc2812.
 	if !strings.HasSuffix(msg.Trailing(), "server") {
-		// This server doesn't appear to support ISupport messages. Here there
-		// be dragons.
+		logger.Warn("This server doesn't appear to support ISupport messages. Here there be dragons.")
 		return
 	}
 
-	s.isupportLock.Lock()
-	defer s.isupportLock.Unlock()
+	t.Lock()
+	defer t.Unlock()
 
 	for _, param := range msg.Params[1 : len(msg.Params)-1] {
 		data := strings.SplitN(param, "=", 2)
 		if len(data) < 2 {
-			s.isupport[data[0]] = ""
+			t.data[data[0]] = ""
 			continue
 		}
 
-		s.isupport[data[0]] = data[1]
+		t.data[data[0]] = data[1]
 	}
 }
 
 // IsEnabled will check for boolean ISupport values
-func (s *Server) isupportIsEnabled(key string) bool {
-	s.isupportLock.RLock()
-	defer s.isupportLock.RUnlock()
+func (t *ISupportTracker) IsEnabled(key string) bool {
+	t.RLock()
+	defer t.RUnlock()
 
-	_, ok := s.isupport[key]
+	_, ok := t.data[key]
 	return ok
 }
 
-// GetList will check for list ISupportValues
-func (s *Server) isupportList(key string) ([]string, bool) {
-	s.isupportLock.RLock()
-	defer s.isupportLock.RUnlock()
+// GetList will check for list ISupport values
+func (t *ISupportTracker) GetList(key string) ([]string, bool) {
+	t.RLock()
+	defer t.RUnlock()
 
-	data, ok := s.isupport[key]
+	data, ok := t.data[key]
 	if !ok {
 		return nil, false
 	}
@@ -55,11 +76,11 @@ func (s *Server) isupportList(key string) ([]string, bool) {
 }
 
 // GetMap will check for map ISupport values
-func (s *Server) isupportMap(key string) (map[string]string, bool) {
-	s.isupportLock.RLock()
-	defer s.isupportLock.RUnlock()
+func (t *ISupportTracker) GetMap(key string) (map[string]string, bool) {
+	t.RLock()
+	defer t.RUnlock()
 
-	data, ok := s.isupport[key]
+	data, ok := t.data[key]
 	if !ok {
 		return nil, false
 	}
@@ -79,17 +100,17 @@ func (s *Server) isupportMap(key string) (map[string]string, bool) {
 }
 
 // GetRaw will get the raw ISupport values
-func (s *Server) isupportRaw(key string) (string, bool) {
-	s.isupportLock.RLock()
-	defer s.isupportLock.RUnlock()
+func (t *ISupportTracker) GetRaw(key string) (string, bool) {
+	t.RLock()
+	defer t.RUnlock()
 
-	ret, ok := s.isupport[key]
+	ret, ok := t.data[key]
 	return ret, ok
 }
 
-func (s *Server) isupportPrefixMap() (map[rune]rune, bool) {
+func (t *ISupportTracker) GetPrefixMap() (map[rune]rune, bool) {
 	// Sample: (qaohv)~&@%+
-	prefix, _ := s.isupportRaw("PREFIX")
+	prefix, _ := t.GetRaw("PREFIX")
 
 	// We only care about the symbols
 	i := strings.IndexByte(prefix, ')')

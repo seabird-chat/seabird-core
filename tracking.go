@@ -2,11 +2,63 @@ package seabird
 
 import (
 	"strings"
+	"sync"
 
+	"github.com/sirupsen/logrus"
 	"gopkg.in/irc.v3"
 )
 
-func (s *Server) handleTopic(client *irc.Client, msg *irc.Message) {
+type Tracker struct {
+	sync.RWMutex
+
+	isupport *ISupportTracker
+	channels map[string]*ChannelState
+}
+
+func NewTracker() *Tracker {
+	return &Tracker{
+		isupport: NewISupportTracker(),
+		channels: make(map[string]*ChannelState),
+	}
+}
+
+type ChannelState struct {
+	Name  string
+	Topic string
+	Users map[string]struct{}
+}
+
+func (t *Tracker) GetChannel(name string) *ChannelState {
+	t.RLock()
+	defer t.RUnlock()
+
+	return t.channels[name]
+}
+
+func (t *Tracker) handleMessage(logger *logrus.Entry, client *irc.Client, msg *irc.Message) {
+	t.isupport.handleMessage(logger, msg)
+
+	switch msg.Command {
+	case "332":
+		t.handleRplTopic(logger, client, msg)
+	case "353":
+		t.handleRplNamReply(logger, client, msg)
+	case "JOIN":
+		t.handleJoin(logger, client, msg)
+	case "TOPIC":
+		t.handleTopic(logger, client, msg)
+	case "PART":
+		t.handlePart(logger, client, msg)
+	case "KICK":
+		t.handleKick(logger, client, msg)
+	case "QUIT":
+		t.handleQuit(logger, client, msg)
+	case "NICK":
+		t.handleNick(logger, client, msg)
+	}
+}
+
+func (t *Tracker) handleTopic(logger *logrus.Entry, client *irc.Client, msg *irc.Message) {
 	if len(msg.Params) != 2 {
 		return
 	}
@@ -14,18 +66,18 @@ func (s *Server) handleTopic(client *irc.Client, msg *irc.Message) {
 	channel := msg.Params[0]
 	topic := msg.Trailing()
 
-	s.chanLock.Lock()
-	defer s.chanLock.Unlock()
+	t.Lock()
+	defer t.Unlock()
 
-	if _, ok := s.channels[channel]; !ok {
+	if _, ok := t.channels[channel]; !ok {
 		// Warning: got topic for channel we don't know about
 		return
 	}
 
-	s.channels[channel].topic = topic
+	t.channels[channel].Topic = topic
 }
 
-func (s *Server) handleRplTopic(client *irc.Client, msg *irc.Message) {
+func (t *Tracker) handleRplTopic(logger *logrus.Entry, client *irc.Client, msg *irc.Message) {
 	if len(msg.Params) != 3 {
 		return
 	}
@@ -34,18 +86,18 @@ func (s *Server) handleRplTopic(client *irc.Client, msg *irc.Message) {
 	channel := msg.Params[1]
 	topic := msg.Trailing()
 
-	s.chanLock.Lock()
-	defer s.chanLock.Unlock()
+	t.Lock()
+	defer t.Unlock()
 
-	if _, ok := s.channels[channel]; !ok {
-		// Warning: got topic for channel we don't know about
+	if _, ok := t.channels[channel]; !ok {
+		logger.Warn("Got TOPIC message for untracked channel")
 		return
 	}
 
-	s.channels[channel].topic = topic
+	t.channels[channel].Topic = topic
 }
 
-func (s *Server) handleJoin(client *irc.Client, msg *irc.Message) {
+func (t *Tracker) handleJoin(logger *logrus.Entry, client *irc.Client, msg *irc.Message) {
 	if len(msg.Params) != 1 {
 		return
 	}
@@ -53,25 +105,25 @@ func (s *Server) handleJoin(client *irc.Client, msg *irc.Message) {
 	user := msg.Prefix.Name
 	channel := msg.Trailing()
 
-	s.chanLock.Lock()
-	defer s.chanLock.Unlock()
+	t.Lock()
+	defer t.Unlock()
 
-	_, ok := s.channels[channel]
+	_, ok := t.channels[channel]
 
 	if !ok {
-		if user == client.CurrentNick() {
-			s.channels[channel] = &channelState{name: channel, users: make(map[string]struct{})}
-		} else {
-			// Warning: got join for channel we don't know about
+		if user != client.CurrentNick() {
+			logger.Warn("Got JOIN message for untracked channel")
 			return
 		}
+
+		t.channels[channel] = &ChannelState{Name: channel, Users: make(map[string]struct{})}
 	}
 
-	state := s.channels[channel]
-	state.users[user] = struct{}{}
+	state := t.channels[channel]
+	state.Users[user] = struct{}{}
 }
 
-func (s *Server) handlePart(client *irc.Client, msg *irc.Message) {
+func (t *Tracker) handlePart(logger *logrus.Entry, client *irc.Client, msg *irc.Message) {
 	if len(msg.Params) != 2 {
 		return
 	}
@@ -79,23 +131,23 @@ func (s *Server) handlePart(client *irc.Client, msg *irc.Message) {
 	user := msg.Prefix.Name
 	channel := msg.Params[0]
 
-	s.chanLock.Lock()
-	defer s.chanLock.Unlock()
+	t.Lock()
+	defer t.Unlock()
 
-	if _, ok := s.channels[channel]; !ok {
-		// Warning: got part for channel we don't know about
+	if _, ok := t.channels[channel]; !ok {
+		logger.Warn("Got PART message for untracked channel")
 		return
 	}
 
 	if user == client.CurrentNick() {
-		delete(s.channels, channel)
+		delete(t.channels, channel)
 	} else {
-		state := s.channels[channel]
-		delete(state.users, user)
+		state := t.channels[channel]
+		delete(state.Users, user)
 	}
 }
 
-func (s *Server) handleKick(client *irc.Client, msg *irc.Message) {
+func (t *Tracker) handleKick(logger *logrus.Entry, client *irc.Client, msg *irc.Message) {
 	if len(msg.Params) != 3 {
 		return
 	}
@@ -104,38 +156,38 @@ func (s *Server) handleKick(client *irc.Client, msg *irc.Message) {
 	user := msg.Params[1]
 	channel := msg.Params[0]
 
-	s.chanLock.Lock()
-	defer s.chanLock.Unlock()
+	t.Lock()
+	defer t.Unlock()
 
-	if _, ok := s.channels[channel]; !ok {
-		// Warning: got kick for channel we don't know about
+	if _, ok := t.channels[channel]; !ok {
+		logger.Warn("Got KICK message for untracked channel")
 		return
 	}
 
 	if user == client.CurrentNick() {
-		delete(s.channels, channel)
+		delete(t.channels, channel)
 	} else {
-		state := s.channels[channel]
-		delete(state.users, user)
+		state := t.channels[channel]
+		delete(state.Users, user)
 	}
 }
 
-func (s *Server) handleQuit(client *irc.Client, msg *irc.Message) {
+func (t *Tracker) handleQuit(logger *logrus.Entry, client *irc.Client, msg *irc.Message) {
 	if len(msg.Params) != 1 {
 		return
 	}
 
 	user := msg.Prefix.Name
 
-	s.chanLock.Lock()
-	defer s.chanLock.Unlock()
+	t.Lock()
+	defer t.Unlock()
 
-	for _, state := range s.channels {
-		delete(state.users, user)
+	for _, state := range t.channels {
+		delete(state.Users, user)
 	}
 }
 
-func (s *Server) handleNick(client *irc.Client, msg *irc.Message) {
+func (t *Tracker) handleNick(logger *logrus.Entry, client *irc.Client, msg *irc.Message) {
 	if len(msg.Params) != 1 {
 		return
 	}
@@ -143,18 +195,18 @@ func (s *Server) handleNick(client *irc.Client, msg *irc.Message) {
 	oldUser := msg.Prefix.Name
 	newUser := msg.Params[0]
 
-	s.chanLock.Lock()
-	defer s.chanLock.Unlock()
+	t.Lock()
+	defer t.Unlock()
 
-	for _, state := range s.channels {
-		if _, ok := state.users[oldUser]; ok {
-			delete(state.users, oldUser)
-			state.users[newUser] = struct{}{}
+	for _, state := range t.channels {
+		if _, ok := state.Users[oldUser]; ok {
+			delete(state.Users, oldUser)
+			state.Users[newUser] = struct{}{}
 		}
 	}
 }
 
-func (s *Server) handleRplNamReply(client *irc.Client, msg *irc.Message) {
+func (t *Tracker) handleRplNamReply(logger *logrus.Entry, client *irc.Client, msg *irc.Message) {
 	if len(msg.Params) != 4 {
 		return
 	}
@@ -162,15 +214,15 @@ func (s *Server) handleRplNamReply(client *irc.Client, msg *irc.Message) {
 	channel := msg.Params[2]
 	users := strings.Split(strings.TrimSpace(msg.Trailing()), " ")
 
-	prefixes, ok := s.isupportPrefixMap()
+	prefixes, ok := t.isupport.GetPrefixMap()
 	if !ok {
 		return
 	}
 
-	s.chanLock.Lock()
-	defer s.chanLock.Unlock()
+	t.Lock()
+	defer t.Unlock()
 
-	if _, ok := s.channels[channel]; !ok {
+	if _, ok := t.channels[channel]; !ok {
 		// Warning: got name info for channel we don't know about
 		return
 	}
@@ -190,7 +242,7 @@ func (s *Server) handleRplNamReply(client *irc.Client, msg *irc.Message) {
 			continue
 		}
 
-		state := s.channels[channel]
-		state.users[user] = struct{}{}
+		state := t.channels[channel]
+		state.Users[user] = struct{}{}
 	}
 }

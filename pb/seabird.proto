@@ -5,7 +5,7 @@ option go_package = ".;pb";
 package seabird;
 
 service Seabird {
-  rpc Connect (ConnectRequest) returns (ConnectResponse) {}
+  rpc Register (RegisterRequest) returns (RegisterResponse) {}
   rpc EventStream(EventStreamRequest) returns (stream SeabirdEvent) {}
 
   rpc SendMessage(SendMessageRequest) returns (SendMessageResponse) {}
@@ -16,11 +16,12 @@ service Seabird {
   rpc LeaveChannel(LeaveChannelRequest) returns (LeaveChannelResponse) {}
 }
 
-message ConnectRequest {
+message RegisterRequest {
   int32 protocolVersion = 1;
+  string identifier = 2;
 }
 
-message ConnectResponse {
+message RegisterResponse {
   string clientId = 1;
 }
 

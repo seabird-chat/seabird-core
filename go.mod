@@ -7,4 +7,5 @@ require (
 	github.com/google/uuid v1.1.1
 	google.golang.org/grpc v1.29.1
 	google.golang.org/protobuf v1.21.0
+	gopkg.in/irc.v3 v3.1.3
 )

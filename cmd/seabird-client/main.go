@@ -9,12 +9,13 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/belak/seabird-core/pb"
 )
 
 const (
-	address = "localhost:50052"
+	address = "localhost:11235"
 )
 
 func main() {
@@ -29,11 +30,15 @@ func main() {
 	// Contact the server and print out its response.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	r, err := c.Connect(ctx, &pb.ConnectRequest{})
+	r, err := c.Register(ctx, &pb.RegisterRequest{
+		Identifier: "seabird-client",
+	})
 	if err != nil {
 		log.Fatalf("could not connect: %v", err)
 	}
 	log.Printf("Greeting: %s", r.GetClientId())
+
+	ctx = metadata.AppendToOutgoingContext(ctx, "client_id", r.GetClientId(), "plugin", "seabird-client")
 
 	stream, err := c.EventStream(ctx, &pb.EventStreamRequest{})
 	if err != nil {

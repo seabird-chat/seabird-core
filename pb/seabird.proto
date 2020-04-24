@@ -61,7 +61,7 @@ message CommandEvent {
 }
 
 message SendMessageRequest {
-  string channel = 1;
+  string target = 1;
   string message = 2;
 }
 

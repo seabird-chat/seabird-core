@@ -40,6 +40,17 @@ func main() {
 
 	ctx = metadata.AppendToOutgoingContext(ctx, "client_id", r.GetClientId(), "plugin", "seabird-client")
 
+	/*
+		resp, err := c.SendMessage(ctx, &pb.SendMessageRequest{Target: "#encoded-test", Message: "hello world"})
+		if err != nil {
+			log.Fatalf("could not send message: %v", err)
+		}
+
+		log.Printf("Resp: %v\n", resp)
+	*/
+
+	time.Sleep(5 * time.Second)
+
 	stream, err := c.EventStream(ctx, &pb.EventStreamRequest{})
 	if err != nil {
 		log.Fatalf("could not get event stream: %v", err)
@@ -56,12 +67,12 @@ func main() {
 		}
 
 		log.Printf("Msg: %v", msg)
-	}
 
-	resp, err := c.SendMessage(ctx, &pb.SendMessageRequest{Channel: "#minecraft", Message: "hello world"})
-	if err != nil {
-		log.Fatalf("could not send message: %v", err)
-	}
+		resp, err := c.SendReplyMessage(ctx, &pb.SendReplyMessageRequest{Target: msg, Message: "no u"})
+		if err != nil {
+			log.Fatalf("could not respond: %v", err)
+		}
 
-	log.Printf("Resp: %v\n", resp)
+		log.Printf("Resp: %v", resp)
+	}
 }

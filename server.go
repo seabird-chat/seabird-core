@@ -5,7 +5,6 @@ package seabird
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
 	"log"
 	"net"
 	"strings"
@@ -23,6 +22,8 @@ import (
 	irc "gopkg.in/irc.v3"
 )
 
+// TODO: store all nicks by uuid and map them in outgoing seabird events
+
 const COMMAND_PREFIX = ","
 
 type Server struct {
@@ -30,15 +31,29 @@ type Server struct {
 
 	pluginLock sync.RWMutex
 	plugins    map[string]*pluginState
+
+	chanLock sync.RWMutex
+	channels map[string]*channelState
+
+	isupportLock sync.RWMutex
+	isupport     map[string]string
 }
 
 type pluginState struct {
 	sync.Mutex
 
-	name            string
-	clientId        string
-	broadcast       chan *pb.SeabirdEvent
+	name      string
+	clientId  string
+	broadcast chan *pb.SeabirdEvent
+
+	// TODO: do something with this metric
 	droppedMessages int
+}
+
+type channelState struct {
+	name  string
+	topic string
+	users map[string]struct{}
 }
 
 func NewServer() (*Server, error) {
@@ -50,8 +65,13 @@ func NewServer() (*Server, error) {
 	}
 
 	s := &Server{
-		plugins: make(map[string]*pluginState),
+		plugins:  make(map[string]*pluginState),
+		channels: make(map[string]*channelState),
+		isupport: make(map[string]string),
 	}
+
+	// Set sane ISUPPORT defaults
+	s.isupport["PREFIX"] = "(ov)@+"
 
 	client := irc.NewClient(c, irc.ClientConfig{
 		Nick:    "seabird51",
@@ -68,11 +88,27 @@ func NewServer() (*Server, error) {
 	return s, nil
 }
 
-func (s *Server) ircHandler(c *irc.Client, msg *irc.Message) {
+func (s *Server) ircHandler(client *irc.Client, msg *irc.Message) {
 	if msg.Command == "001" {
-		_ = c.Write("JOIN #encoded-test")
+		_ = client.Write("JOIN #encoded-test")
+	} else if msg.Command == "005" {
+		s.handleISupport(msg)
+	} else if msg.Command == "332" {
+		s.handleRplTopic(client, msg)
+	} else if msg.Command == "353" {
+		s.handleRplNamReply(client, msg)
 	} else if msg.Command == "JOIN" {
-		fmt.Println(msg)
+		s.handleJoin(client, msg)
+	} else if msg.Command == "TOPIC" {
+		s.handleTopic(client, msg)
+	} else if msg.Command == "PART" {
+		s.handlePart(client, msg)
+	} else if msg.Command == "KICK" {
+		s.handleKick(client, msg)
+	} else if msg.Command == "QUIT" {
+		s.handleQuit(client, msg)
+	} else if msg.Command == "NICK" {
+		s.handleNick(client, msg)
 	}
 
 	event := &pb.SeabirdEvent{Event: nil}
@@ -83,7 +119,7 @@ func (s *Server) ircHandler(c *irc.Client, msg *irc.Message) {
 
 		if msg.Params[0] == currentNick {
 			event.Event = &pb.SeabirdEvent_PrivateMessage{PrivateMessage: &pb.PrivateMessageEvent{
-				Sender:  msg.Name,
+				Sender:  msg.Prefix.Name,
 				Message: lastArg,
 			}}
 		} else {
@@ -93,7 +129,7 @@ func (s *Server) ircHandler(c *irc.Client, msg *irc.Message) {
 				if len(msgParts) == 2 {
 					event.Event = &pb.SeabirdEvent_Command{Command: &pb.CommandEvent{
 						Channel: msg.Params[0],
-						Sender:  msg.Name,
+						Sender:  msg.Prefix.Name,
 						Command: strings.TrimPrefix(msgParts[0], COMMAND_PREFIX),
 						Arg:     msgParts[1],
 					}}
@@ -104,13 +140,13 @@ func (s *Server) ircHandler(c *irc.Client, msg *irc.Message) {
 				lastArg[len(currentNick)+1] == ' ' {
 				event.Event = &pb.SeabirdEvent_Message{Message: &pb.MessageEvent{
 					Channel: msg.Params[0],
-					Sender:  msg.Name,
+					Sender:  msg.Prefix.Name,
 					Message: strings.TrimSpace(lastArg[len(currentNick)+1:]),
 				}}
 			} else {
 				event.Event = &pb.SeabirdEvent_Message{Message: &pb.MessageEvent{
 					Channel: msg.Params[0],
-					Sender:  msg.Name,
+					Sender:  msg.Prefix.Name,
 					Message: msg.Params[1],
 				}}
 			}
@@ -304,7 +340,20 @@ func (s *Server) GetChannel(ctx context.Context, req *pb.ChannelRequest) (*pb.Ch
 		return nil, err
 	}
 
-	return nil, status.Error(codes.Unimplemented, "GetChannel unimplemented")
+	s.chanLock.RLock()
+	defer s.chanLock.RUnlock()
+
+	channel, ok := s.channels[strings.ToLower(req.Name)]
+	if !ok {
+		return nil, status.Error(codes.NotFound, "channel not found")
+	}
+
+	resp := &pb.ChannelResponse{Name: channel.name, Topic: channel.topic, Users: nil}
+	for nick := range channel.users {
+		resp.Users = append(resp.Users, &pb.User{Nick: nick})
+	}
+
+	return resp, nil
 }
 
 // JoinChannel is the internal implementation of SeabirdServer.JoinChannel
@@ -312,6 +361,14 @@ func (s *Server) JoinChannel(ctx context.Context, req *pb.JoinChannelRequest) (*
 	_, err := s.lookupPlugin(ctx)
 	if err != nil {
 		return nil, err
+	}
+
+	err = s.client.WriteMessage(&irc.Message{
+		Command: "JOIN",
+		Params:  []string{req.Target},
+	})
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to write message")
 	}
 
 	return nil, status.Error(codes.Unimplemented, "JoinChannel unimplemented")
@@ -322,6 +379,14 @@ func (s *Server) LeaveChannel(ctx context.Context, req *pb.LeaveChannelRequest) 
 	_, err := s.lookupPlugin(ctx)
 	if err != nil {
 		return nil, err
+	}
+
+	err = s.client.WriteMessage(&irc.Message{
+		Command: "PART",
+		Params:  []string{req.Target, req.Message},
+	})
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to write message")
 	}
 
 	return nil, status.Error(codes.Unimplemented, "LeaveChannel unimplemented")

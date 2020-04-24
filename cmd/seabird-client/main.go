@@ -49,7 +49,13 @@ func main() {
 		log.Printf("Resp: %v\n", resp)
 	*/
 
-	time.Sleep(5 * time.Second)
+	resp, err := c.GetChannel(ctx, &pb.ChannelRequest{Name: "#encoded-test"})
+	if err != nil {
+		log.Fatalf("could not get channel metadata: %v", err)
+	}
+	log.Printf("Chan resp: %v\n", resp)
+
+	c.SendMessage(ctx, &pb.SendMessageRequest{Target: "#encoded-test", Message: resp.Topic})
 
 	stream, err := c.EventStream(ctx, &pb.EventStreamRequest{})
 	if err != nil {

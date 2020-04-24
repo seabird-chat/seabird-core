@@ -81,24 +81,23 @@ message ChannelRequest {
 
 message User {
   string nick = 1;
-  string name = 2;
-  string host = 3;
 }
 
 message ChannelResponse {
   string name = 1;
   string topic = 2;
-  repeated User user = 3;
+  repeated User users = 3;
 }
 
 message JoinChannelRequest {
-  string name = 1;
+  string target = 1;
 }
 
 message JoinChannelResponse {}
 
 message LeaveChannelRequest {
-  string name = 1;
+  string target = 1;
+  string message = 2;
 }
 
 message LeaveChannelResponse {}

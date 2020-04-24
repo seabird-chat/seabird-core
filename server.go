@@ -1,5 +1,3 @@
-//go:generate protoc -I ./pb --go_out=plugins=grpc:./pb/ ./pb/seabird.proto
-
 package seabird
 
 import (
@@ -19,11 +17,6 @@ import (
 	"github.com/sirupsen/logrus"
 	irc "gopkg.in/irc.v3"
 )
-
-// TODO: store all nicks by uuid and map them in outgoing seabird events rather
-// than passing the nicks around directly
-
-// TODO: add configuration of timeouts and command prefix
 
 type Server struct {
 	client     *irc.Client
@@ -93,7 +86,12 @@ func NewServer(config ServerConfig) (*Server, error) {
 	pb.RegisterSeabirdServer(s.grpcServer, s)
 
 	// TODO: properly handle this error
-	go client.Run()
+	go func() {
+		err := client.Run()
+		if err != nil {
+			logrus.WithError(err).Fatal("IRC connection exited")
+		}
+	}()
 
 	return s, nil
 }
@@ -204,6 +202,7 @@ func (s *Server) ircHandler(client *irc.Client, msg *irc.Message) {
 				case plugin.broadcast <- event:
 					plugin.droppedMessages = 0
 				default:
+					logger.WithField("plugin", plugin.name).Warn("Plugin dropped a message")
 					plugin.droppedMessages++
 				}
 			}

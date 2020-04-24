@@ -1,5 +1,8 @@
 package seabird
 
+// TODO: store all nicks by uuid and map them in outgoing seabird events rather
+// than passing the nicks around directly
+
 import (
 	"strings"
 	"sync"

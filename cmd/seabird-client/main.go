@@ -4,32 +4,55 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"io"
 	"log"
+	"os"
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/belak/seabird-core/pb"
 )
 
-const (
-	address = "localhost:11235"
-)
+type basicAuth struct {
+	username string
+	password string
+}
+
+func (b basicAuth) GetRequestMetadata(ctx context.Context, in ...string) (map[string]string, error) {
+	auth := b.username + ":" + b.password
+	enc := base64.StdEncoding.EncodeToString([]byte(auth))
+	return map[string]string{
+		"authorization": "Basic " + enc,
+	}, nil
+}
+
+func (basicAuth) RequireTransportSecurity() bool {
+	return true
+}
 
 func main() {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(address, grpc.WithInsecure(), grpc.WithBlock())
+	conn, err := grpc.DialContext(ctx, os.Args[1],
+		grpc.WithTransportCredentials(credentials.NewTLS(nil)),
+		grpc.WithPerRPCCredentials(basicAuth{
+			username: os.Getenv("GRPC_USER"),
+			password: os.Getenv("GRPC_PASS"),
+		}), grpc.WithBlock())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
 	defer conn.Close()
+
 	c := pb.NewSeabirdClient(conn)
 
 	// Contact the server and print out its response.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 	r, err := c.Register(ctx, &pb.RegisterRequest{
 		Identifier: "seabird-client",
 	})
@@ -40,22 +63,16 @@ func main() {
 
 	ctx = metadata.AppendToOutgoingContext(ctx, "client_id", r.GetClientId(), "plugin", "seabird-client")
 
-	/*
-		resp, err := c.SendMessage(ctx, &pb.SendMessageRequest{Target: "#encoded-test", Message: "hello world"})
-		if err != nil {
-			log.Fatalf("could not send message: %v", err)
-		}
-
-		log.Printf("Resp: %v\n", resp)
-	*/
-
 	resp, err := c.GetChannel(ctx, &pb.ChannelRequest{Name: "#encoded-test"})
 	if err != nil {
 		log.Fatalf("could not get channel metadata: %v", err)
 	}
 	log.Printf("Chan resp: %v\n", resp)
 
-	c.SendMessage(ctx, &pb.SendMessageRequest{Target: "#encoded-test", Message: resp.Topic})
+	_, err = c.SendMessage(ctx, &pb.SendMessageRequest{Target: "#encoded-test", Message: resp.Topic})
+	if err != nil {
+		log.Fatalf("could not send message: %v", err)
+	}
 
 	stream, err := c.EventStream(ctx, &pb.EventStreamRequest{})
 	if err != nil {

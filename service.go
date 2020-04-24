@@ -1,3 +1,5 @@
+//go:generate protoc -I ./pb --go_out=plugins=grpc:./pb/ ./pb/seabird.proto
+
 package seabird
 
 import (
@@ -6,13 +8,21 @@ import (
 
 	"github.com/belak/seabird-core/pb"
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	irc "gopkg.in/irc.v3"
 )
 
+// TODO: move this into a test
+var _ pb.SeabirdServer = &Server{}
+
+// TODO: add tests
+
 // Register is the internal implementation of SeabirdServer.Register
 func (s *Server) Register(ctx context.Context, in *pb.RegisterRequest) (*pb.RegisterResponse, error) {
+	logrus.Info("Register request")
+
 	clientId := uuid.New().String()
 	plugin := in.Identifier
 
@@ -49,6 +59,8 @@ func (s *Server) Register(ctx context.Context, in *pb.RegisterRequest) (*pb.Regi
 
 // EventStream is the internal implementation of SeabirdServer.EventStream
 func (s *Server) EventStream(in *pb.EventStreamRequest, stream pb.Seabird_EventStreamServer) error {
+	logrus.Info("EventStream request")
+
 	ctx := stream.Context()
 	plugin, err := s.lookupPlugin(ctx)
 	if err != nil {
@@ -88,6 +100,8 @@ func (s *Server) EventStream(in *pb.EventStreamRequest, stream pb.Seabird_EventS
 
 // SendMessage is the internal implementation of SeabirdServer.SendMessage
 func (s *Server) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*pb.SendMessageResponse, error) {
+	logrus.Info("SendMessage request")
+
 	_, err := s.lookupPlugin(ctx)
 	if err != nil {
 		return nil, err
@@ -106,6 +120,8 @@ func (s *Server) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*
 
 // SendReplyMessage is the internal implementation of SeabirdServer.SendReplyMessage
 func (s *Server) SendReplyMessage(ctx context.Context, req *pb.SendReplyMessageRequest) (*pb.SendReplyMessageResponse, error) {
+	logrus.Info("SendReplyMessage request")
+
 	_, err := s.lookupPlugin(ctx)
 	if err != nil {
 		return nil, err
@@ -145,6 +161,8 @@ func (s *Server) SendReplyMessage(ctx context.Context, req *pb.SendReplyMessageR
 
 // GetChannel is the internal implementation of SeabirdServer.GetChannel
 func (s *Server) GetChannel(ctx context.Context, req *pb.ChannelRequest) (*pb.ChannelResponse, error) {
+	logrus.Info("GetChannel request")
+
 	_, err := s.lookupPlugin(ctx)
 	if err != nil {
 		return nil, err
@@ -165,6 +183,8 @@ func (s *Server) GetChannel(ctx context.Context, req *pb.ChannelRequest) (*pb.Ch
 
 // JoinChannel is the internal implementation of SeabirdServer.JoinChannel
 func (s *Server) JoinChannel(ctx context.Context, req *pb.JoinChannelRequest) (*pb.JoinChannelResponse, error) {
+	logrus.Info("JoinChannel request")
+
 	_, err := s.lookupPlugin(ctx)
 	if err != nil {
 		return nil, err
@@ -183,6 +203,8 @@ func (s *Server) JoinChannel(ctx context.Context, req *pb.JoinChannelRequest) (*
 
 // LeaveChannel is the internal implementation of SeabirdServer.LeaveChannel
 func (s *Server) LeaveChannel(ctx context.Context, req *pb.LeaveChannelRequest) (*pb.LeaveChannelResponse, error) {
+	logrus.Info("LeaveChannel request")
+
 	_, err := s.lookupPlugin(ctx)
 	if err != nil {
 		return nil, err

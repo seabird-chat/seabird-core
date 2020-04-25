@@ -5,7 +5,7 @@ option go_package = ".;pb";
 package seabird;
 
 service Seabird {
-  rpc Register (RegisterRequest) returns (RegisterResponse) {}
+  rpc Register(RegisterRequest) returns (RegisterResponse) {}
   rpc EventStream(EventStreamRequest) returns (stream SeabirdEvent) {}
 
   rpc SendMessage(SendMessageRequest) returns (SendMessageResponse) {}
@@ -25,7 +25,15 @@ message RegisterResponse {
   string clientId = 1;
 }
 
-message EventStreamRequest {}
+message EventStreamRequest {
+  repeated CommandRegistration commands = 1;
+}
+
+message CommandRegistration {
+  string name = 1;
+  string shortHelp = 2;
+  string fullHelp = 3;
+}
 
 message SeabirdEvent {
   oneof Event {

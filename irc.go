@@ -118,9 +118,17 @@ func (s *Server) ircHandler(client *irc.Client, msg *irc.Message) {
 			// a mutex, this is fine.
 			plugin.RLock()
 
-			for _, stream := range plugin.broadcast {
+			for _, stream := range plugin.streams {
+				// If this was a command event and this stream didn't specify it
+				// supports this command, don't send it.
+				if cmdEvent, ok := event.Event.(*pb.SeabirdEvent_Command); ok {
+					if _, ok := stream.commands[cmdEvent.Command.Command]; !ok {
+						continue
+					}
+				}
+
 				select {
-				case stream <- event:
+				case stream.broadcast <- event:
 					plugin.consecutiveDroppedMessages = 0
 				default:
 					logger.WithField("plugin", plugin.name).Warn("Plugin dropped a message")

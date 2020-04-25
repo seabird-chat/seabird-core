@@ -43,17 +43,28 @@ type pluginState struct {
 
 	name        string
 	clientToken string
-	broadcast   map[string]chan *pb.SeabirdEvent
+	streams     map[string]*streamState
 
 	// TODO: do something with this metric
 	consecutiveDroppedMessages int
+}
+
+type streamState struct {
+	broadcast chan *pb.SeabirdEvent
+	commands  map[string]*commandMetadata
+}
+
+type commandMetadata struct {
+	name      string
+	shortHelp string
+	fullHelp  string
 }
 
 func (p *pluginState) cleanupStream(streamId string) {
 	p.Lock()
 	defer p.Unlock()
 
-	delete(p.broadcast, streamId)
+	delete(p.streams, streamId)
 }
 
 func NewServer(config ServerConfig) (*Server, error) {
@@ -124,7 +135,7 @@ func (s *Server) lookupPlugin(identity *pb.Identity) (*pluginState, error) {
 
 func (s *Server) cleanupPlugin(plugin *pluginState) {
 	plugin.RLock()
-	if len(plugin.broadcast) != 0 {
+	if len(plugin.streams) != 0 {
 		plugin.RUnlock()
 		return
 	}

@@ -26,6 +26,9 @@ service Seabird {
   rpc SetChannelInfo(SetChannelInfoRequest) returns (SetChannelInfoResponse) {}
   rpc JoinChannel(JoinChannelRequest) returns (JoinChannelResponse) {}
   rpc LeaveChannel(LeaveChannelRequest) returns (LeaveChannelResponse) {}
+
+  // TODO: add GetPluginInfo
+  // TODO: add ListPlugins
 }
 
 message RegisterRequest {

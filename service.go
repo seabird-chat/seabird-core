@@ -41,7 +41,7 @@ func (s *Server) Register(ctx context.Context, in *pb.RegisterRequest) (*pb.Regi
 	state := &pluginState{
 		name:        plugin,
 		clientToken: clientToken,
-		broadcast:   make(map[string]chan *pb.SeabirdEvent),
+		streams:     make(map[string]*streamState),
 	}
 
 	s.clients[clientToken] = plugin
@@ -69,11 +69,26 @@ func (s *Server) EventStream(req *pb.EventStreamRequest, stream pb.Seabird_Event
 	}
 
 	streamId := uuid.New().String()
-	inputStream := make(chan *pb.SeabirdEvent)
+	inputStream := &streamState{
+		broadcast: make(chan *pb.SeabirdEvent),
+		commands:  make(map[string]*commandMetadata),
+	}
+
+	for _, registration := range req.Commands {
+		if _, ok := inputStream.commands[registration.Name]; ok {
+			return status.Error(codes.InvalidArgument, "duplicate commands")
+		}
+
+		inputStream.commands[registration.Name] = &commandMetadata{
+			name:      registration.Name,
+			shortHelp: registration.ShortHelp,
+			fullHelp:  registration.FullHelp,
+		}
+	}
 
 	// Mark this stream as active
 	plugin.Lock()
-	plugin.broadcast[streamId] = inputStream
+	plugin.streams[streamId] = inputStream
 	plugin.Unlock()
 
 	// Ensure we properly clean up the plugin information when a plugin's last
@@ -84,7 +99,7 @@ func (s *Server) EventStream(req *pb.EventStreamRequest, stream pb.Seabird_Event
 
 	for {
 		select {
-		case event := <-inputStream:
+		case event := <-inputStream.broadcast:
 			err = stream.Send(event)
 			if err != nil {
 				return status.Error(codes.Internal, "failed to send event")

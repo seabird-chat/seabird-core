@@ -146,35 +146,46 @@ func (s *Server) ircHandler(client *irc.Client, msg *irc.Message) {
 	}
 }
 
-func (s *Server) handleHelp(channel, sender, arg string) {
-	commands := []string{}
-	pluginMeta := make(map[string][]*commandMetadata)
+func (s *Server) getHelp() ([]string, map[string][]*commandMetadata) {
+	// Pull the help info from the cache, regenerate if it doesn't exist
+	s.helpLock.Lock()
+	defer s.helpLock.Unlock()
 
-	s.pluginLock.RLock()
-	for _, plugin := range s.plugins {
-		plugin.RLock()
+	if s.helpCacheMetadata == nil {
+		s.helpCacheMetadata = make(map[string][]*commandMetadata)
 
-		// TODO: cache this on the server somewhere
-		for _, stream := range plugin.streams {
-			for _, command := range stream.commands {
-				// If this is our first time seeing this command, add it to the
-				// overall list.
-				if _, ok := pluginMeta[command.name]; !ok {
-					commands = append(commands, command.name)
+		s.pluginLock.RLock()
+		for _, plugin := range s.plugins {
+			plugin.RLock()
+
+			for _, stream := range plugin.streams {
+				for _, command := range stream.commands {
+					// If this is our first time seeing this command, add it to
+					// the overall list.
+					if _, ok := s.helpCacheMetadata[command.name]; !ok {
+						s.helpCacheCommands = append(s.helpCacheCommands, command.name)
+					}
+
+					s.helpCacheMetadata[command.name] = append(s.helpCacheMetadata[command.name], command)
 				}
-
-				pluginMeta[command.name] = append(pluginMeta[command.name], command)
 			}
-		}
 
-		plugin.RUnlock()
+			plugin.RUnlock()
+		}
+		s.pluginLock.RUnlock()
+
+		sort.Strings(s.helpCacheCommands)
 	}
-	s.pluginLock.RUnlock()
+
+	return s.helpCacheCommands, s.helpCacheMetadata
+}
+
+func (s *Server) handleHelp(channel, sender, arg string) {
+	commands, pluginMeta := s.getHelp()
 
 	// If an arg was given, look up that command, otherwise give a list of commands
 	arg = strings.TrimSpace(arg)
 	if arg == "" {
-		sort.Strings(commands)
 		err := s.client.Writef("PRIVMSG %s :%s: Available commands: %s", channel, sender, strings.Join(commands, ", "))
 		if err != nil {
 			logrus.WithError(err).Error("Failed to write message")

@@ -26,6 +26,10 @@ type Server struct {
 	plugins    map[string]*pluginState // Mapping of plugin name to state
 
 	tracker *Tracker
+
+	helpLock          sync.Mutex
+	helpCacheCommands []string
+	helpCacheMetadata map[string][]*commandMetadata
 }
 
 type ServerConfig struct {
@@ -148,6 +152,14 @@ func (s *Server) cleanupPlugin(plugin *pluginState) {
 
 	delete(s.plugins, s.clients[clientToken])
 	delete(s.clients, clientToken)
+}
+
+func (s *Server) clearHelpCache() {
+	s.helpLock.Lock()
+	defer s.helpLock.Unlock()
+
+	s.helpCacheCommands = nil
+	s.helpCacheMetadata = nil
 }
 
 func (s *Server) ListenAndServe() error {

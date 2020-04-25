@@ -94,6 +94,7 @@ func (s *Server) EventStream(req *pb.EventStreamRequest, stream pb.Seabird_Event
 	// Ensure we properly clean up the plugin information when a plugin's last
 	// event stream dies. Note that because of the defer order, stream cleanup
 	// needs to be deferred last.
+	defer s.clearHelpCache()
 	defer s.cleanupPlugin(plugin)
 	defer plugin.cleanupStream(streamId)
 

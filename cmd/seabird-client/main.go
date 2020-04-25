@@ -7,12 +7,9 @@ import (
 	"encoding/base64"
 	"io"
 	"log"
-	"os"
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/metadata"
 
 	"github.com/belak/seabird-core/pb"
 )
@@ -38,13 +35,16 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Set up a connection to the server.
-	conn, err := grpc.DialContext(ctx, os.Args[1],
-		grpc.WithTransportCredentials(credentials.NewTLS(nil)),
-		grpc.WithPerRPCCredentials(basicAuth{
-			username: os.Getenv("GRPC_USER"),
-			password: os.Getenv("GRPC_PASS"),
-		}), grpc.WithBlock())
+	/*
+		// Set up a connection to the server.
+		conn, err := grpc.DialContext(ctx, os.Args[1],
+			grpc.WithTransportCredentials(credentials.NewTLS(nil)),
+			grpc.WithPerRPCCredentials(basicAuth{
+				username: os.Getenv("GRPC_USER"),
+				password: os.Getenv("GRPC_PASS"),
+			}), grpc.WithBlock())
+	*/
+	conn, err := grpc.DialContext(ctx, "localhost:11235", grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
@@ -54,27 +54,26 @@ func main() {
 
 	// Contact the server and print out its response.
 	r, err := c.Register(ctx, &pb.RegisterRequest{
-		Identifier: "seabird-client",
+		Plugin: "seabird-client",
 	})
 	if err != nil {
 		log.Fatalf("could not connect: %v", err)
 	}
-	log.Printf("Greeting: %s", r.GetClientId())
+	identity := r.GetIdentity()
+	log.Printf("Greeting: %s", identity.GetToken())
 
-	ctx = metadata.AppendToOutgoingContext(ctx, "client_id", r.GetClientId(), "plugin", "seabird-client")
-
-	resp, err := c.GetChannel(ctx, &pb.ChannelRequest{Name: "#encoded-test"})
+	resp, err := c.GetChannelInfo(ctx, &pb.ChannelInfoRequest{Identity: identity, Name: "#encoded-test"})
 	if err != nil {
 		log.Fatalf("could not get channel metadata: %v", err)
 	}
 	log.Printf("Chan resp: %v\n", resp)
 
-	_, err = c.SendMessage(ctx, &pb.SendMessageRequest{Target: "#encoded-test", Message: resp.Topic})
+	_, err = c.SendMessage(ctx, &pb.SendMessageRequest{Identity: identity, Target: "#encoded-test", Message: resp.Topic})
 	if err != nil {
 		log.Fatalf("could not send message: %v", err)
 	}
 
-	stream, err := c.EventStream(ctx, &pb.EventStreamRequest{})
+	stream, err := c.EventStream(ctx, &pb.EventStreamRequest{Identity: identity})
 	if err != nil {
 		log.Fatalf("could not get event stream: %v", err)
 	}
@@ -84,14 +83,25 @@ func main() {
 		if err == io.EOF {
 			break
 		}
-
 		if err != nil {
 			log.Fatalf("could not get event: %v", err)
 		}
 
 		log.Printf("Msg: %v", msg)
 
-		resp, err := c.SendReplyMessage(ctx, &pb.SendReplyMessageRequest{Target: msg, Message: "no u"})
+		var replyTo string
+		switch event := msg.Event.(type) {
+		case *pb.SeabirdEvent_Message:
+			replyTo = event.Message.ReplyTo
+		case *pb.SeabirdEvent_PrivateMessage:
+			replyTo = event.PrivateMessage.ReplyTo
+		case *pb.SeabirdEvent_Command:
+			replyTo = event.Command.ReplyTo
+		default:
+			continue
+		}
+
+		resp, err := c.SendMessage(ctx, &pb.SendMessageRequest{Identity: identity, Target: replyTo, Message: "no u"})
 		if err != nil {
 			log.Fatalf("could not respond: %v", err)
 		}

@@ -4,29 +4,41 @@ option go_package = ".;pb";
 
 package seabird;
 
+// Identity is included in every message that requires auth. One AuthMethod at a
+// time is supported. For now, the only supported method is a token. You can
+// obtain a full Identity from the Register method.
+message Identity {
+  oneof AuthMethod {
+    string token = 1;
+  }
+}
+
 service Seabird {
   rpc Register(RegisterRequest) returns (RegisterResponse) {}
+
   rpc EventStream(EventStreamRequest) returns (stream SeabirdEvent) {}
 
   rpc SendMessage(SendMessageRequest) returns (SendMessageResponse) {}
-  rpc SendReplyMessage(SendReplyMessageRequest) returns (SendReplyMessageResponse) {}
+  rpc SendRawMessage(SendRawMessageRequest) returns (SendRawMessageResponse) {}
 
-  rpc GetChannel(ChannelRequest) returns (ChannelResponse) {}
+  rpc GetChannelInfo(ChannelInfoRequest) returns (ChannelInfoResponse) {}
+  rpc SetChannelInfo(SetChannelInfoRequest) returns (SetChannelInfoResponse) {}
   rpc JoinChannel(JoinChannelRequest) returns (JoinChannelResponse) {}
   rpc LeaveChannel(LeaveChannelRequest) returns (LeaveChannelResponse) {}
 }
 
 message RegisterRequest {
-  int32 protocolVersion = 1;
-  string identifier = 2;
+  string plugin = 1;
 }
 
 message RegisterResponse {
-  string clientId = 1;
+  Identity identity = 1;
 }
 
 message EventStreamRequest {
-  repeated CommandRegistration commands = 1;
+  Identity identity = 1;
+
+  repeated CommandRegistration commands = 2;
 }
 
 message CommandRegistration {
@@ -45,67 +57,86 @@ message SeabirdEvent {
 }
 
 message MessageEvent {
-  string channel = 1;
+  string replyTo = 1;
   string sender = 2;
   string message = 3;
 }
 
 message PrivateMessageEvent {
-  string sender = 1;
+  string replyTo = 1;
+  string sender = 2;
   string message = 3;
 }
 
 message MentionEvent {
-  string channel = 1;
+  string replyTo = 1;
   string sender = 2;
   string message = 3;
 }
 
 message CommandEvent {
-  string channel = 1;
+  string replyTo = 1;
   string sender = 2;
   string command = 3;
   string arg = 4;
 }
 
 message SendMessageRequest {
-  string target = 1;
-  string message = 2;
+  Identity identity = 1;
+
+  string target = 2;
+  string message = 3;
 }
 
 message SendMessageResponse {}
 
-message SendReplyMessageRequest {
-  SeabirdEvent target = 1;
-  string message = 2;
-  bool mention = 3;
+message SendRawMessageRequest {
+  Identity identity = 1;
+
+  string command = 2;
+  repeated string params = 3;
 }
 
-message SendReplyMessageResponse {}
+message SendRawMessageResponse {}
 
-message ChannelRequest {
-  string name = 1;
+message ChannelInfoRequest {
+  Identity identity = 1;
+
+  string name = 2;
 }
 
 message User {
   string nick = 1;
 }
 
-message ChannelResponse {
+message SetChannelInfoRequest {
+  Identity identity = 1;
+
+  string name = 2;
+  string topic = 3;
+}
+
+message SetChannelInfoResponse {}
+
+message ChannelInfoResponse {
   string name = 1;
   string topic = 2;
   repeated User users = 3;
 }
 
 message JoinChannelRequest {
-  string target = 1;
+  Identity identity = 1;
+
+  string target = 2;
 }
 
 message JoinChannelResponse {}
 
 message LeaveChannelRequest {
-  string target = 1;
-  string message = 2;
+  Identity identity = 1;
+
+  string target = 2;
+  string message = 3;
 }
 
 message LeaveChannelResponse {}

@@ -1,7 +1,6 @@
 package seabird
 
 import (
-	"context"
 	"crypto/tls"
 	"net"
 	"strings"
@@ -9,7 +8,6 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	"github.com/belak/seabird-core/pb"
@@ -24,7 +22,8 @@ type Server struct {
 	config ServerConfig
 
 	pluginLock sync.RWMutex
-	plugins    map[string]*pluginState
+	clients    map[string]string       // Mapping of client_id to plugin name
+	plugins    map[string]*pluginState // Mapping of plugin name to state
 
 	tracker *Tracker
 }
@@ -42,9 +41,9 @@ type ServerConfig struct {
 type pluginState struct {
 	sync.Mutex
 
-	name      string
-	clientId  string
-	broadcast chan *pb.SeabirdEvent
+	name        string
+	clientToken string
+	broadcast   chan *pb.SeabirdEvent
 
 	// TODO: do something with this metric
 	droppedMessages int
@@ -65,6 +64,7 @@ func NewServer(config ServerConfig) (*Server, error) {
 	}
 
 	s := &Server{
+		clients: make(map[string]string),
 		plugins: make(map[string]*pluginState),
 		tracker: NewTracker(),
 
@@ -95,22 +95,21 @@ func NewServer(config ServerConfig) (*Server, error) {
 	return s, nil
 }
 
-func (s *Server) lookupPlugin(ctx context.Context) (*pluginState, error) {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok || len(md["client_id"]) != 1 || len(md["plugin"]) != 1 {
-		return nil, status.Error(codes.Unauthenticated, "missing client_id or plugin metadata")
-	}
+func (s *Server) lookupPlugin(identity *pb.Identity) (*pluginState, error) {
+	clientToken := identity.GetToken()
 
-	clientId := md["client_id"][0]
-	plugin := md["plugin"][0]
+	if identity.GetToken() == "" {
+		return nil, status.Error(codes.Unauthenticated, "Identity missing token")
+	}
 
 	s.pluginLock.Lock()
 	defer s.pluginLock.Unlock()
 
+	plugin := s.clients[clientToken]
 	meta := s.plugins[plugin]
 
-	if meta == nil || meta.clientId != clientId {
-		return nil, status.Error(codes.Unauthenticated, "plugin has not been registered or invalid client_id")
+	if meta == nil {
+		return nil, status.Error(codes.Unauthenticated, "invalid client_token")
 	}
 
 	return meta, nil

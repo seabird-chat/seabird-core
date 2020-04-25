@@ -37,6 +37,7 @@ func (s *Server) ircHandler(client *irc.Client, msg *irc.Message) {
 			}).Info("Generating private message event")
 
 			event.Event = &pb.SeabirdEvent_PrivateMessage{PrivateMessage: &pb.PrivateMessageEvent{
+				ReplyTo: sender,
 				Sender:  sender,
 				Message: message,
 			}}
@@ -61,7 +62,7 @@ func (s *Server) ircHandler(client *irc.Client, msg *irc.Message) {
 				}).Info("Generating command event")
 
 				event.Event = &pb.SeabirdEvent_Command{Command: &pb.CommandEvent{
-					Channel: channel,
+					ReplyTo: channel,
 					Sender:  sender,
 					Command: command,
 					Arg:     arg,
@@ -82,7 +83,7 @@ func (s *Server) ircHandler(client *irc.Client, msg *irc.Message) {
 				}).Info("Generating mention event")
 
 				event.Event = &pb.SeabirdEvent_Mention{Mention: &pb.MentionEvent{
-					Channel: channel,
+					ReplyTo: channel,
 					Sender:  sender,
 					Message: message,
 				}}
@@ -98,7 +99,7 @@ func (s *Server) ircHandler(client *irc.Client, msg *irc.Message) {
 				}).Info("Generating message event")
 
 				event.Event = &pb.SeabirdEvent_Message{Message: &pb.MessageEvent{
-					Channel: channel,
+					ReplyTo: channel,
 					Sender:  sender,
 					Message: message,
 				}}

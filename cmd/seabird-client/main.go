@@ -74,7 +74,12 @@ func main() {
 		log.Fatalf("could not send message: %v", err)
 	}
 
-	stream, err := c.EventStream(ctx, &pb.EventStreamRequest{Identity: identity})
+	stream, err := c.EventStream(ctx, &pb.EventStreamRequest{Identity: identity, Commands: []*pb.CommandRegistration{
+		{
+			Name:      "test",
+			ShortHelp: "just a test command",
+		},
+	}})
 	if err != nil {
 		log.Fatalf("could not get event stream: %v", err)
 	}

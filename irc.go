@@ -1,6 +1,7 @@
 package seabird
 
 import (
+	"sort"
 	"strings"
 	"unicode"
 
@@ -44,15 +45,19 @@ func (s *Server) ircHandler(client *irc.Client, msg *irc.Message) {
 		} else {
 			if strings.HasPrefix(lastArg, s.config.CommandPrefix) {
 				msgParts := strings.SplitN(lastArg, " ", 2)
-
-				if len(msgParts) != 2 {
-					return
+				if len(msgParts) < 2 {
+					msgParts = append(msgParts, "")
 				}
 
 				channel := msg.Params[0]
 				sender := msg.Prefix.Name
 				command := strings.TrimPrefix(msgParts[0], s.config.CommandPrefix)
 				arg := msgParts[1]
+
+				if command == "help" {
+					s.handleHelp(channel, sender, arg)
+					return
+				}
 
 				logger.WithFields(logrus.Fields{
 					"channel": channel,
@@ -137,6 +142,56 @@ func (s *Server) ircHandler(client *irc.Client, msg *irc.Message) {
 			}
 
 			plugin.RUnlock()
+		}
+	}
+}
+
+func (s *Server) handleHelp(channel, sender, arg string) {
+	commands := []string{}
+	pluginMeta := make(map[string][]*commandMetadata)
+
+	s.pluginLock.RLock()
+	for _, plugin := range s.plugins {
+		plugin.RLock()
+
+		// TODO: cache this on the server somewhere
+		for _, stream := range plugin.streams {
+			for _, command := range stream.commands {
+				// If this is our first time seeing this command, add it to the
+				// overall list.
+				if _, ok := pluginMeta[command.name]; !ok {
+					commands = append(commands, command.name)
+				}
+
+				pluginMeta[command.name] = append(pluginMeta[command.name], command)
+			}
+		}
+
+		plugin.RUnlock()
+	}
+	s.pluginLock.RUnlock()
+
+	// If an arg was given, look up that command, otherwise give a list of commands
+	arg = strings.TrimSpace(arg)
+	if arg == "" {
+		sort.Strings(commands)
+		err := s.client.Writef("PRIVMSG %s :%s: Available commands: %s", channel, sender, strings.Join(commands, ", "))
+		if err != nil {
+			logrus.WithError(err).Error("Failed to write message")
+		}
+	} else {
+		if metas, ok := pluginMeta[arg]; ok {
+			for _, meta := range metas {
+				err := s.client.Writef("PRIVMSG %s :%s: %q: %s", channel, sender, arg, meta.shortHelp)
+				if err != nil {
+					logrus.WithError(err).Error("Failed to write message")
+				}
+			}
+		} else {
+			err := s.client.Writef("PRIVMSG %s :%s: Unknown command %q", channel, sender, arg)
+			if err != nil {
+				logrus.WithError(err).Error("Failed to write message")
+			}
 		}
 	}
 }

@@ -53,17 +53,15 @@ func (s *Server) Register(ctx context.Context, in *pb.RegisterRequest) (*pb.Regi
 	s.plugins[plugin] = state
 
 	// Clean up any plugins which fail to register within 5 seconds
-	defer func() {
-		go func() {
-			time.Sleep(5 * time.Second)
+	go func() {
+		time.Sleep(5 * time.Second)
 
-			state.Lock()
-			defer state.Unlock()
+		state.Lock()
+		defer state.Unlock()
 
-			if state.broadcast == nil {
-				s.cleanupPlugin(state)
-			}
-		}()
+		if state.broadcast == nil {
+			s.cleanupPlugin(state)
+		}
 	}()
 
 	return &pb.RegisterResponse{
@@ -84,7 +82,6 @@ func (s *Server) EventStream(req *pb.EventStreamRequest, stream pb.Seabird_Event
 	// Mark this plugin as active
 	{
 		plugin.Lock()
-		defer plugin.Unlock()
 
 		if plugin.broadcast != nil {
 			plugin.Unlock()
@@ -92,15 +89,13 @@ func (s *Server) EventStream(req *pb.EventStreamRequest, stream pb.Seabird_Event
 		}
 
 		plugin.broadcast = make(chan *pb.SeabirdEvent)
+
+		plugin.Unlock()
+
 	}
 
 	// Ensure we properly clean up the plugin information when a plugin's event stream dies.
-	defer func() {
-		s.pluginLock.Lock()
-		defer s.pluginLock.Unlock()
-
-		s.cleanupPlugin(plugin)
-	}()
+	defer s.cleanupPlugin(plugin)
 
 	for {
 		select {

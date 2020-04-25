@@ -31,6 +31,18 @@ type ChannelState struct {
 	Users map[string]struct{}
 }
 
+func (t *Tracker) ListChannels() []string {
+	t.RLock()
+	defer t.RUnlock()
+
+	var ret []string
+	for channel := range t.channels {
+		ret = append(ret, channel)
+	}
+
+	return ret
+}
+
 func (t *Tracker) GetChannel(name string) *ChannelState {
 	t.RLock()
 	defer t.RUnlock()

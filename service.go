@@ -156,6 +156,20 @@ func (s *Server) SendRawMessage(ctx context.Context, req *pb.SendRawMessageReque
 }
 
 // GetChannelInfo is the internal implementation of SeabirdServer.GetChannelInfo
+func (s *Server) ListChannels(ctx context.Context, req *pb.ListChannelsRequest) (*pb.ListChannelsResponse, error) {
+	logrus.Info("ListChannels request")
+
+	_, err := s.lookupPlugin(req.Identity)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &pb.ListChannelsResponse{Names: s.tracker.ListChannels()}
+
+	return resp, nil
+}
+
+// GetChannelInfo is the internal implementation of SeabirdServer.GetChannelInfo
 func (s *Server) GetChannelInfo(ctx context.Context, req *pb.ChannelInfoRequest) (*pb.ChannelInfoResponse, error) {
 	logrus.Info("GetChannelInfo request")
 

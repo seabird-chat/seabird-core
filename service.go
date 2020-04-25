@@ -6,28 +6,19 @@ import (
 	"context"
 	"time"
 
-	"github.com/belak/seabird-core/pb"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	irc "gopkg.in/irc.v3"
+
+	"github.com/belak/seabird-core/pb"
 )
 
 // TODO: move this into a test
 var _ pb.SeabirdServer = &Server{}
 
 // TODO: add tests
-
-func (s *Server) cleanupPlugin(plugin *pluginState) {
-	s.pluginLock.Lock()
-	defer s.pluginLock.Unlock()
-
-	clientToken := plugin.clientToken
-
-	delete(s.plugins, s.clients[clientToken])
-	delete(s.clients, clientToken)
-}
 
 // Register is the internal implementation of SeabirdServer.Register
 func (s *Server) Register(ctx context.Context, in *pb.RegisterRequest) (*pb.RegisterResponse, error) {
@@ -47,7 +38,11 @@ func (s *Server) Register(ctx context.Context, in *pb.RegisterRequest) (*pb.Regi
 		return nil, status.Error(codes.PermissionDenied, "plugin already registered")
 	}
 
-	state := &pluginState{name: plugin, clientToken: clientToken}
+	state := &pluginState{
+		name:        plugin,
+		clientToken: clientToken,
+		broadcast:   make(map[string]chan *pb.SeabirdEvent),
+	}
 
 	s.clients[clientToken] = plugin
 	s.plugins[plugin] = state
@@ -55,13 +50,7 @@ func (s *Server) Register(ctx context.Context, in *pb.RegisterRequest) (*pb.Regi
 	// Clean up any plugins which fail to register within 5 seconds
 	go func() {
 		time.Sleep(5 * time.Second)
-
-		state.Lock()
-		defer state.Unlock()
-
-		if state.broadcast == nil {
-			s.cleanupPlugin(state)
-		}
+		s.cleanupPlugin(state)
 	}()
 
 	return &pb.RegisterResponse{
@@ -79,27 +68,23 @@ func (s *Server) EventStream(req *pb.EventStreamRequest, stream pb.Seabird_Event
 		return err
 	}
 
-	// Mark this plugin as active
-	{
-		plugin.Lock()
+	streamId := uuid.New().String()
+	inputStream := make(chan *pb.SeabirdEvent)
 
-		if plugin.broadcast != nil {
-			plugin.Unlock()
-			return status.Error(codes.PermissionDenied, "plugin event stream already started")
-		}
+	// Mark this stream as active
+	plugin.Lock()
+	plugin.broadcast[streamId] = inputStream
+	plugin.Unlock()
 
-		plugin.broadcast = make(chan *pb.SeabirdEvent)
-
-		plugin.Unlock()
-
-	}
-
-	// Ensure we properly clean up the plugin information when a plugin's event stream dies.
+	// Ensure we properly clean up the plugin information when a plugin's last
+	// event stream dies. Note that because of the defer order, stream cleanup
+	// needs to be deferred last.
 	defer s.cleanupPlugin(plugin)
+	defer plugin.cleanupStream(streamId)
 
 	for {
 		select {
-		case event := <-plugin.broadcast:
+		case event := <-inputStream:
 			err = stream.Send(event)
 			if err != nil {
 				return status.Error(codes.Internal, "failed to send event")

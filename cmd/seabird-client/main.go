@@ -7,11 +7,12 @@ import (
 	"encoding/base64"
 	"io"
 	"log"
+	"os"
 	"time"
 
-	"google.golang.org/grpc"
-
 	"github.com/belak/seabird-core/pb"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 type basicAuth struct {
@@ -35,16 +36,16 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	/*
-		// Set up a connection to the server.
-		conn, err := grpc.DialContext(ctx, os.Args[1],
-			grpc.WithTransportCredentials(credentials.NewTLS(nil)),
-			grpc.WithPerRPCCredentials(basicAuth{
-				username: os.Getenv("GRPC_USER"),
-				password: os.Getenv("GRPC_PASS"),
-			}), grpc.WithBlock())
-	*/
-	conn, err := grpc.DialContext(ctx, "localhost:11235", grpc.WithInsecure(), grpc.WithBlock())
+	///*
+	// Set up a connection to the server.
+	conn, err := grpc.DialContext(ctx, os.Args[1],
+		grpc.WithTransportCredentials(credentials.NewTLS(nil)),
+		grpc.WithPerRPCCredentials(basicAuth{
+			username: os.Getenv("GRPC_USER"),
+			password: os.Getenv("GRPC_PASS"),
+		}), grpc.WithBlock())
+	//*/
+	//conn, err := grpc.DialContext(ctx, "localhost:11235", grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
@@ -76,6 +77,11 @@ func main() {
 	stream, err := c.EventStream(ctx, &pb.EventStreamRequest{Identity: identity})
 	if err != nil {
 		log.Fatalf("could not get event stream: %v", err)
+	}
+
+	_, err = c.EventStream(ctx, &pb.EventStreamRequest{Identity: identity})
+	if err != nil {
+		log.Fatalf("could not get second event stream: %v", err)
 	}
 
 	for {

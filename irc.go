@@ -112,15 +112,23 @@ func (s *Server) ircHandler(client *irc.Client, msg *irc.Message) {
 		defer s.pluginLock.RUnlock()
 
 		for _, plugin := range s.plugins {
-			if plugin.broadcast != nil {
+			// NOTE: this is the *ONLY* portion of the code that is allowed to
+			// modify consecutiveDroppedMessages. Because this isn't called
+			// concurrently, even though consecutiveDroppedMessages isn't behind
+			// a mutex, this is fine.
+			plugin.RLock()
+
+			for _, stream := range plugin.broadcast {
 				select {
-				case plugin.broadcast <- event:
-					plugin.droppedMessages = 0
+				case stream <- event:
+					plugin.consecutiveDroppedMessages = 0
 				default:
 					logger.WithField("plugin", plugin.name).Warn("Plugin dropped a message")
-					plugin.droppedMessages++
+					plugin.consecutiveDroppedMessages++
 				}
 			}
+
+			plugin.RUnlock()
 		}
 	}
 }

@@ -6,13 +6,13 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	irc "gopkg.in/irc.v3"
 
 	"github.com/belak/seabird-core/pb"
-	"github.com/sirupsen/logrus"
-	irc "gopkg.in/irc.v3"
 )
 
 type Server struct {
@@ -39,14 +39,21 @@ type ServerConfig struct {
 }
 
 type pluginState struct {
-	sync.Mutex
+	sync.RWMutex
 
 	name        string
 	clientToken string
-	broadcast   chan *pb.SeabirdEvent
+	broadcast   map[string]chan *pb.SeabirdEvent
 
 	// TODO: do something with this metric
-	droppedMessages int
+	consecutiveDroppedMessages int
+}
+
+func (p *pluginState) cleanupStream(streamId string) {
+	p.Lock()
+	defer p.Unlock()
+
+	delete(p.broadcast, streamId)
 }
 
 func NewServer(config ServerConfig) (*Server, error) {
@@ -113,6 +120,23 @@ func (s *Server) lookupPlugin(identity *pb.Identity) (*pluginState, error) {
 	}
 
 	return meta, nil
+}
+
+func (s *Server) cleanupPlugin(plugin *pluginState) {
+	plugin.RLock()
+	if len(plugin.broadcast) != 0 {
+		plugin.RUnlock()
+		return
+	}
+	plugin.RUnlock()
+
+	s.pluginLock.Lock()
+	defer s.pluginLock.Unlock()
+
+	clientToken := plugin.clientToken
+
+	delete(s.plugins, s.clients[clientToken])
+	delete(s.clients, clientToken)
 }
 
 func (s *Server) ListenAndServe() error {

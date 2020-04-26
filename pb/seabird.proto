@@ -27,12 +27,14 @@ service Seabird {
   rpc JoinChannel(JoinChannelRequest) returns (JoinChannelResponse) {}
   rpc LeaveChannel(LeaveChannelRequest) returns (LeaveChannelResponse) {}
 
-  // TODO: add GetPluginInfo
-  // TODO: add ListPlugins
+  rpc ListPlugins(ListPluginsRequest) returns (ListPluginsResponse) {}
+  rpc GetPluginInfo(PluginInfoRequest) returns (PluginInfoResponse) {}
 }
 
 message RegisterRequest {
   string plugin = 1;
+
+  map<string, CommandMetadata> commands = 2;
 }
 
 message RegisterResponse {
@@ -41,11 +43,10 @@ message RegisterResponse {
 
 message EventStreamRequest {
   Identity identity = 1;
-
-  repeated CommandRegistration commands = 2;
 }
 
-message CommandRegistration {
+message CommandMetadata {
+  // TODO: revisit if name should be included here as well
   string name = 1;
   string shortHelp = 2;
   string fullHelp = 3;
@@ -152,3 +153,23 @@ message LeaveChannelRequest {
 }
 
 message LeaveChannelResponse {}
+
+message ListPluginsRequest {
+  Identity identity = 1;
+}
+
+message ListPluginsResponse {
+  repeated string names = 1;
+}
+
+message PluginInfoRequest {
+  Identity identity = 1;
+
+  string name = 2;
+}
+
+message PluginInfoResponse {
+  string name = 1;
+
+  map<string, CommandMetadata> commands = 2;
+}

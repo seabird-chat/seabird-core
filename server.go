@@ -48,6 +48,7 @@ type pluginState struct {
 	name        string
 	clientToken string
 	streams     map[string]*streamState
+	commands    map[string]*commandMetadata
 
 	// TODO: do something with this metric
 	consecutiveDroppedMessages int
@@ -55,7 +56,6 @@ type pluginState struct {
 
 type streamState struct {
 	broadcast chan *pb.SeabirdEvent
-	commands  map[string]*commandMetadata
 }
 
 type commandMetadata struct {

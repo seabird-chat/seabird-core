@@ -21,11 +21,11 @@ var _ pb.SeabirdServer = &Server{}
 // TODO: add tests
 
 // Register is the internal implementation of SeabirdServer.Register
-func (s *Server) Register(ctx context.Context, in *pb.RegisterRequest) (*pb.RegisterResponse, error) {
+func (s *Server) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterResponse, error) {
 	logrus.Info("Register request")
 
 	clientToken := uuid.New().String()
-	plugin := in.Plugin
+	plugin := req.Plugin
 
 	s.pluginLock.Lock()
 	defer s.pluginLock.Unlock()
@@ -42,13 +42,30 @@ func (s *Server) Register(ctx context.Context, in *pb.RegisterRequest) (*pb.Regi
 		name:        plugin,
 		clientToken: clientToken,
 		streams:     make(map[string]*streamState),
+		commands:    make(map[string]*commandMetadata),
+	}
+
+	for _, registration := range req.Commands {
+		if _, ok := state.commands[registration.Name]; ok {
+			return nil, status.Error(codes.InvalidArgument, "duplicate commands")
+		}
+
+		state.commands[registration.Name] = &commandMetadata{
+			name:      registration.Name,
+			shortHelp: registration.ShortHelp,
+			fullHelp:  registration.FullHelp,
+		}
 	}
 
 	s.clients[clientToken] = plugin
 	s.plugins[plugin] = state
 
-	// Clean up any plugins which fail to register within 5 seconds
+	// Clean up any plugins which fail to register within 5 seconds. Note that
+	// we also clear the help cache here because if it's done in a defer,
+	// there's a potential deadlock.
 	go func() {
+		s.clearHelpCache()
+
 		time.Sleep(5 * time.Second)
 		s.cleanupPlugin(state)
 	}()
@@ -71,19 +88,6 @@ func (s *Server) EventStream(req *pb.EventStreamRequest, stream pb.Seabird_Event
 	streamId := uuid.New().String()
 	inputStream := &streamState{
 		broadcast: make(chan *pb.SeabirdEvent),
-		commands:  make(map[string]*commandMetadata),
-	}
-
-	for _, registration := range req.Commands {
-		if _, ok := inputStream.commands[registration.Name]; ok {
-			return status.Error(codes.InvalidArgument, "duplicate commands")
-		}
-
-		inputStream.commands[registration.Name] = &commandMetadata{
-			name:      registration.Name,
-			shortHelp: registration.ShortHelp,
-			fullHelp:  registration.FullHelp,
-		}
 	}
 
 	// Mark this stream as active
@@ -253,4 +257,54 @@ func (s *Server) LeaveChannel(ctx context.Context, req *pb.LeaveChannelRequest) 
 	}
 
 	return nil, status.Error(codes.Unimplemented, "LeaveChannel unimplemented")
+}
+
+func (s *Server) ListPlugins(ctx context.Context, req *pb.ListPluginsRequest) (*pb.ListPluginsResponse, error) {
+	logrus.Info("ListPlugins request")
+
+	_, err := s.lookupPlugin(req.Identity)
+	if err != nil {
+		return nil, err
+	}
+
+	s.pluginLock.RLock()
+	defer s.pluginLock.RUnlock()
+
+	var plugins []string
+	for plugin := range s.plugins {
+		plugins = append(plugins, plugin)
+	}
+
+	resp := &pb.ListPluginsResponse{Names: plugins}
+
+	return resp, nil
+}
+
+func (s *Server) GetPluginInfo(ctx context.Context, req *pb.PluginInfoRequest) (*pb.PluginInfoResponse, error) {
+	logrus.Info("GetPluginInfo request")
+
+	_, err := s.lookupPlugin(req.Identity)
+	if err != nil {
+		return nil, err
+	}
+
+	s.pluginLock.RLock()
+	defer s.pluginLock.RUnlock()
+
+	plugin, ok := s.plugins[req.Name]
+	if !ok {
+		return nil, status.Error(codes.NotFound, "plugin not found")
+	}
+
+	resp := &pb.PluginInfoResponse{Name: plugin.name, Commands: make(map[string]*pb.CommandMetadata)}
+
+	for _, command := range plugin.commands {
+		resp.Commands[command.name] = &pb.CommandMetadata{
+			Name:      command.name,
+			ShortHelp: command.shortHelp,
+			FullHelp:  command.fullHelp,
+		}
+	}
+
+	return resp, nil
 }

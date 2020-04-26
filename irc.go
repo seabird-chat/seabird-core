@@ -123,15 +123,16 @@ func (s *Server) ircHandler(client *irc.Client, msg *irc.Message) {
 			// a mutex, this is fine.
 			plugin.RLock()
 
-			for _, stream := range plugin.streams {
-				// If this was a command event and this stream didn't specify it
-				// supports this command, don't send it.
-				if cmdEvent, ok := event.Event.(*pb.SeabirdEvent_Command); ok {
-					if _, ok := stream.commands[cmdEvent.Command.Command]; !ok {
-						continue
-					}
+			// If this was a command event and this plugin didn't specify it
+			// supports this command, don't send it.
+			if cmdEvent, ok := event.Event.(*pb.SeabirdEvent_Command); ok {
+				if _, ok := plugin.commands[cmdEvent.Command.Command]; !ok {
+					plugin.RUnlock()
+					continue
 				}
+			}
 
+			for _, stream := range plugin.streams {
 				select {
 				case stream.broadcast <- event:
 					plugin.consecutiveDroppedMessages = 0
@@ -158,16 +159,14 @@ func (s *Server) getHelp() ([]string, map[string][]*commandMetadata) {
 		for _, plugin := range s.plugins {
 			plugin.RLock()
 
-			for _, stream := range plugin.streams {
-				for _, command := range stream.commands {
-					// If this is our first time seeing this command, add it to
-					// the overall list.
-					if _, ok := s.helpCacheMetadata[command.name]; !ok {
-						s.helpCacheCommands = append(s.helpCacheCommands, command.name)
-					}
-
-					s.helpCacheMetadata[command.name] = append(s.helpCacheMetadata[command.name], command)
+			for _, command := range plugin.commands {
+				// If this is our first time seeing this command, add it to
+				// the overall list.
+				if _, ok := s.helpCacheMetadata[command.name]; !ok {
+					s.helpCacheCommands = append(s.helpCacheCommands, command.name)
 				}
+
+				s.helpCacheMetadata[command.name] = append(s.helpCacheMetadata[command.name], command)
 			}
 
 			plugin.RUnlock()
@@ -193,7 +192,7 @@ func (s *Server) handleHelp(channel, sender, arg string) {
 	} else {
 		if metas, ok := pluginMeta[arg]; ok {
 			for _, meta := range metas {
-				err := s.client.Writef("PRIVMSG %s :%s: %q: %s", channel, sender, arg, meta.shortHelp)
+				err := s.client.Writef("PRIVMSG %s :%s: %s: %s", channel, sender, arg, meta.shortHelp)
 				if err != nil {
 					logrus.WithError(err).Error("Failed to write message")
 				}

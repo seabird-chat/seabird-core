@@ -114,12 +114,27 @@ func (s *Server) AddPlugin(plugin *Plugin) error {
 }
 
 func (s *Server) MaybeRemovePlugin(plugin *Plugin) {
+	s.pluginLock.Lock()
+	defer s.pluginLock.Unlock()
+
 	if !plugin.Dead() {
 		return
 	}
 
+	s.removePlugin(plugin)
+}
+
+func (s *Server) DropPlugin(plugin *Plugin) {
 	s.pluginLock.Lock()
 	defer s.pluginLock.Unlock()
+
+	plugin.Close()
+
+	s.removePlugin(plugin)
+}
+
+func (s *Server) removePlugin(plugin *Plugin) {
+	// NOTE: pluginLock needs to be acquired while this is called.
 
 	clientToken := plugin.Token
 

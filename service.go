@@ -77,14 +77,14 @@ func (s *Server) EventStream(req *pb.EventStreamRequest, stream pb.Seabird_Event
 	defer plugin.RemoveStream(inputStream)
 
 	for {
-		select {
-		case event := <-inputStream.Recv():
-			err = stream.Send(event)
-			if err != nil {
-				return status.Error(codes.Internal, "failed to send event")
-			}
-		case <-ctx.Done():
+		event, err := inputStream.Recv(ctx)
+		if err != nil {
 			return status.Error(codes.Canceled, "event stream cancelled")
+		}
+
+		err = stream.Send(event)
+		if err != nil {
+			return status.Error(codes.Internal, "failed to send event")
 		}
 	}
 }

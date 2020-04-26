@@ -1,6 +1,7 @@
 package seabird
 
 import (
+	"context"
 	"sort"
 	"strings"
 	"unicode"
@@ -117,31 +118,19 @@ func (s *Server) ircHandler(client *irc.Client, msg *irc.Message) {
 		defer s.pluginLock.RUnlock()
 
 		for _, plugin := range s.plugins {
-			// NOTE: this is the *ONLY* portion of the code that is allowed to
-			// modify consecutiveDroppedMessages. Because this isn't called
-			// concurrently, even though consecutiveDroppedMessages isn't behind
-			// a mutex, this is fine.
-			plugin.RLock()
-
 			// If this was a command event and this plugin didn't specify it
 			// supports this command, don't send it.
 			if cmdEvent, ok := event.Event.(*pb.SeabirdEvent_Command); ok {
-				if plugin.RespondsToCommand(cmdEvent.Command.Command) {
+				if !plugin.RespondsToCommand(cmdEvent.Command.Command) {
 					continue
 				}
 			}
 
-			for _, stream := range plugin.streams {
-				select {
-				case stream.broadcast <- event:
-					plugin.consecutiveDroppedMessages = 0
-				default:
-					logger.WithField("plugin", plugin.Name).Warn("Plugin dropped a message")
-					plugin.consecutiveDroppedMessages++
-				}
+			// If a broadcast to this plugin fails, kill the plugin
+			err := plugin.Broadcast(context.Background(), event)
+			if err != nil {
+				go s.DropPlugin(plugin)
 			}
-
-			plugin.RUnlock()
 		}
 	}
 }
@@ -156,19 +145,20 @@ func (s *Server) getHelp() ([]string, map[string][]*commandMetadata) {
 
 		s.pluginLock.RLock()
 		for _, plugin := range s.plugins {
-			plugin.RLock()
-
-			for _, command := range plugin.commands {
-				// If this is our first time seeing this command, add it to
-				// the overall list.
-				if _, ok := s.helpCacheMetadata[command.name]; !ok {
-					s.helpCacheCommands = append(s.helpCacheCommands, command.name)
+			for _, command := range plugin.Commands() {
+				meta := plugin.CommandInfo(command)
+				if meta == nil {
+					continue
 				}
 
-				s.helpCacheMetadata[command.name] = append(s.helpCacheMetadata[command.name], command)
-			}
+				// If this is our first time seeing this command, add it to
+				// the overall list.
+				if _, ok := s.helpCacheMetadata[command]; !ok {
+					s.helpCacheCommands = append(s.helpCacheCommands, command)
+				}
 
-			plugin.RUnlock()
+				s.helpCacheMetadata[command] = append(s.helpCacheMetadata[command], meta)
+			}
 		}
 		s.pluginLock.RUnlock()
 

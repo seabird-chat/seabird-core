@@ -6,7 +6,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -24,54 +23,34 @@ var _ pb.SeabirdServer = &Server{}
 func (s *Server) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterResponse, error) {
 	logrus.Info("Register request")
 
-	clientToken := uuid.New().String()
-	plugin := req.Plugin
-
-	s.pluginLock.Lock()
-	defer s.pluginLock.Unlock()
-
-	if _, ok := s.clients[clientToken]; ok {
-		return nil, status.Error(codes.Internal, "duplicate client token")
-	}
-
-	if _, ok := s.plugins[plugin]; ok {
-		return nil, status.Error(codes.PermissionDenied, "plugin already registered")
-	}
-
-	state := &pluginState{
-		name:        plugin,
-		clientToken: clientToken,
-		streams:     make(map[string]*streamState),
-		commands:    make(map[string]*commandMetadata),
-	}
-
+	commands := make(map[string]*commandMetadata)
 	for _, registration := range req.Commands {
-		if _, ok := state.commands[registration.Name]; ok {
+		if _, ok := commands[registration.Name]; ok {
 			return nil, status.Error(codes.InvalidArgument, "duplicate commands")
 		}
 
-		state.commands[registration.Name] = &commandMetadata{
+		commands[registration.Name] = &commandMetadata{
 			name:      registration.Name,
 			shortHelp: registration.ShortHelp,
 			fullHelp:  registration.FullHelp,
 		}
 	}
 
-	s.clients[clientToken] = plugin
-	s.plugins[plugin] = state
+	plugin := NewPlugin(req.Plugin, commands)
 
-	// Clean up any plugins which fail to register within 5 seconds. Note that
-	// we also clear the help cache here because if it's done in a defer,
-	// there's a potential deadlock.
+	err := s.AddPlugin(plugin)
+	if err != nil {
+		return nil, err
+	}
+
+	// Clean up any plugins which fail to register within 5 seconds.
 	go func() {
-		s.clearHelpCache()
-
 		time.Sleep(5 * time.Second)
-		s.cleanupPlugin(state)
+		s.MaybeRemovePlugin(plugin)
 	}()
 
 	return &pb.RegisterResponse{
-		Identity: &pb.Identity{AuthMethod: &pb.Identity_Token{Token: clientToken}},
+		Identity: &pb.Identity{AuthMethod: &pb.Identity_Token{Token: plugin.Token}},
 	}, nil
 }
 
@@ -85,26 +64,21 @@ func (s *Server) EventStream(req *pb.EventStreamRequest, stream pb.Seabird_Event
 		return err
 	}
 
-	streamId := uuid.New().String()
-	inputStream := &streamState{
-		broadcast: make(chan *pb.SeabirdEvent),
+	inputStream := NewStream()
+	err = plugin.AddStream(inputStream)
+	if err != nil {
+		return err
 	}
-
-	// Mark this stream as active
-	plugin.Lock()
-	plugin.streams[streamId] = inputStream
-	plugin.Unlock()
 
 	// Ensure we properly clean up the plugin information when a plugin's last
 	// event stream dies. Note that because of the defer order, stream cleanup
 	// needs to be deferred last.
-	defer s.clearHelpCache()
-	defer s.cleanupPlugin(plugin)
-	defer plugin.cleanupStream(streamId)
+	defer s.MaybeRemovePlugin(plugin)
+	defer plugin.RemoveStream(inputStream)
 
 	for {
 		select {
-		case event := <-inputStream.broadcast:
+		case event := <-inputStream.Recv():
 			err = stream.Send(event)
 			if err != nil {
 				return status.Error(codes.Internal, "failed to send event")
@@ -236,7 +210,8 @@ func (s *Server) JoinChannel(ctx context.Context, req *pb.JoinChannelRequest) (*
 		return nil, status.Error(codes.Internal, "failed to write message")
 	}
 
-	return nil, status.Error(codes.Unimplemented, "JoinChannel unimplemented")
+	// TODO: this is implemented
+	return &pb.JoinChannelResponse{}, nil
 }
 
 // LeaveChannel is the internal implementation of SeabirdServer.LeaveChannel
@@ -296,7 +271,7 @@ func (s *Server) GetPluginInfo(ctx context.Context, req *pb.PluginInfoRequest) (
 		return nil, status.Error(codes.NotFound, "plugin not found")
 	}
 
-	resp := &pb.PluginInfoResponse{Name: plugin.name, Commands: make(map[string]*pb.CommandMetadata)}
+	resp := &pb.PluginInfoResponse{Name: plugin.Name, Commands: make(map[string]*pb.CommandMetadata)}
 
 	for _, command := range plugin.commands {
 		resp.Commands[command.name] = &pb.CommandMetadata{

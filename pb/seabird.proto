@@ -172,4 +172,7 @@ message PluginInfoResponse {
   string name = 1;
 
   map<string, CommandMetadata> commands = 2;
+
+  // TODO: find a way to track IPs related to plugins - maybe deny connections
+  // from an IP other than the registration
 }

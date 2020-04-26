@@ -126,8 +126,7 @@ func (s *Server) ircHandler(client *irc.Client, msg *irc.Message) {
 			// If this was a command event and this plugin didn't specify it
 			// supports this command, don't send it.
 			if cmdEvent, ok := event.Event.(*pb.SeabirdEvent_Command); ok {
-				if _, ok := plugin.commands[cmdEvent.Command.Command]; !ok {
-					plugin.RUnlock()
+				if plugin.RespondsToCommand(cmdEvent.Command.Command) {
 					continue
 				}
 			}
@@ -137,7 +136,7 @@ func (s *Server) ircHandler(client *irc.Client, msg *irc.Message) {
 				case stream.broadcast <- event:
 					plugin.consecutiveDroppedMessages = 0
 				default:
-					logger.WithField("plugin", plugin.name).Warn("Plugin dropped a message")
+					logger.WithField("plugin", plugin.Name).Warn("Plugin dropped a message")
 					plugin.consecutiveDroppedMessages++
 				}
 			}

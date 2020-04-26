@@ -22,8 +22,8 @@ type Server struct {
 	config ServerConfig
 
 	pluginLock sync.RWMutex
-	clients    map[string]string       // Mapping of client_id to plugin name
-	plugins    map[string]*pluginState // Mapping of plugin name to state
+	clients    map[string]string  // Mapping of client_id to plugin name
+	plugins    map[string]*Plugin // Mapping of plugin name to state
 
 	tracker *Tracker
 
@@ -42,33 +42,10 @@ type ServerConfig struct {
 	Pass          string
 }
 
-type pluginState struct {
-	sync.RWMutex
-
-	name        string
-	clientToken string
-	streams     map[string]*streamState
-	commands    map[string]*commandMetadata
-
-	// TODO: do something with this metric
-	consecutiveDroppedMessages int
-}
-
-type streamState struct {
-	broadcast chan *pb.SeabirdEvent
-}
-
 type commandMetadata struct {
 	name      string
 	shortHelp string
 	fullHelp  string
-}
-
-func (p *pluginState) cleanupStream(streamId string) {
-	p.Lock()
-	defer p.Unlock()
-
-	delete(p.streams, streamId)
 }
 
 func NewServer(config ServerConfig) (*Server, error) {
@@ -87,7 +64,7 @@ func NewServer(config ServerConfig) (*Server, error) {
 
 	s := &Server{
 		clients: make(map[string]string),
-		plugins: make(map[string]*pluginState),
+		plugins: make(map[string]*Plugin),
 		tracker: NewTracker(),
 
 		config: config,
@@ -117,7 +94,46 @@ func NewServer(config ServerConfig) (*Server, error) {
 	return s, nil
 }
 
-func (s *Server) lookupPlugin(identity *pb.Identity) (*pluginState, error) {
+func (s *Server) AddPlugin(plugin *Plugin) error {
+	s.pluginLock.Lock()
+	defer s.pluginLock.Unlock()
+
+	if _, ok := s.clients[plugin.Token]; ok {
+		return status.Error(codes.Internal, "duplicate client token")
+	}
+
+	if _, ok := s.plugins[plugin.Name]; ok {
+		return status.Error(codes.PermissionDenied, "plugin already registered")
+	}
+
+	// Register this plugin on the server
+	s.clients[plugin.Token] = plugin.Name
+	s.plugins[plugin.Name] = plugin
+
+	return nil
+}
+
+func (s *Server) MaybeRemovePlugin(plugin *Plugin) {
+	if !plugin.Dead() {
+		return
+	}
+
+	s.pluginLock.Lock()
+	defer s.pluginLock.Unlock()
+
+	clientToken := plugin.Token
+
+	delete(s.plugins, s.clients[clientToken])
+	delete(s.clients, clientToken)
+
+	// We need to do this in a goroutine to avoid a possible deadlock. This
+	// allows it to be delayed until the helpLock is available.
+	go func() {
+		s.clearHelpCache()
+	}()
+}
+
+func (s *Server) lookupPlugin(identity *pb.Identity) (*Plugin, error) {
 	clientToken := identity.GetToken()
 
 	if identity.GetToken() == "" {
@@ -135,23 +151,6 @@ func (s *Server) lookupPlugin(identity *pb.Identity) (*pluginState, error) {
 	}
 
 	return meta, nil
-}
-
-func (s *Server) cleanupPlugin(plugin *pluginState) {
-	plugin.RLock()
-	if len(plugin.streams) != 0 {
-		plugin.RUnlock()
-		return
-	}
-	plugin.RUnlock()
-
-	s.pluginLock.Lock()
-	defer s.pluginLock.Unlock()
-
-	clientToken := plugin.clientToken
-
-	delete(s.plugins, s.clients[clientToken])
-	delete(s.clients, clientToken)
 }
 
 func (s *Server) clearHelpCache() {

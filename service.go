@@ -21,7 +21,7 @@ var _ pb.SeabirdServer = &Server{}
 
 // Register is the internal implementation of SeabirdServer.Register
 func (s *Server) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterResponse, error) {
-	logrus.Info("Register request")
+	logrus.Debug("Register request")
 
 	commands := make(map[string]*commandMetadata)
 	for _, registration := range req.Commands {
@@ -43,6 +43,8 @@ func (s *Server) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.Reg
 		return nil, err
 	}
 
+	logrus.WithField("plugin", plugin.Name).Info("Plugin registered")
+
 	// Clean up any plugins which fail to register within 5 seconds.
 	go func() {
 		time.Sleep(5 * time.Second)
@@ -56,7 +58,7 @@ func (s *Server) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.Reg
 
 // EventStream is the internal implementation of SeabirdServer.EventStream
 func (s *Server) EventStream(req *pb.EventStreamRequest, stream pb.Seabird_EventStreamServer) error {
-	logrus.Info("EventStream request")
+	logrus.Debug("EventStream request")
 
 	ctx := stream.Context()
 	plugin, err := s.lookupPlugin(req.Identity)
@@ -69,6 +71,14 @@ func (s *Server) EventStream(req *pb.EventStreamRequest, stream pb.Seabird_Event
 	if err != nil {
 		return err
 	}
+
+	logger := logrus.WithFields(logrus.Fields{
+		"plugin": plugin.Name,
+		"stream": inputStream.ID,
+	})
+
+	logger.Info("Stream started")
+	defer logger.Info("Stream closed")
 
 	// Ensure we properly clean up the plugin information when a plugin's last
 	// event stream dies. Note that because of the defer order, stream cleanup
@@ -91,7 +101,7 @@ func (s *Server) EventStream(req *pb.EventStreamRequest, stream pb.Seabird_Event
 
 // SendMessage is the internal implementation of SeabirdServer.SendMessage
 func (s *Server) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*pb.SendMessageResponse, error) {
-	logrus.Info("SendMessage request")
+	logrus.Debug("SendMessage request")
 
 	_, err := s.lookupPlugin(req.Identity)
 	if err != nil {
@@ -111,7 +121,7 @@ func (s *Server) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*
 
 // SendRawMessage is the internal implementation of SeabirdServer.SendMessage
 func (s *Server) SendRawMessage(ctx context.Context, req *pb.SendRawMessageRequest) (*pb.SendRawMessageResponse, error) {
-	logrus.Info("SendMessage request")
+	logrus.Debug("SendMessage request")
 
 	_, err := s.lookupPlugin(req.Identity)
 	if err != nil {
@@ -131,7 +141,7 @@ func (s *Server) SendRawMessage(ctx context.Context, req *pb.SendRawMessageReque
 
 // GetChannelInfo is the internal implementation of SeabirdServer.GetChannelInfo
 func (s *Server) ListChannels(ctx context.Context, req *pb.ListChannelsRequest) (*pb.ListChannelsResponse, error) {
-	logrus.Info("ListChannels request")
+	logrus.Debug("ListChannels request")
 
 	_, err := s.lookupPlugin(req.Identity)
 	if err != nil {
@@ -145,7 +155,7 @@ func (s *Server) ListChannels(ctx context.Context, req *pb.ListChannelsRequest) 
 
 // GetChannelInfo is the internal implementation of SeabirdServer.GetChannelInfo
 func (s *Server) GetChannelInfo(ctx context.Context, req *pb.ChannelInfoRequest) (*pb.ChannelInfoResponse, error) {
-	logrus.Info("GetChannelInfo request")
+	logrus.Debug("GetChannelInfo request")
 
 	_, err := s.lookupPlugin(req.Identity)
 	if err != nil {
@@ -167,7 +177,7 @@ func (s *Server) GetChannelInfo(ctx context.Context, req *pb.ChannelInfoRequest)
 
 // SetChannelInfo is the internal implementation of SeabirdServer.SetChannelInfo
 func (s *Server) SetChannelInfo(ctx context.Context, req *pb.SetChannelInfoRequest) (*pb.SetChannelInfoResponse, error) {
-	logrus.Info("SetChannelInfo request")
+	logrus.Debug("SetChannelInfo request")
 
 	_, err := s.lookupPlugin(req.Identity)
 	if err != nil {

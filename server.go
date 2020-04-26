@@ -141,6 +141,8 @@ func (s *Server) removePlugin(plugin *Plugin) {
 	delete(s.plugins, s.clients[clientToken])
 	delete(s.clients, clientToken)
 
+	logrus.WithField("plugin", plugin.Name).Info("Plugin dropped")
+
 	// We need to do this in a goroutine to avoid a possible deadlock. This
 	// allows it to be delayed until the helpLock is available.
 	go func() {
@@ -174,6 +176,8 @@ func (s *Server) clearHelpCache() {
 
 	s.helpCacheCommands = nil
 	s.helpCacheMetadata = nil
+
+	logrus.Debug("Help cache cleared")
 }
 
 func (s *Server) ListenAndServe() error {

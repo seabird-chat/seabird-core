@@ -13,7 +13,7 @@ import (
 type Stream struct {
 	ID string
 
-	broadcast chan *pb.SeabirdEvent
+	broadcast chan *pb.Event
 	done      chan struct{}
 	once      sync.Once
 }
@@ -24,13 +24,13 @@ func NewStream() *Stream {
 
 		// We buffer broadcast so there's a bit of leeway if the plugin doesn't
 		// respond to an event right away.
-		broadcast: make(chan *pb.SeabirdEvent, 5),
+		broadcast: make(chan *pb.Event, 5),
 
 		done: make(chan struct{}),
 	}
 }
 
-func (s *Stream) Send(ctx context.Context, event *pb.SeabirdEvent) error {
+func (s *Stream) Send(ctx context.Context, event *pb.Event) error {
 	select {
 	case s.broadcast <- event:
 	case <-s.done:
@@ -44,7 +44,7 @@ func (s *Stream) Send(ctx context.Context, event *pb.SeabirdEvent) error {
 	return nil
 }
 
-func (s *Stream) Recv(ctx context.Context) (*pb.SeabirdEvent, error) {
+func (s *Stream) Recv(ctx context.Context) (*pb.Event, error) {
 	select {
 	case event := <-s.broadcast:
 		return event, nil

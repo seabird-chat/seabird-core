@@ -23,7 +23,7 @@ func (s *Server) ircHandler(client *irc.Client, msg *irc.Message) {
 		logger.Info("Connected")
 	}
 
-	event := &pb.SeabirdEvent{Event: nil}
+	event := &pb.Event{Inner: nil}
 
 	if msg.Command == "PRIVMSG" && len(msg.Params) == 2 {
 		lastArg := msg.Trailing()
@@ -38,7 +38,7 @@ func (s *Server) ircHandler(client *irc.Client, msg *irc.Message) {
 				"message": message,
 			}).Info("Generating private message event")
 
-			event.Event = &pb.SeabirdEvent_PrivateMessage{PrivateMessage: &pb.PrivateMessageEvent{
+			event.Inner = &pb.Event_PrivateMessage{PrivateMessage: &pb.PrivateMessageEvent{
 				ReplyTo: sender,
 				Sender:  sender,
 				Message: message,
@@ -67,7 +67,7 @@ func (s *Server) ircHandler(client *irc.Client, msg *irc.Message) {
 					"arg":     arg,
 				}).Info("Generating command event")
 
-				event.Event = &pb.SeabirdEvent_Command{Command: &pb.CommandEvent{
+				event.Inner = &pb.Event_Command{Command: &pb.CommandEvent{
 					ReplyTo: channel,
 					Sender:  sender,
 					Command: command,
@@ -88,7 +88,7 @@ func (s *Server) ircHandler(client *irc.Client, msg *irc.Message) {
 					"message": message,
 				}).Info("Generating mention event")
 
-				event.Event = &pb.SeabirdEvent_Mention{Mention: &pb.MentionEvent{
+				event.Inner = &pb.Event_Mention{Mention: &pb.MentionEvent{
 					ReplyTo: channel,
 					Sender:  sender,
 					Message: message,
@@ -104,7 +104,7 @@ func (s *Server) ircHandler(client *irc.Client, msg *irc.Message) {
 					"message": message,
 				}).Info("Generating message event")
 
-				event.Event = &pb.SeabirdEvent_Message{Message: &pb.MessageEvent{
+				event.Inner = &pb.Event_Message{Message: &pb.MessageEvent{
 					ReplyTo: channel,
 					Sender:  sender,
 					Message: message,
@@ -113,14 +113,14 @@ func (s *Server) ircHandler(client *irc.Client, msg *irc.Message) {
 		}
 	}
 
-	if event.Event != nil {
+	if event.Inner != nil {
 		s.pluginLock.RLock()
 		defer s.pluginLock.RUnlock()
 
 		for _, plugin := range s.plugins {
 			// If this was a command event and this plugin didn't specify it
 			// supports this command, don't send it.
-			if cmdEvent, ok := event.Event.(*pb.SeabirdEvent_Command); ok {
+			if cmdEvent, ok := event.Inner.(*pb.Event_Command); ok {
 				if !plugin.RespondsToCommand(cmdEvent.Command.Command) {
 					continue
 				}

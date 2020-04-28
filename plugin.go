@@ -102,7 +102,7 @@ func (p *Plugin) RespondsToCommand(command string) bool {
 	return ok
 }
 
-func (p *Plugin) Broadcast(ctx context.Context, event *pb.SeabirdEvent) error {
+func (p *Plugin) Broadcast(ctx context.Context, event *pb.Event) error {
 	p.RLock()
 	defer p.RUnlock()
 

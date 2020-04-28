@@ -1,4 +1,4 @@
-//go:generate protoc -I ../../pb --go_out=plugins=grpc:../../pb/ ../../pb/seabird.proto
+//go:generate protoc -I ../../proto --go_out=plugins=grpc:../../pb/ ../../proto/seabird.proto
 
 package main
 
@@ -52,7 +52,7 @@ func main() {
 	c := pb.NewSeabirdClient(conn)
 
 	// Contact the server and print out its response.
-	r, err := c.Register(ctx, &pb.RegisterRequest{
+	r, err := c.OpenSession(ctx, &pb.OpenSessionRequest{
 		Plugin: "seabird-client",
 		Commands: map[string]*pb.CommandMetadata{
 			"test": {
@@ -78,12 +78,12 @@ func main() {
 		log.Fatalf("could not send message: %v", err)
 	}
 
-	stream, err := c.EventStream(ctx, &pb.EventStreamRequest{Identity: identity})
+	stream, err := c.Events(ctx, &pb.EventsRequest{Identity: identity})
 	if err != nil {
 		log.Fatalf("could not get event stream: %v", err)
 	}
 
-	_, err = c.EventStream(ctx, &pb.EventStreamRequest{Identity: identity})
+	_, err = c.Events(ctx, &pb.EventsRequest{Identity: identity})
 	if err != nil {
 		log.Fatalf("could not get second event stream: %v", err)
 	}
@@ -100,12 +100,12 @@ func main() {
 		log.Printf("Msg: %v", msg)
 
 		var replyTo string
-		switch event := msg.Event.(type) {
-		case *pb.SeabirdEvent_Message:
+		switch event := msg.Inner.(type) {
+		case *pb.Event_Message:
 			replyTo = event.Message.ReplyTo
-		case *pb.SeabirdEvent_PrivateMessage:
+		case *pb.Event_PrivateMessage:
 			replyTo = event.PrivateMessage.ReplyTo
-		case *pb.SeabirdEvent_Command:
+		case *pb.Event_Command:
 			replyTo = event.Command.ReplyTo
 		default:
 			continue

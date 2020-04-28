@@ -1,4 +1,4 @@
-//go:generate protoc -I ./pb --go_out=plugins=grpc:./pb/ ./pb/seabird.proto
+//go:generate protoc -I ./proto --go_out=plugins=grpc:./pb/ ./proto/seabird.proto
 
 package seabird
 
@@ -19,8 +19,8 @@ var _ pb.SeabirdServer = &Server{}
 
 // TODO: add tests
 
-// Register is the internal implementation of SeabirdServer.Register
-func (s *Server) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterResponse, error) {
+// OpenSession is the internal implementation of SeabirdServer.OpenSession
+func (s *Server) OpenSession(ctx context.Context, req *pb.OpenSessionRequest) (*pb.OpenSessionResponse, error) {
 	logrus.Debug("Register request")
 
 	commands := make(map[string]*commandMetadata)
@@ -51,13 +51,13 @@ func (s *Server) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.Reg
 		s.MaybeRemovePlugin(plugin)
 	}()
 
-	return &pb.RegisterResponse{
+	return &pb.OpenSessionResponse{
 		Identity: &pb.Identity{AuthMethod: &pb.Identity_Token{Token: plugin.Token}},
 	}, nil
 }
 
 // EventStream is the internal implementation of SeabirdServer.EventStream
-func (s *Server) EventStream(req *pb.EventStreamRequest, stream pb.Seabird_EventStreamServer) error {
+func (s *Server) Events(req *pb.EventsRequest, stream pb.Seabird_EventsServer) error {
 	logrus.Debug("EventStream request")
 
 	ctx := stream.Context()

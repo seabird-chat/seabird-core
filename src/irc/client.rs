@@ -152,6 +152,10 @@ impl Client {
         self.write(msg.to_string()).await
     }
 
+    pub async fn get_current_nick(&self) -> String {
+        self.metadata.read().await.current_nick.clone()
+    }
+
     pub async fn recv(&self) -> Result<irc::Message> {
         let mut buf = String::new();
         self.reader.lock().await.read_line(&mut buf).await?;

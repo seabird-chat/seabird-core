@@ -23,7 +23,7 @@ async fn main() -> Result<()> {
     // There's a little bit of an oddity here, since we want to set it if it
     // hasn't already been set, but we want this done before the logger is loaded.
     if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "info,seabird=trace");
+        std::env::set_var("RUST_LOG", "info,seabird::server=trace");
     }
 
     // Now that everything is set up, load up the logger.

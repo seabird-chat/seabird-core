@@ -10,11 +10,11 @@ pub struct Tracker {
     channels: BTreeMap<String, ChannelState>,
 }
 
-#[derive(Debug)]
-struct ChannelState {
-    name: String,
-    topic: Option<String>,
-    users: BTreeSet<String>,
+#[derive(Debug, Clone)]
+pub struct ChannelState {
+    pub name: String,
+    pub topic: Option<String>,
+    pub users: BTreeSet<String>,
 }
 
 impl ChannelState {
@@ -34,6 +34,14 @@ impl Tracker {
             current_nick: None,
             channels: BTreeMap::new(),
         }
+    }
+
+    pub fn get_channel(&self, name: &str) -> Option<ChannelState> {
+        self.channels.get(name).map(|val| val.clone())
+    }
+
+    pub fn list_channels(&self) -> Vec<String> {
+        self.channels.keys().map(String::clone).collect()
     }
 
     pub fn handle_message(&mut self, msg: &irc::Message) {

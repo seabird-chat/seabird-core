@@ -132,7 +132,7 @@ impl Seabird for Arc<Server> {
 
     async fn events(
         &self,
-        request: Request<proto::StreamEventsRequest>,
+        request: Request<proto::EventsRequest>,
     ) -> RpcResult<Response<Self::EventsStream>> {
         let request = request.into_inner();
         self.validate_identity(request.identity.as_ref())?;

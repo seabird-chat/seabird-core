@@ -57,9 +57,31 @@ impl ISupportTracker {
         self.data.contains_key(key)
     }
 
+    #[allow(dead_code)]
+    pub fn get_list(&self, key: &str) -> Option<Vec<String>> {
+        self.data
+            .get(key)
+            .map(|val| val.split(',').map(String::from).collect())
+    }
+
+    #[allow(dead_code)]
+    pub fn get_map(&self, key: &str) -> Option<BTreeMap<String, String>> {
+        self.data.get(key).and_then(|val| {
+            let inner = val.split(',');
+
+            FromIterator::from_iter(inner.map(|inner| {
+                let mut split = inner.splitn(2, ':');
+                match (split.next(), split.next()) {
+                    (Some(k), Some(v)) => Some((k.to_string(), v.to_string())),
+                    _ => None,
+                }
+            }))
+        })
+    }
+
     pub fn get_prefix_map(&self) -> Option<BTreeMap<u8, u8>> {
         // Sample: (qaohv)~&@%+
-        self.get("PREFIX").and_then(|val| {
+        self.data.get("PREFIX").and_then(|val| {
             // We only care about the symbols
             let idx = val.find(')');
             if !val.starts_with('(') || idx.is_none() {
@@ -79,61 +101,3 @@ impl ISupportTracker {
         })
     }
 }
-
-/*
-
-// IsEnabled will check for boolean ISupport values
-func (t *ISupportTracker) IsEnabled(key string) bool {
-    t.RLock()
-    defer t.RUnlock()
-
-    _, ok := t.data[key]
-    return ok
-}
-
-// GetList will check for list ISupport values
-func (t *ISupportTracker) GetList(key string) ([]string, bool) {
-    t.RLock()
-    defer t.RUnlock()
-
-    data, ok := t.data[key]
-    if !ok {
-        return nil, false
-    }
-
-    return strings.Split(data, ","), true
-}
-
-// GetMap will check for map ISupport values
-func (t *ISupportTracker) GetMap(key string) (map[string]string, bool) {
-    t.RLock()
-    defer t.RUnlock()
-
-    data, ok := t.data[key]
-    if !ok {
-        return nil, false
-    }
-
-    ret := make(map[string]string)
-
-    for _, v := range strings.Split(data, ",") {
-        innerData := strings.SplitN(v, ":", 2)
-        if len(innerData) != 2 {
-            return nil, false
-        }
-
-        ret[innerData[0]] = innerData[1]
-    }
-
-    return ret, true
-}
-
-// GetRaw will get the raw ISupport values
-func (t *ISupportTracker) GetRaw(key string) (string, bool) {
-    t.RLock()
-    defer t.RUnlock()
-
-    ret, ok := t.data[key]
-    return ret, ok
-}
-*/

@@ -78,23 +78,25 @@ impl Client {
             _ => anyhow::bail!("unknown irc host scheme"),
         };
 
-        // NOTE: this isn't async, but dns lookup should be fast, this happens
-        // only on startup, and we get this helpful "default port goodness".
-        let addr = url
-            .socket_addrs(|| Some(default_port))
+        let hostname = url
+            .domain()
+            .ok_or_else(|| anyhow!("irc host missing domain"))?;
+
+        // We have to build a custom host string so lookup_host can understand
+        // what port.
+        let host = format!("{}:{}", hostname, url.port().unwrap_or(default_port));
+
+        let addr = tokio::net::lookup_host(host)
+            .await
             .context("failed to lookup IRC host")?
             .into_iter()
             .next()
             .context("failed to lookup IRC host")?;
 
-        let host_name = url
-            .domain()
-            .ok_or_else(|| anyhow!("irc host missing domain"))?;
-
         let socket = TcpStream::connect(&addr).await?;
 
         let (reader, writer): (BoxedReader, BoxedWriter) = if tls {
-            let dns = DNSNameRef::try_from_ascii_str(host_name)?;
+            let dns = DNSNameRef::try_from_ascii_str(hostname)?;
 
             let mut client_config = ClientConfig::new();
 

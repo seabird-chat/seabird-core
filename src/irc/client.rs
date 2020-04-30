@@ -15,7 +15,7 @@ use url::Url;
 
 use crate::prelude::*;
 
-type BoxedReader = Pin<Box<dyn AsyncBufRead>>;
+type BoxedBufReader = Pin<Box<dyn AsyncBufRead>>;
 type BoxedWriter = Pin<Box<dyn AsyncWrite>>;
 
 struct UnsafeVerifier {}
@@ -39,7 +39,7 @@ impl ServerCertVerifier for UnsafeVerifier {
 }
 
 pub struct Client {
-    reader: Mutex<BoxedReader>,
+    reader: Mutex<BoxedBufReader>,
     writer: Mutex<BoxedWriter>,
     metadata: RwLock<Arc<ClientMetadata>>,
 }
@@ -95,7 +95,7 @@ impl Client {
 
         let socket = TcpStream::connect(&addr).await?;
 
-        let (reader, writer): (BoxedReader, BoxedWriter) = if tls {
+        let (reader, writer): (BoxedBufReader, BoxedWriter) = if tls {
             let dns = DNSNameRef::try_from_ascii_str(hostname)?;
 
             let mut client_config = ClientConfig::new();

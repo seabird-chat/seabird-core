@@ -3,7 +3,7 @@ use std::pin::Pin;
 use futures::stream::{Stream, StreamExt};
 use futures::task::Poll;
 use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
-use tokio::time::{delay_queue::Key as DelayQueueKey, DelayQueue, Duration, Instant};
+use tokio::time::Instant;
 use tonic::{Code, Request, Response, Status};
 use uuid::Uuid;
 
@@ -14,8 +14,9 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub enum CleanupEvent {
-    StreamEnd { session_id: Uuid, stream_id: Uuid },
+pub enum InternalEvent {
+    SetTokens { tokens: BTreeMap<String, String> },
+    StreamEnd { stream_id: Uuid },
 }
 
 #[derive(Clone, Debug)]
@@ -54,76 +55,81 @@ impl ServerConfig {
 #[derive(Debug)]
 pub struct Server {
     config: ServerConfig,
+
+    // Sender allows us to broadcast to everyone. Call sender.subscribe() to get
+    // a stream of events.
     sender: Arc<broadcast::Sender<proto::Event>>,
-    cleanup_sender: mpsc::UnboundedSender<CleanupEvent>,
-    cleanup_receiver: Mutex<mpsc::UnboundedReceiver<CleanupEvent>>,
+
+    // The internal sender acts as an event bus and allows for cleanup events to
+    // be sent as well as config update events.
+    internal_sender: mpsc::UnboundedSender<InternalEvent>,
+    internal_receiver: Mutex<mpsc::UnboundedReceiver<InternalEvent>>,
+
+    // Message sender allows anyone to send a message to the IRC server.
     message_sender: mpsc::UnboundedSender<irc::Message>,
     message_receiver: Mutex<mpsc::UnboundedReceiver<irc::Message>>,
+
+    // Tracker tracks channel/user information
     tracker: RwLock<crate::irc::Tracker>,
-    sessions: RwLock<BTreeMap<Uuid, Arc<RwLock<SessionMetadata>>>>,
+
+    // Tokens is a mapping of token to owner
+    tokens: RwLock<BTreeMap<String, String>>,
+
+    // Streams is a mapping of stream ID to stream metadata. This will be
+    // cleaned up by the cleanup task.
+    streams: RwLock<BTreeMap<Uuid, Arc<RwLock<StreamMetadata>>>>,
 }
 
 #[derive(Debug)]
-struct SessionMetadata {
-    session_id: Uuid,
-    session_start: Instant,
-    session_tag: String,
+struct StreamMetadata {
+    id: Uuid,
+    owner: String,
+    start_time: Instant,
     commands: HashMap<String, proto::CommandMetadata>,
-    streams: BTreeSet<Uuid>,
-
-    cleanup_key: Option<DelayQueueKey>,
-    cleanup_sender: mpsc::UnboundedSender<CleanupEvent>,
+    handle: Option<StreamHandle>,
 }
 
-impl SessionMetadata {
+impl StreamMetadata {
     fn new(
-        tag: String,
+        owner: String,
         commands: HashMap<String, proto::CommandMetadata>,
-        cleanup_sender: mpsc::UnboundedSender<CleanupEvent>,
+        internal_sender: mpsc::UnboundedSender<InternalEvent>,
     ) -> Self {
-        SessionMetadata {
-            session_id: Uuid::new_v4(),
-            session_start: Instant::now(),
-            session_tag: tag,
-            streams: BTreeSet::new(),
+        let id = Uuid::new_v4();
+        StreamMetadata {
+            id: id.clone(),
+            owner,
+            start_time: Instant::now(),
             commands,
-            cleanup_key: None,
-            cleanup_sender,
+            handle: Some(StreamHandle::new(id, internal_sender)),
         }
     }
 
-    fn get_stream_handle(&mut self) -> StreamHandle {
-        let handle = StreamHandle::new(self.session_id, self.cleanup_sender.clone());
-        self.streams.insert(handle.stream_id);
-        handle
+    fn take_handle(&mut self) -> Option<StreamHandle> {
+        self.handle.take()
     }
 }
 #[derive(Debug)]
 struct StreamHandle {
-    session_id: Uuid,
-    stream_id: Uuid,
-    cleanup_sender: mpsc::UnboundedSender<CleanupEvent>,
+    id: Uuid,
+    internal_sender: mpsc::UnboundedSender<InternalEvent>,
 }
 
 impl StreamHandle {
-    fn new(session_id: Uuid, cleanup_sender: mpsc::UnboundedSender<CleanupEvent>) -> Self {
+    fn new(stream_id: Uuid, internal_sender: mpsc::UnboundedSender<InternalEvent>) -> Self {
         let ret = StreamHandle {
-            session_id,
-            stream_id: Uuid::new_v4(),
-            cleanup_sender,
+            id: stream_id,
+            internal_sender: internal_sender,
         };
-        info!("new stream: {}", ret.stream_id);
+        info!("new stream: {}", ret.id);
         ret
     }
 }
 
 impl Drop for StreamHandle {
     fn drop(&mut self) {
-        self.cleanup_sender
-            .send(CleanupEvent::StreamEnd {
-                session_id: self.session_id,
-                stream_id: self.stream_id,
-            })
+        self.internal_sender
+            .send(InternalEvent::StreamEnd { stream_id: self.id })
             .unwrap();
     }
 }
@@ -165,18 +171,19 @@ impl Server {
         // We actually don't care about the receiving side - the clients will
         // subscribe to it later.
         let (sender, _) = broadcast::channel(16);
-        let (cleanup_sender, cleanup_receiver) = mpsc::unbounded_channel();
+        let (internal_sender, internal_receiver) = mpsc::unbounded_channel();
         let (message_sender, message_receiver) = mpsc::unbounded_channel();
 
         Server {
             config,
+            tokens: RwLock::new(BTreeMap::new()),
             sender: Arc::new(sender),
-            cleanup_sender,
-            cleanup_receiver: Mutex::new(cleanup_receiver),
+            internal_sender,
+            internal_receiver: Mutex::new(internal_receiver),
             message_sender,
             message_receiver: Mutex::new(message_receiver),
             tracker: RwLock::new(crate::irc::Tracker::new()),
-            sessions: RwLock::new(BTreeMap::new()),
+            streams: RwLock::new(BTreeMap::new()),
         }
     }
 
@@ -191,111 +198,40 @@ impl Server {
         futures::future::try_join3(
             service.run_irc_client(),
             service.run_grpc_server(),
-            service.run_cleanup(),
+            service.run_internal_event_loop(),
         )
         .await?;
 
         Ok(())
     }
+
+    pub fn get_internal_sender(&self) -> mpsc::UnboundedSender<InternalEvent> {
+        return self.internal_sender.clone();
+    }
 }
 
 impl Server {
-    async fn handle_cleanup_queue(self: &Arc<Self>, session_id: Uuid) {
-        let mut sessions_guard = self.sessions.write().await;
-        let remove = if let Some(session) = sessions_guard.get(&session_id) {
-            let session_guard = session.write().await;
+    async fn run_internal_event_loop(self: &Arc<Self>) -> Result<()> {
+        let mut receiver = self.internal_receiver.try_lock()?;
 
-            // If there are still no running streams on this session, kill it
-            // with fire.
-            session_guard.streams.is_empty()
-        } else {
-            false
-        };
+        while let Some(event) = receiver.next().await {
+            match event {
+                InternalEvent::SetTokens { tokens } => {
+                    let mut tokens_guard = self.tokens.write().await;
+                    info!("updating tokens");
+                    *tokens_guard = tokens;
+                }
+                InternalEvent::StreamEnd { stream_id } => {
+                    let mut streams_guard = self.streams.write().await;
 
-        if remove {
-            trace!("removing session: {}", session_id);
-            sessions_guard.remove(&session_id);
-        }
-    }
-
-    async fn handle_cleanup_event(
-        self: &Arc<Self>,
-        cleanup_queue: &mut DelayQueue<Uuid>,
-        event: CleanupEvent,
-    ) {
-        match event {
-            CleanupEvent::StreamEnd {
-                session_id,
-                stream_id,
-            } => {
-                let sessions_guard = self.sessions.read().await;
-                if let Some(session) = sessions_guard.get(&session_id) {
-                    let mut session_guard = session.write().await;
-
-                    trace!("removing stream: {}", stream_id);
-                    if !session_guard.streams.remove(&stream_id) {
+                    if streams_guard.remove(&stream_id).is_none() {
                         warn!("A stream was marked dead but did not exist. There is most likely a leak somewhere.");
-                    }
-
-                    let key = session_guard.cleanup_key.take();
-
-                    if let Some(key) = key {
-                        // If they've recovered, remove this key from the delay
-                        // queue. Otherwise, put it back inside the session,
-                        // adding to the delay.
-                        if session_guard.streams.is_empty() {
-                            session_guard.cleanup_key.replace(key);
-                        } else {
-                            cleanup_queue.remove(&key);
-                        }
-                    } else {
-                        // If there was not already a key and there are no
-                        // running streams on this session, queue up a removal.
-                        if session_guard.streams.is_empty() {
-                            let key = cleanup_queue.insert(session_id, Duration::from_secs(5));
-                            session_guard.cleanup_key.replace(key);
-                        }
                     }
                 }
             }
         }
-    }
 
-    async fn run_cleanup(self: &Arc<Self>) -> Result<()> {
-        use futures::future::{select, Either};
-
-        let mut receiver = self.cleanup_receiver.try_lock()?;
-        let mut cleanup_queue: DelayQueue<Uuid> = DelayQueue::new();
-
-        loop {
-            // We select on
-            match select(cleanup_queue.next(), receiver.next()).await {
-                // Deadline on the cleanup queue
-                Either::Left((Some(Ok(session_id)), _)) => {
-                    self.handle_cleanup_queue(session_id.into_inner()).await;
-                }
-                Either::Left((Some(Err(_)), _)) => anyhow::bail!("cleanup queue unexpected error"),
-
-                // The only thing that can insert into the cleanup queue is the
-                // cleanup event, so if we got none, just wait for a cleanup
-                // event.
-                Either::Left((None, next_cleanup_event)) => {
-                    self.handle_cleanup_event(
-                        &mut cleanup_queue,
-                        next_cleanup_event
-                            .await
-                            .ok_or_else(|| anyhow!("cleanup event receiver closed early"))?,
-                    )
-                    .await
-                }
-
-                // Incoming cleanup event
-                Either::Right((Some(event), _)) => {
-                    self.handle_cleanup_event(&mut cleanup_queue, event).await;
-                }
-                Either::Right((None, _)) => anyhow::bail!("cleanup event receiver closed early"),
-            };
-        }
+        anyhow::bail!("run_internal_event_loop exited early");
     }
 
     async fn run_irc_client(self: &Arc<Self>) -> Result<()> {
@@ -415,12 +351,11 @@ impl Server {
         anyhow::bail!("run_grpc_server exited early");
     }
 
-    async fn validate_internal(
+    async fn validate_identity(
         &self,
         method: &str,
         identity: Option<&proto::Identity>,
-        stream: bool,
-    ) -> RpcResult<Option<StreamHandle>> {
+    ) -> RpcResult<String> {
         use proto::identity::AuthMethod;
 
         trace!("call to {}", method);
@@ -428,109 +363,60 @@ impl Server {
         let identity =
             identity.ok_or_else(|| Status::new(Code::Unauthenticated, "missing identity"))?;
 
-        match identity
+        let owner = match identity
             .auth_method
             .as_ref()
             .ok_or_else(|| Status::new(Code::Unauthenticated, "missing auth_method"))?
         {
-            AuthMethod::Token(auth_token) => {
-                let auth_token = auth_token
-                    .parse()
-                    .map_err(|_| Status::new(Code::Unauthenticated, "invalid token"))?;
+            AuthMethod::Token(auth_token) => self
+                .tokens
+                .read()
+                .await
+                .get(auth_token)
+                .map(|s| s.to_string())
+                .ok_or_else(|| Status::new(Code::Unauthenticated, "unknown token"))?,
+        };
 
-                let sessions_guard = self.sessions.read().await;
+        info!("authenticated call to {} rpc by {}", method, owner);
 
-                let mut session_guard = sessions_guard
-                    .get(&auth_token)
-                    .ok_or_else(|| Status::new(Code::Unauthenticated, "session does not exist"))?
-                    .write()
-                    .await;
-
-                if stream {
-                    info!(
-                        "authenticated call to open {} stream with session_id {}",
-                        method, session_guard.session_id,
-                    );
-                    Ok(Some(session_guard.get_stream_handle()))
-                } else {
-                    info!(
-                        "authenticated call to {} rpc with session_id {}",
-                        method, session_guard.session_id,
-                    );
-                    Ok(None)
-                }
-            }
-        }
+        Ok(owner)
     }
 
-    async fn validate_identity(
+    async fn new_stream(
         &self,
-        method: &str,
-        identity: Option<&proto::Identity>,
-    ) -> RpcResult<()> {
-        // We this shouldn't generate a stream handle, but we drop it just in
-        // case.
-        self.validate_internal(method, identity, false).await?;
-        Ok(())
-    }
-
-    async fn validate_stream(
-        &self,
-        method: &str,
-        identity: Option<&proto::Identity>,
+        owner: String,
+        commands: HashMap<String, proto::CommandMetadata>,
     ) -> RpcResult<StreamHandle> {
-        Ok(self
-            .validate_internal(method, identity, true)
-            .await?
-            .ok_or_else(|| Status::new(Code::Internal, "failed to get session handle"))?)
+        // Build the stream metadata
+        let mut meta = StreamMetadata::new(owner, commands, self.internal_sender.clone());
+        let handle = meta
+            .take_handle()
+            .ok_or_else(|| Status::new(Code::Internal, "failed to get stream handle"));
+
+        // Add the metadata to the tracked streams
+        self.streams
+            .write()
+            .await
+            .insert(meta.id.clone(), Arc::new(RwLock::new(meta)));
+
+        handle
     }
 }
 
 #[async_trait]
 impl Seabird for Arc<Server> {
-    type EventsStream = EventStreamReceiver;
+    type StreamEventsStream = EventStreamReceiver;
 
-    async fn open_session(
+    async fn stream_events(
         &self,
-        request: Request<proto::OpenSessionRequest>,
-    ) -> RpcResult<Response<proto::OpenSessionResponse>> {
-        trace!("call to open_session");
-        use proto::identity::AuthMethod;
-
+        request: Request<proto::StreamEventsRequest>,
+    ) -> RpcResult<Response<Self::StreamEventsStream>> {
         let request = request.into_inner();
-
-        let mut sessions_guard = self.sessions.write().await;
-
-        let meta = SessionMetadata::new(request.tag, request.commands, self.cleanup_sender.clone());
-
-        if let Some(_) = sessions_guard.get(&meta.session_id) {
-            return Err(Status::new(Code::Internal, "duplicate session_id"));
-        }
-
-        let response = Response::new(proto::OpenSessionResponse {
-            identity: Some(proto::Identity {
-                auth_method: Some(AuthMethod::Token(meta.session_id.to_string())),
-            }),
-        });
-
-        info!(
-            "session opened with tag {} and session_id {}",
-            meta.session_tag, meta.session_id
-        );
-
-        sessions_guard.insert(meta.session_id.clone(), Arc::new(RwLock::new(meta)));
-
-        Ok(response)
-    }
-
-    async fn events(
-        &self,
-        request: Request<proto::EventsRequest>,
-    ) -> RpcResult<Response<Self::EventsStream>> {
-        let request = request.into_inner();
-        let stream_handle = self
-            .validate_stream("events", request.identity.as_ref())
+        let owner = self
+            .validate_identity("stream_events", request.identity.as_ref())
             .await?;
+
+        let stream_handle = self.new_stream(owner, request.commands).await?;
 
         Ok(Response::new(EventStreamReceiver::new(
             stream_handle,
@@ -621,7 +507,7 @@ impl Seabird for Arc<Server> {
             ))
             .map_err(|_| Status::new(Code::Internal, "failed set channel topic"))?;
 
-        Err(Status::new(Code::Unimplemented, "todo"))
+        Ok(Response::new(proto::SetChannelInfoResponse {}))
     }
 
     async fn join_channel(
@@ -659,16 +545,16 @@ impl Seabird for Arc<Server> {
         Ok(Response::new(proto::LeaveChannelResponse {}))
     }
 
-    async fn list_sessions(
+    async fn list_streams(
         &self,
-        request: Request<proto::ListSessionsRequest>,
-    ) -> RpcResult<Response<proto::ListSessionsResponse>> {
+        request: Request<proto::ListStreamsRequest>,
+    ) -> RpcResult<Response<proto::ListStreamsResponse>> {
         let request = request.into_inner();
-        self.validate_identity("list_sessions", request.identity.as_ref())
+        self.validate_identity("list_streams", request.identity.as_ref())
             .await?;
 
-        let session_ids = self
-            .sessions
+        let stream_ids = self
+            .streams
             .read()
             .await
             .keys()
@@ -676,45 +562,36 @@ impl Seabird for Arc<Server> {
             .map(|uuid| uuid.to_string())
             .collect();
 
-        Ok(Response::new(proto::ListSessionsResponse { session_ids }))
+        Ok(Response::new(proto::ListStreamsResponse { stream_ids }))
     }
 
-    async fn get_session_info(
+    async fn get_stream_info(
         &self,
-        request: Request<proto::SessionInfoRequest>,
-    ) -> RpcResult<Response<proto::SessionInfoResponse>> {
+        request: Request<proto::StreamInfoRequest>,
+    ) -> RpcResult<Response<proto::StreamInfoResponse>> {
         let request = request.into_inner();
-        self.validate_identity("get_session_info", request.identity.as_ref())
+        self.validate_identity("get_stream_info", request.identity.as_ref())
             .await?;
 
-        let session_id = request
-            .session_id
+        let stream_id = request
+            .stream_id
             .parse()
-            .map_err(|_| Status::new(Code::Unauthenticated, "invalid session_id"))?;
+            .map_err(|_| Status::new(Code::InvalidArgument, "invalid stream_id"))?;
 
-        let (session_tag, stream_ids, commands) = {
-            let sessions_guard = self.sessions.read().await;
-            match sessions_guard.get(&session_id) {
-                Some(session) => {
-                    let session_guard = session.read().await;
-                    Ok((
-                        session_guard.session_tag.clone(),
-                        session_guard
-                            .streams
-                            .iter()
-                            .map(|uuid| uuid.to_string())
-                            .collect(),
-                        session_guard.commands.clone(),
-                    ))
+        let (stream_owner, commands) = {
+            let streams_guard = self.streams.read().await;
+            match streams_guard.get(&stream_id) {
+                Some(stream) => {
+                    let stream_guard = stream.read().await;
+                    Ok((stream_guard.owner.clone(), stream_guard.commands.clone()))
                 }
-                None => Err(Status::new(Code::NotFound, "session not found")),
+                None => Err(Status::new(Code::NotFound, "stream not found")),
             }
         }?;
 
-        Ok(Response::new(proto::SessionInfoResponse {
-            session_tag,
-            session_id: session_id.to_string(),
-            stream_ids,
+        Ok(Response::new(proto::StreamInfoResponse {
+            id: request.stream_id,
+            owner: stream_owner,
             commands,
         }))
     }

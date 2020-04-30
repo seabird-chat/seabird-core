@@ -3,6 +3,10 @@
 #[macro_use]
 extern crate log;
 
+use std::path::PathBuf;
+
+use notify::{event::AccessKind, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+
 mod error;
 mod irc;
 mod prelude;
@@ -14,6 +18,20 @@ pub mod proto {
 
 use prelude::*;
 use server::{Server, ServerConfig};
+
+#[derive(serde::Deserialize)]
+struct Tokens {
+    // In the config file we use owner -> token because that makes the most
+    // sense, but we need to reverse it before passing it in to the server.
+    tokens: BTreeMap<String, String>,
+}
+
+fn read_tokens(filename: &str) -> Result<BTreeMap<String, String>> {
+    let tokens: Tokens = serde_json::from_str(&std::fs::read_to_string(filename)?)?;
+
+    // Reverse the mapping of key and value.
+    Ok(tokens.tokens.into_iter().map(|(k, v)| (v, k)).collect())
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -49,5 +67,51 @@ async fn main() -> Result<()> {
         dotenv::var("SEABIRD_COMMAND_PREFIX").ok(),
     );
 
-    Server::new(config).run().await
+    let token_file = dotenv::var("SEABIRD_TOKEN_FILE")
+        .context("Missing $SEABIRD_TOKEN_FILE. You must specify a token file for the bot.")?;
+
+    let watched_filename = PathBuf::from(&token_file)
+        .file_name()
+        .unwrap()
+        .to_os_string();
+    let watch_dir = PathBuf::from(&token_file)
+        .parent()
+        .unwrap()
+        .as_os_str()
+        .to_os_string();
+
+    let server = Server::new(config);
+    let sender = server.get_internal_sender();
+
+    sender.send(server::InternalEvent::SetTokens {
+        tokens: read_tokens(&token_file)?,
+    })?;
+
+    let mut watcher: RecommendedWatcher =
+        Watcher::new_immediate(move |res: notify::Result<notify::Event>| match res {
+            Ok(event) => match event.kind {
+                EventKind::Access(AccessKind::Close(_)) => {
+                    if event
+                        .paths
+                        .iter()
+                        .any(|path| path.ends_with(&watched_filename))
+                    {
+                        match read_tokens(&token_file) {
+                            Err(err) => error!("failed to read tokens: {}", err),
+                            Ok(tokens) => sender
+                                .send(server::InternalEvent::SetTokens { tokens })
+                                .unwrap(),
+                        }
+                    }
+                }
+                _ => {}
+            },
+            Err(e) => println!("watch error: {:?}", e),
+        })?;
+
+    // Add a path to be watched. All files and directories at that path and
+    // below will be monitored for changes.
+    watcher.watch(watch_dir, RecursiveMode::NonRecursive)?;
+
+    server.run().await
 }

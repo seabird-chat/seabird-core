@@ -107,11 +107,13 @@ struct StreamHandle {
 
 impl StreamHandle {
     fn new(session_id: Uuid, cleanup_sender: mpsc::UnboundedSender<CleanupEvent>) -> Self {
-        StreamHandle {
+        let ret = StreamHandle {
             session_id,
             stream_id: Uuid::new_v4(),
             cleanup_sender,
-        }
+        };
+        info!("new stream: {}", ret.stream_id);
+        ret
     }
 }
 
@@ -415,10 +417,13 @@ impl Server {
 
     async fn validate_internal(
         &self,
+        method: &str,
         identity: Option<&proto::Identity>,
         stream: bool,
     ) -> RpcResult<Option<StreamHandle>> {
         use proto::identity::AuthMethod;
+
+        trace!("call to {}", method);
 
         let identity =
             identity.ok_or_else(|| Status::new(Code::Unauthenticated, "missing identity"))?;
@@ -442,24 +447,40 @@ impl Server {
                     .await;
 
                 if stream {
+                    info!(
+                        "authenticated call to open {} stream with session_id {}",
+                        method, session_guard.session_id,
+                    );
                     Ok(Some(session_guard.get_stream_handle()))
                 } else {
+                    info!(
+                        "authenticated call to {} rpc with session_id {}",
+                        method, session_guard.session_id,
+                    );
                     Ok(None)
                 }
             }
         }
     }
 
-    async fn validate_identity(&self, identity: Option<&proto::Identity>) -> RpcResult<()> {
+    async fn validate_identity(
+        &self,
+        method: &str,
+        identity: Option<&proto::Identity>,
+    ) -> RpcResult<()> {
         // We this shouldn't generate a stream handle, but we drop it just in
         // case.
-        self.validate_internal(identity, false).await?;
+        self.validate_internal(method, identity, false).await?;
         Ok(())
     }
 
-    async fn validate_stream(&self, identity: Option<&proto::Identity>) -> RpcResult<StreamHandle> {
+    async fn validate_stream(
+        &self,
+        method: &str,
+        identity: Option<&proto::Identity>,
+    ) -> RpcResult<StreamHandle> {
         Ok(self
-            .validate_internal(identity, true)
+            .validate_internal(method, identity, true)
             .await?
             .ok_or_else(|| Status::new(Code::Internal, "failed to get session handle"))?)
     }
@@ -473,15 +494,16 @@ impl Seabird for Arc<Server> {
         &self,
         request: Request<proto::OpenSessionRequest>,
     ) -> RpcResult<Response<proto::OpenSessionResponse>> {
+        trace!("call to open_session");
         use proto::identity::AuthMethod;
 
         let request = request.into_inner();
 
-        let mut guard = self.sessions.write().await;
+        let mut sessions_guard = self.sessions.write().await;
 
         let meta = SessionMetadata::new(request.tag, request.commands, self.cleanup_sender.clone());
 
-        if let Some(_) = guard.get(&meta.session_id) {
+        if let Some(_) = sessions_guard.get(&meta.session_id) {
             return Err(Status::new(Code::Internal, "duplicate session_id"));
         }
 
@@ -491,9 +513,12 @@ impl Seabird for Arc<Server> {
             }),
         });
 
-        guard.insert(meta.session_id.clone(), Arc::new(RwLock::new(meta)));
+        info!(
+            "session opened with tag {} and session_id {}",
+            meta.session_tag, meta.session_id
+        );
 
-        // TODO: handle command registration
+        sessions_guard.insert(meta.session_id.clone(), Arc::new(RwLock::new(meta)));
 
         Ok(response)
     }
@@ -503,7 +528,9 @@ impl Seabird for Arc<Server> {
         request: Request<proto::EventsRequest>,
     ) -> RpcResult<Response<Self::EventsStream>> {
         let request = request.into_inner();
-        let stream_handle = self.validate_stream(request.identity.as_ref()).await?;
+        let stream_handle = self
+            .validate_stream("events", request.identity.as_ref())
+            .await?;
 
         Ok(Response::new(EventStreamReceiver::new(
             stream_handle,
@@ -516,7 +543,8 @@ impl Seabird for Arc<Server> {
         request: Request<proto::SendMessageRequest>,
     ) -> RpcResult<Response<proto::SendMessageResponse>> {
         let request = request.into_inner();
-        self.validate_identity(request.identity.as_ref()).await?;
+        self.validate_identity("send_message", request.identity.as_ref())
+            .await?;
 
         self.message_sender
             .send(irc::Message::new(
@@ -533,7 +561,8 @@ impl Seabird for Arc<Server> {
         request: Request<proto::SendRawMessageRequest>,
     ) -> RpcResult<Response<proto::SendRawMessageResponse>> {
         let request = request.into_inner();
-        self.validate_identity(request.identity.as_ref()).await?;
+        self.validate_identity("send_raw_message", request.identity.as_ref())
+            .await?;
 
         self.message_sender
             .send(irc::Message::new(request.command, request.params))
@@ -547,7 +576,8 @@ impl Seabird for Arc<Server> {
         request: Request<proto::ListChannelsRequest>,
     ) -> RpcResult<Response<proto::ListChannelsResponse>> {
         let request = request.into_inner();
-        self.validate_identity(request.identity.as_ref()).await?;
+        self.validate_identity("list_channels", request.identity.as_ref())
+            .await?;
 
         Ok(Response::new(proto::ListChannelsResponse {
             names: self.tracker.read().await.list_channels(),
@@ -559,7 +589,8 @@ impl Seabird for Arc<Server> {
         request: Request<proto::ChannelInfoRequest>,
     ) -> RpcResult<Response<proto::ChannelInfoResponse>> {
         let request = request.into_inner();
-        self.validate_identity(request.identity.as_ref()).await?;
+        self.validate_identity("get_channel_info", request.identity.as_ref())
+            .await?;
 
         match self.tracker.read().await.get_channel(request.name.as_str()) {
             Some(channel) => Ok(Response::new(proto::ChannelInfoResponse {
@@ -580,7 +611,15 @@ impl Seabird for Arc<Server> {
         request: Request<proto::SetChannelInfoRequest>,
     ) -> RpcResult<Response<proto::SetChannelInfoResponse>> {
         let request = request.into_inner();
-        self.validate_identity(request.identity.as_ref()).await?;
+        self.validate_identity("set_channel_info", request.identity.as_ref())
+            .await?;
+
+        self.message_sender
+            .send(irc::Message::new(
+                "TOPIC".to_string(),
+                vec![request.name, request.topic],
+            ))
+            .map_err(|_| Status::new(Code::Internal, "failed set channel topic"))?;
 
         Err(Status::new(Code::Unimplemented, "todo"))
     }
@@ -590,7 +629,8 @@ impl Seabird for Arc<Server> {
         request: Request<proto::JoinChannelRequest>,
     ) -> RpcResult<Response<proto::JoinChannelResponse>> {
         let request = request.into_inner();
-        self.validate_identity(request.identity.as_ref()).await?;
+        self.validate_identity("join_channel", request.identity.as_ref())
+            .await?;
 
         // TODO: this could arguably wait for the channel to be synced.
 
@@ -606,7 +646,8 @@ impl Seabird for Arc<Server> {
         request: Request<proto::LeaveChannelRequest>,
     ) -> RpcResult<Response<proto::LeaveChannelResponse>> {
         let request = request.into_inner();
-        self.validate_identity(request.identity.as_ref()).await?;
+        self.validate_identity("leave_channel", request.identity.as_ref())
+            .await?;
 
         self.message_sender
             .send(irc::Message::new(
@@ -622,9 +663,9 @@ impl Seabird for Arc<Server> {
         &self,
         request: Request<proto::ListSessionsRequest>,
     ) -> RpcResult<Response<proto::ListSessionsResponse>> {
-        trace!("call to list_sessions");
         let request = request.into_inner();
-        self.validate_identity(request.identity.as_ref()).await?;
+        self.validate_identity("list_sessions", request.identity.as_ref())
+            .await?;
 
         let session_ids = self
             .sessions
@@ -642,9 +683,9 @@ impl Seabird for Arc<Server> {
         &self,
         request: Request<proto::SessionInfoRequest>,
     ) -> RpcResult<Response<proto::SessionInfoResponse>> {
-        trace!("call to get_session_info");
         let request = request.into_inner();
-        self.validate_identity(request.identity.as_ref()).await?;
+        self.validate_identity("get_session_info", request.identity.as_ref())
+            .await?;
 
         let session_id = request
             .session_id

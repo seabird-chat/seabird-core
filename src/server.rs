@@ -225,7 +225,9 @@ impl Server {
                     let mut streams_guard = self.streams.write().await;
 
                     if streams_guard.remove(&stream_id).is_none() {
-                        warn!("A stream was marked dead but did not exist. There is most likely a leak somewhere.");
+                        warn!("attempted to remove stream {} but it did not exist", stream_id);
+                    } else {
+                        info!("removed stream: {}", stream_id);
                     }
                 }
             }

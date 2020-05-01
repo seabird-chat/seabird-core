@@ -72,7 +72,7 @@ pub struct Server {
     // Tracker tracks channel/user information
     tracker: RwLock<crate::irc::Tracker>,
 
-    // Tokens is a mapping of token to owner
+    // Tokens is a mapping of token to tag
     tokens: RwLock<BTreeMap<String, String>>,
 
     // Streams is a mapping of stream ID to stream metadata. This will be
@@ -83,7 +83,7 @@ pub struct Server {
 #[derive(Debug)]
 struct StreamMetadata {
     id: Uuid,
-    owner: String,
+    tag: String,
     start_time: Instant,
     commands: HashMap<String, proto::CommandMetadata>,
     handle: Option<StreamHandle>,
@@ -91,14 +91,14 @@ struct StreamMetadata {
 
 impl StreamMetadata {
     fn new(
-        owner: String,
+        tag: String,
         commands: HashMap<String, proto::CommandMetadata>,
         internal_sender: mpsc::UnboundedSender<InternalEvent>,
     ) -> Self {
         let id = Uuid::new_v4();
         StreamMetadata {
             id: id.clone(),
-            owner,
+            tag,
             start_time: Instant::now(),
             commands,
             handle: Some(StreamHandle::new(id, internal_sender)),
@@ -365,7 +365,7 @@ impl Server {
         let identity =
             identity.ok_or_else(|| Status::new(Code::Unauthenticated, "missing identity"))?;
 
-        let owner = match identity
+        let tag = match identity
             .auth_method
             .as_ref()
             .ok_or_else(|| Status::new(Code::Unauthenticated, "missing auth_method"))?
@@ -379,18 +379,18 @@ impl Server {
                 .ok_or_else(|| Status::new(Code::Unauthenticated, "unknown token"))?,
         };
 
-        info!("authenticated call to {} rpc by {}", method, owner);
+        info!("authenticated call to {} rpc with tag {}", method, tag);
 
-        Ok(owner)
+        Ok(tag)
     }
 
     async fn new_stream(
         &self,
-        owner: String,
+        tag: String,
         commands: HashMap<String, proto::CommandMetadata>,
     ) -> RpcResult<StreamHandle> {
         // Build the stream metadata
-        let mut meta = StreamMetadata::new(owner, commands, self.internal_sender.clone());
+        let mut meta = StreamMetadata::new(tag, commands, self.internal_sender.clone());
         let handle = meta
             .take_handle()
             .ok_or_else(|| Status::new(Code::Internal, "failed to get stream handle"));
@@ -414,11 +414,11 @@ impl Seabird for Arc<Server> {
         request: Request<proto::StreamEventsRequest>,
     ) -> RpcResult<Response<Self::StreamEventsStream>> {
         let request = request.into_inner();
-        let owner = self
+        let tag = self
             .validate_identity("stream_events", request.identity.as_ref())
             .await?;
 
-        let stream_handle = self.new_stream(owner, request.commands).await?;
+        let stream_handle = self.new_stream(tag, request.commands).await?;
 
         Ok(Response::new(EventStreamReceiver::new(
             stream_handle,
@@ -580,12 +580,12 @@ impl Seabird for Arc<Server> {
             .parse()
             .map_err(|_| Status::new(Code::InvalidArgument, "invalid stream_id"))?;
 
-        let (stream_owner, commands) = {
+        let (stream_tag, commands) = {
             let streams_guard = self.streams.read().await;
             match streams_guard.get(&stream_id) {
                 Some(stream) => {
                     let stream_guard = stream.read().await;
-                    Ok((stream_guard.owner.clone(), stream_guard.commands.clone()))
+                    Ok((stream_guard.tag.clone(), stream_guard.commands.clone()))
                 }
                 None => Err(Status::new(Code::NotFound, "stream not found")),
             }
@@ -593,7 +593,7 @@ impl Seabird for Arc<Server> {
 
         Ok(Response::new(proto::StreamInfoResponse {
             id: request.stream_id,
-            owner: stream_owner,
+            tag: stream_tag,
             commands,
         }))
     }

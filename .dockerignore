@@ -1,0 +1,4 @@
+go/pb/seabird.pb.go
+rust/target
+go/.env
+rust/.env

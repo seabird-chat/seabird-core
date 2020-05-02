@@ -1,17 +1,27 @@
 # Stage 1: Build the application
 FROM golang:1.14-buster as builder
 
-RUN apt update && apt install protobuf-compiler
+RUN apt-get update && apt-get install -y protobuf-compiler && rm -rf /var/lib/apt/lists/*
 RUN go get github.com/golang/protobuf/protoc-gen-go
 
 RUN mkdir /build
-RUN mkdir /seabird-core
-WORKDIR /seabird-core
+RUN mkdir -p /seabird-core/{go,proto}
 
-ADD go.mod go.sum ./
+WORKDIR /seabird-core/go
+ADD ./go/go.mod ./go/go.sum ./
 RUN go mod download
 
-ADD . .
+ADD ./proto/* /seabird-core/proto/
+
+WORKDIR /seabird-core/go/pb
+ADD ./go/pb/* ./
+RUN go generate
+
+WORKDIR /seabird-core/go
+ADD ./go/*.go ./
+ADD ./go/cmd ./cmd
+ADD ./go/ircx ./ircx
+RUN find
 RUN go build -v -o /build/seabird-core ./cmd/seabird-core
 
 # Stage 2: Copy files and configure what we need

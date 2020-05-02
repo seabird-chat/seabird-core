@@ -1,5 +1,3 @@
-//go:generate protoc -I ../proto --go_out=plugins=grpc:./pb/ ../proto/seabird.proto
-
 package seabird
 
 import (

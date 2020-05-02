@@ -95,6 +95,8 @@ func (s *EventStream) Close() {
 	s.Lock()
 	defer s.Unlock()
 
-	close(s.channel)
-	s.channel = nil
+	if s.channel != nil {
+		close(s.channel)
+		s.channel = nil
+	}
 }

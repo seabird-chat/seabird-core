@@ -72,6 +72,12 @@ func main() {
 		logrus.WithError(err).Fatalf("failed to create server")
 	}
 
+	tokens, err := ReadTokenFile(tokensFile)
+	if err != nil {
+		logrus.WithError(err).Fatal("failed to load tokens")
+	}
+	server.SetTokens(tokens)
+
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		log.Fatal(err)

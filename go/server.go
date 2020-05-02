@@ -49,6 +49,7 @@ func NewServer(config ServerConfig) (*Server, error) {
 	s := &Server{
 		tracker: ircx.NewTracker(),
 		config:  config,
+		streams: make(map[uuid.UUID]*EventStream),
 	}
 	s.SetTokens(config.Tokens)
 

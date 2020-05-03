@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/url"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
@@ -93,11 +94,13 @@ func NewServer(config ServerConfig) (*Server, error) {
 	}
 
 	s.client = irc.NewClient(c, irc.ClientConfig{
-		Nick:    config.Nick,
-		User:    config.User,
-		Name:    config.Name,
-		Pass:    config.Pass,
-		Handler: irc.HandlerFunc(s.ircHandler),
+		Nick:          config.Nick,
+		User:          config.User,
+		Name:          config.Name,
+		Pass:          config.Pass,
+		PingFrequency: 60 * time.Second,
+		PingTimeout:   10 * time.Second,
+		Handler:       irc.HandlerFunc(s.ircHandler),
 	})
 
 	s.grpcServer = grpc.NewServer()

@@ -92,7 +92,7 @@ func (s *Server) JoinChannel(ctx context.Context, req *pb.JoinChannelRequest) (*
 	// TODO: maybe it would make sense to wait until fully joined to a channel
 	err = s.client.WriteMessage(&irc.Message{
 		Command: "JOIN",
-		Params:  []string{req.Target},
+		Params:  []string{req.Name},
 	})
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to write message")
@@ -111,7 +111,7 @@ func (s *Server) LeaveChannel(ctx context.Context, req *pb.LeaveChannelRequest) 
 	// TODO: support leave messages
 	err = s.client.WriteMessage(&irc.Message{
 		Command: "PART",
-		Params:  []string{req.Target},
+		Params:  []string{req.Name},
 	})
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to write message")
@@ -150,9 +150,9 @@ func (s *Server) GetChannelInfo(ctx context.Context, req *pb.ChannelInfoRequest)
 	return resp, nil
 }
 
-// SetChannelInfo implements SeabirdServer.SetChannelInfo
-func (s *Server) SetChannelInfo(ctx context.Context, req *pb.SetChannelInfoRequest) (*pb.SetChannelInfoResponse, error) {
-	logger, err := s.verifyIdentity("SetChannelInfo", req.Identity)
+// SetChannelInfo implements SeabirdServer.SetChannelTopic
+func (s *Server) SetChannelTopic(ctx context.Context, req *pb.SetChannelTopicRequest) (*pb.SetChannelTopicResponse, error) {
+	logger, err := s.verifyIdentity("SetChannelTopic", req.Identity)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +171,7 @@ func (s *Server) SetChannelInfo(ctx context.Context, req *pb.SetChannelInfoReque
 		return nil, status.Error(codes.Internal, "failed to write message")
 	}
 
-	return &pb.SetChannelInfoResponse{}, nil
+	return &pb.SetChannelTopicResponse{}, nil
 }
 
 // ListStreams implements SeabirdServer.ListStreams

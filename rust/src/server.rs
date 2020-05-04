@@ -497,12 +497,12 @@ impl Seabird for Arc<Server> {
         }
     }
 
-    async fn set_channel_info(
+    async fn set_channel_topic(
         &self,
-        request: Request<proto::SetChannelInfoRequest>,
-    ) -> RpcResult<Response<proto::SetChannelInfoResponse>> {
+        request: Request<proto::SetChannelTopicRequest>,
+    ) -> RpcResult<Response<proto::SetChannelTopicResponse>> {
         let request = request.into_inner();
-        self.validate_identity("set_channel_info", request.identity.as_ref())
+        self.validate_identity("set_channel_topic", request.identity.as_ref())
             .await?;
 
         self.message_sender
@@ -512,7 +512,7 @@ impl Seabird for Arc<Server> {
             ))
             .map_err(|_| Status::new(Code::Internal, "failed set channel topic"))?;
 
-        Ok(Response::new(proto::SetChannelInfoResponse {}))
+        Ok(Response::new(proto::SetChannelTopicResponse {}))
     }
 
     async fn join_channel(
@@ -526,7 +526,7 @@ impl Seabird for Arc<Server> {
         // TODO: this could arguably wait for the channel to be synced.
 
         self.message_sender
-            .send(irc::Message::new("JOIN".to_string(), vec![request.target]))
+            .send(irc::Message::new("JOIN".to_string(), vec![request.name]))
             .map_err(|_| Status::new(Code::Internal, "failed to join channel"))?;
 
         Ok(Response::new(proto::JoinChannelResponse {}))
@@ -543,7 +543,7 @@ impl Seabird for Arc<Server> {
         self.message_sender
             .send(irc::Message::new(
                 "PART".to_string(),
-                vec![request.target, request.message],
+                vec![request.name, request.message],
             ))
             .map_err(|_| Status::new(Code::Internal, "failed to leave channel"))?;
 

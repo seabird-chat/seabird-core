@@ -21,7 +21,7 @@ use server::{Server, ServerConfig};
 
 #[derive(serde::Deserialize)]
 struct Tokens {
-    // In the config file we use owner -> token because that makes the most
+    // In the config file we use tag -> token because that makes the most
     // sense, but we need to reverse it before passing it in to the server.
     tokens: BTreeMap<String, String>,
 }

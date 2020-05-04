@@ -1,4 +1,7 @@
+README.md
 go/pb/seabird.pb.go
-rust/target
+go/README.md
 go/.env
+rust/target
+rust/README.md
 rust/.env

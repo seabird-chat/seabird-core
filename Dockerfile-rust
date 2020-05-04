@@ -19,8 +19,6 @@ COPY ./proto/ /usr/src/seabird-core/proto
 # Copy over the files to actually build the application.
 COPY ./rust/ .
 
-RUN find ..
-
 # We need to make sure the update time on main.rs is newer than the temporary
 # file or there are weird cargo caching issues we run into.
 RUN touch src/main.rs && cargo build --release && cp -v target/release/seabird-core /usr/local/bin

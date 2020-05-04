@@ -25,7 +25,7 @@ RUN find
 RUN go build -v -o /build/seabird-core ./cmd/seabird-core
 
 # Stage 2: Copy files and configure what we need
-FROM debian:buster
+FROM debian:buster-slim
 
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 

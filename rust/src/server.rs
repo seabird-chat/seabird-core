@@ -13,6 +13,8 @@ use crate::{
     proto::seabird_server::{Seabird, SeabirdServer},
 };
 
+const BROADCAST_BUFFER: usize = 32;
+
 #[derive(Debug)]
 pub enum InternalEvent {
     SetTokens { tokens: BTreeMap<String, String> },
@@ -121,7 +123,6 @@ impl StreamHandle {
             id: stream_id,
             internal_sender: internal_sender,
         };
-        info!("new stream: {}", ret.id);
         ret
     }
 }
@@ -170,7 +171,7 @@ impl Server {
     pub fn new(config: ServerConfig) -> Self {
         // We actually don't care about the receiving side - the clients will
         // subscribe to it later.
-        let (sender, _) = broadcast::channel(16);
+        let (sender, _) = broadcast::channel(BROADCAST_BUFFER);
         let (internal_sender, internal_receiver) = mpsc::unbounded_channel();
         let (message_sender, message_receiver) = mpsc::unbounded_channel();
 
@@ -218,7 +219,7 @@ impl Server {
             match event {
                 InternalEvent::SetTokens { tokens } => {
                     let mut tokens_guard = self.tokens.write().await;
-                    info!("updating tokens");
+                    debug!("updating tokens");
                     *tokens_guard = tokens;
                 }
                 InternalEvent::StreamEnd { stream_id } => {
@@ -379,7 +380,7 @@ impl Server {
                 .ok_or_else(|| Status::new(Code::Unauthenticated, "unknown token"))?,
         };
 
-        info!("authenticated call to {} rpc with tag {}", method, tag);
+        debug!("authenticated call to {} rpc with tag {}", method, tag);
 
         Ok(tag)
     }
@@ -390,10 +391,12 @@ impl Server {
         commands: HashMap<String, proto::CommandMetadata>,
     ) -> RpcResult<StreamHandle> {
         // Build the stream metadata
-        let mut meta = StreamMetadata::new(tag, commands, self.internal_sender.clone());
+        let mut meta = StreamMetadata::new(tag.clone(), commands, self.internal_sender.clone());
+        debug!("new stream {} with tag {}", meta.id, &tag);
+
         let handle = meta
             .take_handle()
-            .ok_or_else(|| Status::new(Code::Internal, "failed to get stream handle"));
+            .ok_or_else(|| Status::new(Code::Internal, format!("failed to create new stream handle for {}", &tag)));
 
         // Add the metadata to the tracked streams
         self.streams
@@ -578,7 +581,7 @@ impl Seabird for Arc<Server> {
         let stream_id = request
             .stream_id
             .parse()
-            .map_err(|_| Status::new(Code::InvalidArgument, "invalid stream_id"))?;
+            .map_err(|_| Status::new(Code::InvalidArgument, format!("invalid stream_id")))?;
 
         let (stream_tag, commands) = {
             let streams_guard = self.streams.read().await;

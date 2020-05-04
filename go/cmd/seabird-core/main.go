@@ -56,8 +56,13 @@ func main() {
 	user := EnvDefault("SEABIRD_USER", nick)
 	name := EnvDefault("SEABIRD_NAME", user)
 
-	tokensFile := Env("SEABIRD_TOKEN_FILE")
+	tokensFile, err := filepath.Abs(Env("SEABIRD_TOKEN_FILE"))
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to get absolute path of token file")
+	}
+
 	tokensDir := filepath.Dir(tokensFile)
+	tokensFilename := filepath.Base(tokensFile)
 
 	server, err := seabird.NewServer(seabird.ServerConfig{
 		IrcHost:       Env("SEABIRD_IRC_HOST"),
@@ -69,7 +74,7 @@ func main() {
 		Pass:          os.Getenv("SEABIRD_PASS"),
 	})
 	if err != nil {
-		logrus.WithError(err).Fatalf("failed to create server")
+		logrus.WithError(err).Fatal("failed to create server")
 	}
 
 	tokens, err := ReadTokenFile(tokensFile)
@@ -97,19 +102,28 @@ func main() {
 					logrus.Fatal("fswatcher exited early")
 				}
 
-				if event.Name != filepath.Base(tokensFile) {
+				logrus.Debugf("fswatch event: %v", event.Name)
+
+				if filepath.Base(event.Name) != tokensFilename {
+					logrus.Debugf(
+						"Skipping file event because %q != %q",
+						filepath.Base(event.Name), tokensFilename,
+					)
 					continue
 				}
 
-				if event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Create == fsnotify.Create {
-					logrus.Info("modified file:", event.Name)
-					tokens, err := ReadTokenFile(tokensFile)
-					if err != nil {
-						logrus.WithError(err).Warn("failed to read file")
-						continue
-					}
-					server.SetTokens(tokens)
+				if event.Op&fsnotify.Write != fsnotify.Write && event.Op&fsnotify.Create != fsnotify.Create {
+					logrus.Debug("Skipping file event because event was not Write or Create")
+					continue
 				}
+
+				logrus.Infof("tokens file modified: %s", event.Name)
+				tokens, err := ReadTokenFile(tokensFile)
+				if err != nil {
+					logrus.WithError(err).Warn("failed to read file")
+					continue
+				}
+				server.SetTokens(tokens)
 			case err, ok := <-watcher.Errors:
 				if !ok {
 					logrus.Fatal("fswatcher exited early")

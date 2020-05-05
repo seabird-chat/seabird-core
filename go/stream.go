@@ -3,7 +3,9 @@ package seabird
 import (
 	"context"
 	"fmt"
+	"net"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -25,18 +27,31 @@ type EventStream struct {
 	tag     string
 	channel chan *pb.Event
 
+	remoteAddr     net.Addr
+	connectionTime time.Time
+
 	commandMetadata map[string]*CommandMetadata
 }
 
-func NewEventStream(ctx context.Context, meta map[string]*CommandMetadata) *EventStream {
+func NewEventStream(ctx context.Context, addr net.Addr, meta map[string]*CommandMetadata) *EventStream {
 	ret := &EventStream{
 		id:              uuid.New(),
 		tag:             CtxTag(ctx),
 		channel:         make(chan *pb.Event, EVENT_STREAM_BUFFER),
+		connectionTime:  time.Now(),
+		remoteAddr:      addr,
 		commandMetadata: meta,
 	}
 
 	return ret
+}
+
+func (s *EventStream) RemoteAddr() net.Addr {
+	return s.remoteAddr
+}
+
+func (s *EventStream) ConnectionTime() time.Time {
+	return s.connectionTime
 }
 
 func (s *EventStream) Commands() []string {

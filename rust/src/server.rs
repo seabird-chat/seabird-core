@@ -1,9 +1,10 @@
+use std::net::SocketAddr;
 use std::pin::Pin;
 
 use futures::stream::{Stream, StreamExt};
 use futures::task::Poll;
+use time::OffsetDateTime;
 use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
-use tokio::time::Instant;
 use tonic::{Code, Request, Response, Status};
 use uuid::Uuid;
 
@@ -77,6 +78,8 @@ pub struct Server {
     // Tokens is a mapping of token to tag
     tokens: RwLock<BTreeMap<String, String>>,
 
+    start_time: OffsetDateTime,
+
     // Streams is a mapping of stream ID to stream metadata. This will be
     // cleaned up by the cleanup task.
     streams: RwLock<BTreeMap<Uuid, Arc<RwLock<StreamMetadata>>>>,
@@ -86,7 +89,8 @@ pub struct Server {
 struct StreamMetadata {
     id: Uuid,
     tag: String,
-    start_time: Instant,
+    start_time: OffsetDateTime,
+    remote_addr: SocketAddr,
     commands: HashMap<String, proto::CommandMetadata>,
     handle: Option<StreamHandle>,
 }
@@ -94,6 +98,7 @@ struct StreamMetadata {
 impl StreamMetadata {
     fn new(
         tag: String,
+        remote_addr: SocketAddr,
         commands: HashMap<String, proto::CommandMetadata>,
         internal_sender: mpsc::UnboundedSender<InternalEvent>,
     ) -> Self {
@@ -101,7 +106,8 @@ impl StreamMetadata {
         StreamMetadata {
             id: id.clone(),
             tag,
-            start_time: Instant::now(),
+            start_time: OffsetDateTime::now_utc(),
+            remote_addr,
             commands,
             handle: Some(StreamHandle::new(id, internal_sender)),
         }
@@ -185,6 +191,7 @@ impl Server {
             message_receiver: Mutex::new(message_receiver),
             tracker: RwLock::new(crate::irc::Tracker::new()),
             streams: RwLock::new(BTreeMap::new()),
+            start_time: OffsetDateTime::now_utc(),
         }
     }
 
@@ -226,7 +233,10 @@ impl Server {
                     let mut streams_guard = self.streams.write().await;
 
                     if streams_guard.remove(&stream_id).is_none() {
-                        warn!("attempted to remove stream {} but it did not exist", stream_id);
+                        warn!(
+                            "attempted to remove stream {} but it did not exist",
+                            stream_id
+                        );
                     } else {
                         info!("removed stream: {}", stream_id);
                     }
@@ -388,15 +398,24 @@ impl Server {
     async fn new_stream(
         &self,
         tag: String,
+        remote_addr: SocketAddr,
         commands: HashMap<String, proto::CommandMetadata>,
     ) -> RpcResult<StreamHandle> {
         // Build the stream metadata
-        let mut meta = StreamMetadata::new(tag.clone(), commands, self.internal_sender.clone());
+        let mut meta = StreamMetadata::new(
+            tag.clone(),
+            remote_addr,
+            commands,
+            self.internal_sender.clone(),
+        );
         debug!("new stream {} with tag {}", meta.id, &tag);
 
-        let handle = meta
-            .take_handle()
-            .ok_or_else(|| Status::new(Code::Internal, format!("failed to create new stream handle for {}", &tag)));
+        let handle = meta.take_handle().ok_or_else(|| {
+            Status::new(
+                Code::Internal,
+                format!("failed to create new stream handle for {}", &tag),
+            )
+        });
 
         // Add the metadata to the tracked streams
         self.streams
@@ -416,12 +435,15 @@ impl Seabird for Arc<Server> {
         &self,
         request: Request<proto::StreamEventsRequest>,
     ) -> RpcResult<Response<Self::StreamEventsStream>> {
+        let remote_addr = request
+            .remote_addr()
+            .ok_or_else(|| Status::new(Code::Internal, "missing remote_addr"))?;
         let request = request.into_inner();
         let tag = self
             .validate_identity("stream_events", request.identity.as_ref())
             .await?;
 
-        let stream_handle = self.new_stream(tag, request.commands).await?;
+        let stream_handle = self.new_stream(tag, remote_addr, request.commands).await?;
 
         Ok(Response::new(EventStreamReceiver::new(
             stream_handle,
@@ -583,12 +605,17 @@ impl Seabird for Arc<Server> {
             .parse()
             .map_err(|_| Status::new(Code::InvalidArgument, format!("invalid stream_id")))?;
 
-        let (stream_tag, commands) = {
+        let (stream_tag, stream_start, stream_addr, commands) = {
             let streams_guard = self.streams.read().await;
             match streams_guard.get(&stream_id) {
                 Some(stream) => {
                     let stream_guard = stream.read().await;
-                    Ok((stream_guard.tag.clone(), stream_guard.commands.clone()))
+                    Ok((
+                        stream_guard.tag.clone(),
+                        stream_guard.start_time.timestamp(),
+                        stream_guard.remote_addr.to_string(),
+                        stream_guard.commands.clone(),
+                    ))
                 }
                 None => Err(Status::new(Code::NotFound, "stream not found")),
             }
@@ -598,6 +625,27 @@ impl Seabird for Arc<Server> {
             id: request.stream_id,
             tag: stream_tag,
             commands,
+            connection_timestamp: stream_start,
+            remote_address: stream_addr,
+        }))
+    }
+
+    async fn get_core_info(
+        &self,
+        request: Request<proto::CoreInfoRequest>,
+    ) -> RpcResult<Response<proto::CoreInfoResponse>> {
+        let request = request.into_inner();
+        self.validate_identity("get_core_info", request.identity.as_ref())
+            .await?;
+
+        Ok(Response::new(proto::CoreInfoResponse {
+            current_nick: self
+                .tracker
+                .read()
+                .await
+                .get_current_nick()
+                .unwrap_or_else(|| "".to_string()),
+            startup_timestamp: self.start_time.timestamp(),
         }))
     }
 }

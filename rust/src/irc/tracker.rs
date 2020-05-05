@@ -36,6 +36,10 @@ impl Tracker {
         }
     }
 
+    pub fn get_current_nick(&self) -> Option<String> {
+        self.current_nick.clone()
+    }
+
     pub fn get_channel(&self, name: &str) -> Option<ChannelState> {
         self.channels.get(name).map(|val| val.clone())
     }

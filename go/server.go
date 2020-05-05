@@ -44,13 +44,16 @@ type Server struct {
 
 	streamLock sync.RWMutex
 	streams    map[uuid.UUID]*EventStream
+
+	startTime time.Time
 }
 
 func NewServer(config ServerConfig) (*Server, error) {
 	s := &Server{
-		tracker: ircx.NewTracker(),
-		config:  config,
-		streams: make(map[uuid.UUID]*EventStream),
+		tracker:   ircx.NewTracker(),
+		config:    config,
+		streams:   make(map[uuid.UUID]*EventStream),
+		startTime: time.Now(),
 	}
 	s.SetTokens(config.Tokens)
 
@@ -145,11 +148,11 @@ func (s *Server) Run() error {
 	return group.Wait()
 }
 
-func (s *Server) NewStream(ctx context.Context, meta map[string]*CommandMetadata) (context.Context, *EventStream) {
+func (s *Server) NewStream(ctx context.Context, addr net.Addr, meta map[string]*CommandMetadata) (context.Context, *EventStream) {
 	s.streamLock.Lock()
 	defer s.streamLock.Unlock()
 
-	ret := NewEventStream(ctx, meta)
+	ret := NewEventStream(ctx, addr, meta)
 	s.streams[ret.ID()] = ret
 
 	return WithStreamID(ctx, ret.ID()), ret

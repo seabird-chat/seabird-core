@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 	irc "gopkg.in/irc.v3"
 
@@ -25,9 +26,18 @@ func (s *Server) StreamEvents(req *pb.StreamEventsRequest, outputStream pb.Seabi
 		meta[k] = &CommandMetadata{Name: k, ShortHelp: v.ShortHelp, FullHelp: v.FullHelp}
 	}
 
+	ctx := outputStream.Context()
+
+	// TODO: this only pulls the peer out if it came in directly. We should
+	// properly handle reverse proxies as well.
+	streamPeer, ok := peer.FromContext(ctx)
+	if !ok {
+		return status.Error(codes.Internal, "failed to get remote addr")
+	}
+
 	// NOTE: we do the setup slightly different here in order to have the
 	// stream_id attached properly to the logger.
-	ctx, eventStream := s.NewStream(outputStream.Context(), meta)
+	ctx, eventStream := s.NewStream(ctx, streamPeer.Addr, meta)
 	logger = logger.WithField("stream_id", eventStream.ID())
 	defer logger.Info("request finished")
 	defer eventStream.Close()
@@ -215,9 +225,11 @@ func (s *Server) GetStreamInfo(ctx context.Context, req *pb.StreamInfoRequest) (
 	}
 
 	resp := &pb.StreamInfoResponse{
-		Id:       stream.ID().String(),
-		Tag:      stream.Tag(),
-		Commands: make(map[string]*pb.CommandMetadata),
+		Id:                  stream.ID().String(),
+		Tag:                 stream.Tag(),
+		ConnectionTimestamp: stream.ConnectionTime().Unix(),
+		RemoteAddress:       stream.RemoteAddr().String(),
+		Commands:            make(map[string]*pb.CommandMetadata),
 	}
 
 	for _, command := range stream.Commands() {
@@ -231,6 +243,22 @@ func (s *Server) GetStreamInfo(ctx context.Context, req *pb.StreamInfoRequest) (
 			ShortHelp: info.ShortHelp,
 			FullHelp:  info.FullHelp,
 		}
+	}
+
+	return resp, nil
+}
+
+// GetCoreInfo implements SeabirdServer.GetCoreInfo
+func (s *Server) GetCoreInfo(ctx context.Context, req *pb.CoreInfoRequest) (*pb.CoreInfoResponse, error) {
+	logger, err := s.verifyIdentity("GetStreamInfo", req.Identity)
+	if err != nil {
+		return nil, err
+	}
+	defer logger.Info("request finished")
+
+	resp := &pb.CoreInfoResponse{
+		CurrentNick:      s.client.CurrentNick(),
+		StartupTimestamp: s.startTime.Unix(),
 	}
 
 	return resp, nil

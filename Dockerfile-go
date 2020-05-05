@@ -21,7 +21,6 @@ WORKDIR /seabird-core/go
 ADD ./go/*.go ./
 ADD ./go/cmd ./cmd
 ADD ./go/ircx ./ircx
-RUN find
 RUN go build -v -o /build/seabird-core ./cmd/seabird-core
 
 # Stage 2: Copy files and configure what we need

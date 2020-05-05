@@ -6,12 +6,17 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/improbable-eng/grpc-web/go/grpcweb"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -30,6 +35,7 @@ type ServerConfig struct {
 	Pass          string            `json:"irc_pass"`
 	CommandPrefix string            `json:"command_prefix"`
 	BindHost      string            `json:"bind_host"`
+	EnableWeb     bool              `json:"enable_web"`
 	Tokens        map[string]string `json:"tokens"`
 }
 
@@ -131,14 +137,45 @@ func (s *Server) SetTokens(tokens map[string]string) {
 func (s *Server) Run() error {
 	group, ctx := errgroup.WithContext(context.Background())
 	group.Go(func() error {
-		var lc net.ListenConfig
-		listener, err := lc.Listen(ctx, "tcp", s.config.BindHost)
-		if err != nil {
-			return err
-		}
-		defer listener.Close()
+		wrapped := grpcweb.WrapServer(
+			s.grpcServer,
+			grpcweb.WithWebsockets(true),
+			grpcweb.WithWebsocketPingInterval(30*time.Second),
 
-		return s.grpcServer.Serve(listener)
+			// We allow all origins because there's other auth
+			grpcweb.WithOriginFunc(func(origin string) bool { return true }),
+			grpcweb.WithWebsocketOriginFunc(func(req *http.Request) bool { return true }),
+		)
+
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// If web is enabled and this is a valid grpc-web request, send it
+			// to the grpc-web handler.
+			if s.config.EnableWeb && (wrapped.IsGrpcWebRequest(r) || wrapped.IsGrpcWebSocketRequest(r) || wrapped.IsAcceptableGrpcCorsRequest(r)) {
+				wrapped.ServeHTTP(w, r)
+				return
+			}
+
+			// This is the recommended example from gRPC's ServeHTTP.
+			if r.ProtoMajor == 2 && strings.HasPrefix(r.Header.Get("Content-Type"), "application/grpc") {
+				s.grpcServer.ServeHTTP(w, r)
+				return
+			}
+
+			w.WriteHeader(http.StatusNotFound)
+		})
+
+		// We can't use http.ListenAndServe because we want to set a base
+		// context.
+		server := http.Server{
+			Addr:        s.config.BindHost,
+			BaseContext: func(net.Listener) context.Context { return ctx },
+
+			// We need to wrap our handler in h2c because we require some proxy
+			// to encrypt it.
+			Handler: h2c.NewHandler(handler, &http2.Server{}),
+		}
+
+		return server.ListenAndServe()
 	})
 
 	group.Go(func() error {

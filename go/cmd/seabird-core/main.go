@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
@@ -68,6 +69,7 @@ func main() {
 		IrcHost:       Env("SEABIRD_IRC_HOST"),
 		CommandPrefix: EnvDefault("SEABIRD_COMMAND_PREFIX", "!"),
 		BindHost:      EnvDefault("SEABIRD_BIND_HOST", ":11235"),
+		EnableWeb:     strings.ToLower(EnvDefault("SEABIRD_ENABLE_WEB", "true")) == "true",
 		Nick:          nick,
 		User:          user,
 		Name:          name,

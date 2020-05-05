@@ -12,7 +12,8 @@ same environment variables for configuration and the same config file format.
 
 ### Go
 
-The Go version uses the official gRPC libraries for a server implementation.
+The Go version uses the official gRPC libraries for a server implementation but
+a semi-custom http Handler in order to support grpc-web.
 
 ### Rust
 

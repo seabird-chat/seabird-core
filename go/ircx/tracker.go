@@ -152,7 +152,7 @@ func (t *Tracker) handleJoin(client *irc.Client, msg *irc.Message) {
 }
 
 func (t *Tracker) handlePart(client *irc.Client, msg *irc.Message) {
-	if len(msg.Params) != 2 {
+	if len(msg.Params) < 1 {
 		return
 	}
 

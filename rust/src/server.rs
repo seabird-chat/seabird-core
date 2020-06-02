@@ -469,21 +469,6 @@ impl Seabird for Arc<Server> {
         Ok(Response::new(proto::SendMessageResponse {}))
     }
 
-    async fn send_raw_message(
-        &self,
-        request: Request<proto::SendRawMessageRequest>,
-    ) -> RpcResult<Response<proto::SendRawMessageResponse>> {
-        let request = request.into_inner();
-        self.validate_identity("send_raw_message", request.identity.as_ref())
-            .await?;
-
-        self.message_sender
-            .send(irc::Message::new(request.command, request.params))
-            .map_err(|_| Status::new(Code::Internal, "failed to send message"))?;
-
-        Ok(Response::new(proto::SendRawMessageResponse {}))
-    }
-
     async fn list_channels(
         &self,
         request: Request<proto::ListChannelsRequest>,

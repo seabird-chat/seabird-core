@@ -7,7 +7,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
-	irc "gopkg.in/irc.v3"
 
 	"github.com/seabird-irc/seabird-core/pb"
 )
@@ -62,33 +61,12 @@ func (s *Server) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*
 	}
 	defer logger.Info("request finished")
 
-	err = s.client.WriteMessage(&irc.Message{
-		Command: "PRIVMSG",
-		Params:  []string{req.Target, req.Message},
-	})
-	if err != nil {
-		return nil, status.Error(codes.Internal, "failed to write message")
-	}
-
-	return &pb.SendMessageResponse{}, nil
-}
-
-func (s *Server) SendRawMessage(ctx context.Context, req *pb.SendRawMessageRequest) (*pb.SendRawMessageResponse, error) {
-	logger, err := s.verifyIdentity("SendRawMessage", req.Identity)
+	err = s.chat.SendMessage(req.Target, req.Message)
 	if err != nil {
 		return nil, err
 	}
-	defer logger.Info("request finished")
 
-	err = s.client.WriteMessage(&irc.Message{
-		Command: req.Command,
-		Params:  req.Params,
-	})
-	if err != nil {
-		return nil, status.Error(codes.Internal, "failed to write message")
-	}
-
-	return &pb.SendRawMessageResponse{}, nil
+	return &pb.SendMessageResponse{}, nil
 }
 
 func (s *Server) JoinChannel(ctx context.Context, req *pb.JoinChannelRequest) (*pb.JoinChannelResponse, error) {
@@ -100,12 +78,9 @@ func (s *Server) JoinChannel(ctx context.Context, req *pb.JoinChannelRequest) (*
 
 	// TODO: support channels which require a password to join
 	// TODO: maybe it would make sense to wait until fully joined to a channel
-	err = s.client.WriteMessage(&irc.Message{
-		Command: "JOIN",
-		Params:  []string{req.Name},
-	})
+	err = s.chat.JoinChannel(req.Name)
 	if err != nil {
-		return nil, status.Error(codes.Internal, "failed to write message")
+		return nil, err
 	}
 
 	return &pb.JoinChannelResponse{}, nil
@@ -119,12 +94,9 @@ func (s *Server) LeaveChannel(ctx context.Context, req *pb.LeaveChannelRequest) 
 	defer logger.Info("request finished")
 
 	// TODO: support leave messages
-	err = s.client.WriteMessage(&irc.Message{
-		Command: "PART",
-		Params:  []string{req.Name},
-	})
+	err = s.chat.LeaveChannel(req.Name)
 	if err != nil {
-		return nil, status.Error(codes.Internal, "failed to write message")
+		return nil, err
 	}
 
 	return &pb.LeaveChannelResponse{}, nil
@@ -137,7 +109,12 @@ func (s *Server) ListChannels(ctx context.Context, req *pb.ListChannelsRequest) 
 	}
 	defer logger.Info("request finished")
 
-	return &pb.ListChannelsResponse{Names: s.tracker.ListChannels()}, nil
+	channels, err := s.chat.ListChannels()
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.ListChannelsResponse{Names: channels}, nil
 }
 
 func (s *Server) GetChannelInfo(ctx context.Context, req *pb.ChannelInfoRequest) (*pb.ChannelInfoResponse, error) {
@@ -147,14 +124,9 @@ func (s *Server) GetChannelInfo(ctx context.Context, req *pb.ChannelInfoRequest)
 	}
 	defer logger.Info("request finished")
 
-	channel := s.tracker.GetChannel(req.Name)
-	if channel == nil {
-		return nil, status.Error(codes.NotFound, "channel not found")
-	}
-
-	resp := &pb.ChannelInfoResponse{Name: channel.Name, Topic: channel.Topic, Users: nil}
-	for nick := range channel.Users {
-		resp.Users = append(resp.Users, &pb.User{Nick: nick})
+	resp, err := s.chat.GetChannelInfo(req.Name)
+	if err != nil {
+		return nil, err
 	}
 
 	return resp, nil
@@ -168,17 +140,9 @@ func (s *Server) SetChannelTopic(ctx context.Context, req *pb.SetChannelTopicReq
 	}
 	defer logger.Info("request finished")
 
-	channel := s.tracker.GetChannel(req.Name)
-	if channel == nil {
-		return nil, status.Error(codes.NotFound, "channel not found")
-	}
-
-	err = s.client.WriteMessage(&irc.Message{
-		Command: "TOPIC",
-		Params:  []string{req.Name, req.Topic},
-	})
+	err = s.chat.SetChannelTopic(req.Name, req.Topic)
 	if err != nil {
-		return nil, status.Error(codes.Internal, "failed to write message")
+		return nil, err
 	}
 
 	return &pb.SetChannelTopicResponse{}, nil
@@ -257,7 +221,7 @@ func (s *Server) GetCoreInfo(ctx context.Context, req *pb.CoreInfoRequest) (*pb.
 	defer logger.Info("request finished")
 
 	resp := &pb.CoreInfoResponse{
-		CurrentNick:      s.client.CurrentNick(),
+		CurrentNick:      s.chat.CurrentNick(),
 		StartupTimestamp: s.startTime.Unix(),
 	}
 

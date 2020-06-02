@@ -2,9 +2,6 @@ package seabird
 
 import (
 	"context"
-	"crypto/tls"
-	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -21,9 +18,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"gopkg.in/irc.v3"
 
-	"github.com/seabird-irc/seabird-core/ircx"
 	"github.com/seabird-irc/seabird-core/pb"
 )
 
@@ -41,9 +36,8 @@ type ServerConfig struct {
 
 type Server struct {
 	grpcServer *grpc.Server
-	// TODO: client should perhaps be put behind a mutex
-	client  *irc.Client
-	tracker *ircx.Tracker
+
+	chat ChatConnection
 
 	configLock sync.RWMutex
 	config     ServerConfig
@@ -56,7 +50,6 @@ type Server struct {
 
 func NewServer(config ServerConfig) (*Server, error) {
 	s := &Server{
-		tracker:   ircx.NewTracker(),
 		config:    config,
 		streams:   make(map[uuid.UUID]*EventStream),
 		startTime: time.Now(),
@@ -68,54 +61,51 @@ func NewServer(config ServerConfig) (*Server, error) {
 		return nil, err
 	}
 
-	hostname := ircUrl.Hostname()
-	port := ircUrl.Port()
-
-	var c io.ReadWriteCloser
-
-	switch ircUrl.Scheme {
-	case "irc":
-		if port == "" {
-			port = "6667"
-		}
-
-		c, err = net.Dial("tcp", fmt.Sprintf("%s:%s", hostname, port))
-	case "ircs":
-		if port == "" {
-			port = "6697"
-		}
-
-		c, err = tls.Dial("tcp", fmt.Sprintf("%s:%s", hostname, port), nil)
-	case "ircs+unsafe":
-		if port == "" {
-			port = "6697"
-		}
-
-		c, err = tls.Dial("tcp", fmt.Sprintf("%s:%s", hostname, port), &tls.Config{
-			InsecureSkipVerify: true,
-		})
-	default:
-		return nil, fmt.Errorf("unknown irc scheme %s", ircUrl.Scheme)
-	}
-
+	s.chat, err = NewIRCConn(&config, ircUrl, s.broadcastEvent, s.getCommandMetadata)
 	if err != nil {
 		return nil, err
 	}
-
-	s.client = irc.NewClient(c, irc.ClientConfig{
-		Nick:          config.Nick,
-		User:          config.User,
-		Name:          config.Name,
-		Pass:          config.Pass,
-		PingFrequency: 60 * time.Second,
-		PingTimeout:   10 * time.Second,
-		Handler:       irc.HandlerFunc(s.ircHandler),
-	})
 
 	s.grpcServer = grpc.NewServer()
 	pb.RegisterSeabirdServer(s.grpcServer, s)
 
 	return s, nil
+}
+
+func (s *Server) broadcastEvent(event *pb.Event) {
+	// NOTE: we get a full lock and not an RLock because there's a chance we
+	// will need to remove plugins during this iteration.
+	s.streamLock.Lock()
+	defer s.streamLock.Unlock()
+
+	for id, stream := range s.streams {
+		// If a broadcast to this plugin fails, kill the plugin
+		err := stream.Send(event)
+		if err != nil {
+			stream.Close()
+			delete(s.streams, id)
+		}
+	}
+}
+
+func (s *Server) getCommandMetadata() map[string][]*CommandMetadata {
+	s.streamLock.RLock()
+	defer s.streamLock.RUnlock()
+
+	meta := make(map[string][]*CommandMetadata)
+
+	for _, stream := range s.streams {
+		for _, command := range stream.Commands() {
+			commandMeta := stream.CommandInfo(command)
+			if meta == nil {
+				continue
+			}
+
+			meta[command] = append(meta[command], commandMeta)
+		}
+	}
+
+	return meta
 }
 
 // SetTokens allows an external method to update the tokens of the currently
@@ -179,7 +169,7 @@ func (s *Server) Run() error {
 	})
 
 	group.Go(func() error {
-		return s.client.RunContext(ctx)
+		return s.chat.RunContext(ctx)
 	})
 
 	return group.Wait()

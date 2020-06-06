@@ -73,24 +73,6 @@ func (s *Server) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*
 	return &pb.SendMessageResponse{}, nil
 }
 
-func (s *Server) SendRawMessage(ctx context.Context, req *pb.SendRawMessageRequest) (*pb.SendRawMessageResponse, error) {
-	logger, err := s.verifyIdentity("SendRawMessage", req.Identity)
-	if err != nil {
-		return nil, err
-	}
-	defer logger.Info("request finished")
-
-	err = s.client.WriteMessage(&irc.Message{
-		Command: req.Command,
-		Params:  req.Params,
-	})
-	if err != nil {
-		return nil, status.Error(codes.Internal, "failed to write message")
-	}
-
-	return &pb.SendRawMessageResponse{}, nil
-}
-
 func (s *Server) JoinChannel(ctx context.Context, req *pb.JoinChannelRequest) (*pb.JoinChannelResponse, error) {
 	logger, err := s.verifyIdentity("JoinChannel", req.Identity)
 	if err != nil {

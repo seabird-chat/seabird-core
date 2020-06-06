@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-irc/ircx"
 	"github.com/google/uuid"
 	"github.com/improbable-eng/grpc-web/go/grpcweb"
 	"github.com/sirupsen/logrus"
@@ -21,9 +22,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"gopkg.in/irc.v3"
 
-	"github.com/seabird-irc/seabird-core/ircx"
 	"github.com/seabird-irc/seabird-core/pb"
 )
 
@@ -42,8 +41,7 @@ type ServerConfig struct {
 type Server struct {
 	grpcServer *grpc.Server
 	// TODO: client should perhaps be put behind a mutex
-	client  *irc.Client
-	tracker *ircx.Tracker
+	client *ircx.Client
 
 	configLock sync.RWMutex
 	config     ServerConfig
@@ -56,7 +54,6 @@ type Server struct {
 
 func NewServer(config ServerConfig) (*Server, error) {
 	s := &Server{
-		tracker:   ircx.NewTracker(),
 		config:    config,
 		streams:   make(map[uuid.UUID]*EventStream),
 		startTime: time.Now(),
@@ -102,14 +99,15 @@ func NewServer(config ServerConfig) (*Server, error) {
 		return nil, err
 	}
 
-	s.client = irc.NewClient(c, irc.ClientConfig{
+	s.client = ircx.NewClient(c, ircx.ClientConfig{
 		Nick:          config.Nick,
 		User:          config.User,
 		Name:          config.Name,
 		Pass:          config.Pass,
+		EnableTracker: true,
 		PingFrequency: 60 * time.Second,
 		PingTimeout:   10 * time.Second,
-		Handler:       irc.HandlerFunc(s.ircHandler),
+		Handler:       ircx.HandlerFunc(s.ircHandler),
 	})
 
 	s.grpcServer = grpc.NewServer()

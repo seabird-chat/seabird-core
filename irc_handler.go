@@ -5,17 +5,16 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/go-irc/irc/v4"
+	"github.com/go-irc/ircx"
 	"github.com/sirupsen/logrus"
-	irc "gopkg.in/irc.v3"
 
 	"github.com/seabird-irc/seabird-core/pb"
 )
 
-func (s *Server) ircHandler(client *irc.Client, msg *irc.Message) {
+func (s *Server) ircHandler(client *ircx.Client, msg *irc.Message) {
 	logger := logrus.WithField("irc_msg", msg)
 	logger.Debug("Got IRC message")
-
-	s.tracker.Handle(client, msg)
 
 	if msg.Command == "001" {
 		_ = client.Write("JOIN #encoded-test")

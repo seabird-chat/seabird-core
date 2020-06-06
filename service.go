@@ -3,11 +3,11 @@ package seabird
 import (
 	"context"
 
+	"github.com/go-irc/irc/v4"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
-	irc "gopkg.in/irc.v3"
 
 	"github.com/seabird-irc/seabird-core/pb"
 )
@@ -137,7 +137,7 @@ func (s *Server) ListChannels(ctx context.Context, req *pb.ListChannelsRequest) 
 	}
 	defer logger.Info("request finished")
 
-	return &pb.ListChannelsResponse{Names: s.tracker.ListChannels()}, nil
+	return &pb.ListChannelsResponse{Names: s.client.Tracker.ListChannels()}, nil
 }
 
 func (s *Server) GetChannelInfo(ctx context.Context, req *pb.ChannelInfoRequest) (*pb.ChannelInfoResponse, error) {
@@ -147,7 +147,7 @@ func (s *Server) GetChannelInfo(ctx context.Context, req *pb.ChannelInfoRequest)
 	}
 	defer logger.Info("request finished")
 
-	channel := s.tracker.GetChannel(req.Name)
+	channel := s.client.Tracker.GetChannel(req.Name)
 	if channel == nil {
 		return nil, status.Error(codes.NotFound, "channel not found")
 	}
@@ -168,7 +168,7 @@ func (s *Server) SetChannelTopic(ctx context.Context, req *pb.SetChannelTopicReq
 	}
 	defer logger.Info("request finished")
 
-	channel := s.tracker.GetChannel(req.Name)
+	channel := s.client.Tracker.GetChannel(req.Name)
 	if channel == nil {
 		return nil, status.Error(codes.NotFound, "channel not found")
 	}

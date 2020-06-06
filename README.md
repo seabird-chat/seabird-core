@@ -2,7 +2,7 @@
 
 Seabird has been an IRC bot for the last 10 years in many different
 incarnations. This version is a gRPC service which exports a number of functions
-to easily interact with IRC.
+to easily interact with chat services.
 
 ## Server Implementations
 
@@ -10,18 +10,16 @@ The official gRPC libraries are used for a server implementation but a
 semi-custom http Handler is needed in order to support grpc-web without a
 separate proxy.
 
-
 ## Building
 
 The easiest way to build and deploy `seabird-core` is to use the [official
-docker images](https://hub.docker.com/r/belak/seabird-core). The `go` and `rust`
-tags point to their specific implementations.
+docker images](https://hub.docker.com/r/belak/seabird-core). The `latest` tag
+points to the master branch.
 
 In order to build these, you can use the following:
 
 ```sh
-docker build -f Dockerfile-go -t seabird-core:go .
-docker build -f Dockerfile-rust -t seabird-core:rust .
+docker build -t seabird-core:latest .
 ```
 
 If you want to run the server outside of docker, you can use the following:

@@ -1,5 +1,4 @@
 /pb/seabird.pb.go
-/rust/target
 /.vscode
 .env
 *.json

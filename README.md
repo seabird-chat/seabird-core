@@ -6,18 +6,10 @@ to easily interact with IRC.
 
 ## Server Implementations
 
-There are currently two server implementations. They export the same interface
-and should respond almost exactly the same. They are both designed to use the
-same environment variables for configuration and the same config file format.
+The official gRPC libraries are used for a server implementation but a
+semi-custom http Handler is needed in order to support grpc-web without a
+separate proxy.
 
-### Go
-
-The Go version uses the official gRPC libraries for a server implementation but
-a semi-custom http Handler in order to support grpc-web.
-
-### Rust
-
-The Rust version uses `tonic` for a gRPC server implementation.
 
 ## Building
 
@@ -32,17 +24,20 @@ docker build -f Dockerfile-go -t seabird-core:go .
 docker build -f Dockerfile-rust -t seabird-core:rust .
 ```
 
-Specific information about building/running each implementation locally is
-included in that implementation's README.
+If you want to run the server outside of docker, you can use the following:
+
+```sh
+go generate ./...
+go run ./cmd/seabird-core
+```
 
 ## Configuring
 
 ### Environment Variables
 
 For production, it is generally recommended that environment variables be
-configured in the environment, but for dev, both implementations will
-conveniently load any `.env` file in the working directory of the running
-service.
+configured in the environment, but for dev, any `.env` file in the working
+directory of the running service will be loaded.
 
 - `SEABIRD_IRC_HOST` - which irc server to connect to. This accepts the irc,
   ircs, and ircs+unsafe schemes, depending on the connection.
@@ -56,6 +51,8 @@ service.
 - `SEABIRD_COMMAND_PREFIX` (optional, defaults to `!`)
 - `SEABIRD_TOKEN_FILE` - the file to load tokens from. Note that this file will
   be watched for changes so a token change will not require a bot restart.
+- `SEABIRD_ENABLE_WEB` (optional, defaults to true) - whether or not to enable
+  grpc-web
 
 ### Token File
 

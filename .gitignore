@@ -1,4 +1,4 @@
-/go/pb/seabird.pb.go
+/pb/seabird.pb.go
 /rust/target
 /.vscode
 .env

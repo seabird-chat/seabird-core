@@ -1,7 +1,3 @@
 README.md
-go/pb/seabird.pb.go
-go/README.md
-go/.env
-rust/target
-rust/README.md
-rust/.env
+pb/seabird.pb.go
+.env

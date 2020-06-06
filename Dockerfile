@@ -7,20 +7,17 @@ RUN go get github.com/golang/protobuf/protoc-gen-go
 RUN mkdir /build
 RUN mkdir -p /seabird-core/{go,proto}
 
-WORKDIR /seabird-core/go
-ADD ./go/go.mod ./go/go.sum ./
+WORKDIR /seabird-core
+
+ADD ./go.mod ./go.sum ./
 RUN go mod download
 
 ADD ./proto/* /seabird-core/proto/
 
-WORKDIR /seabird-core/go/pb
-ADD ./go/pb/* ./
-RUN go generate
+ADD ./pb/* ./pb/
+RUN go generate ./...
 
-WORKDIR /seabird-core/go
-ADD ./go/*.go ./
-ADD ./go/cmd ./cmd
-ADD ./go/ircx ./ircx
+ADD . ./
 RUN go build -v -o /build/seabird-core ./cmd/seabird-core
 
 # Stage 2: Copy files and configure what we need

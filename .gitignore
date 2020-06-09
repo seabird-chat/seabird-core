@@ -1,4 +1,4 @@
-/pb/seabird.pb.go
+*.pb.go
 /.vscode
 .env
 *.json

@@ -2,7 +2,8 @@
 FROM golang:1.14-buster as builder
 
 RUN apt-get update && apt-get install -y protobuf-compiler && rm -rf /var/lib/apt/lists/*
-RUN go get github.com/golang/protobuf/protoc-gen-go
+RUN go get google.golang.org/protobuf/cmd/protoc-gen-go
+RUN go get google.golang.org/grpc/cmd/protoc-gen-go-grpc
 
 RUN mkdir /build
 RUN mkdir -p /seabird-core/{go,proto}

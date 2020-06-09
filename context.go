@@ -5,12 +5,10 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 )
 
 const (
-	contextKeyLogger = ContextKey("logger")
-	contextKeyTag = ContextKey("tag")
+	contextKeyTag      = ContextKey("tag")
 	contextKeyStreamID = ContextKey("streamID")
 )
 
@@ -18,23 +16,6 @@ type ContextKey string
 
 func (key ContextKey) String() string {
 	return fmt.Sprintf("ContextKey(%s)", string(key))
-}
-
-func WithLogger(ctx context.Context, logger *logrus.Entry) context.Context {
-	return context.WithValue(ctx, contextKeyLogger, logger)
-}
-
-func CtxLogger(ctx context.Context) *logrus.Entry {
-	logger, ok := ctx.Value(contextKeyLogger).(*logrus.Entry)
-	if !ok {
-		// It's frustrating, but this is the easiest way to get an Entry from
-		// the standard logger.
-		logger := logrus.WithContext(ctx)
-		logger.Context = nil
-		return logger
-	}
-
-	return logger
 }
 
 func WithTag(ctx context.Context, tag string) context.Context {

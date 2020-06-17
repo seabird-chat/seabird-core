@@ -6,19 +6,21 @@ RUN go get google.golang.org/protobuf/cmd/protoc-gen-go
 RUN go get google.golang.org/grpc/cmd/protoc-gen-go-grpc
 
 RUN mkdir /build
-RUN mkdir -p /seabird-core/{go,proto}
+RUN mkdir -p /seabird-core/{proto,go,go/pb}
 
-WORKDIR /seabird-core
-
-ADD ./go.mod ./go.sum ./
+WORKDIR /seabird-core/go
+ADD ./go/go.mod ./go/go.sum ./
 RUN go mod download
 
+WORKDIR /seabird-core
 ADD ./proto/* /seabird-core/proto/
 
-ADD ./pb/* ./pb/
+WORKDIR /seabird-core/go
+
+ADD ./go/pb/ ./pb/
 RUN go generate ./...
 
-ADD . ./
+ADD ./go/ ./
 RUN go build -v -o /build/seabird-core ./cmd/seabird-core
 
 # Stage 2: Copy files and configure what we need

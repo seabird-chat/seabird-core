@@ -1,4 +1,6 @@
 *.pb.go
-/.vscode
 .env
 *.json
+
+/.vscode
+/rust/target

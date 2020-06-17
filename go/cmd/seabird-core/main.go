@@ -72,7 +72,7 @@ func main() {
 	tokensFilename := filepath.Base(tokensFile)
 
 	server, err := seabird.NewServer(seabird.ServerConfig{
-		BindHost:  EnvDefault("SEABIRD_BIND_HOST", ":11235"),
+		BindHost:  EnvDefault("SEABIRD_BIND_HOST", "0.0.0.0:11235"),
 		EnableWeb: strings.ToLower(EnvDefault("SEABIRD_ENABLE_WEB", "true")) == "true",
 	})
 	if err != nil {

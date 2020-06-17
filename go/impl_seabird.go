@@ -292,7 +292,11 @@ func (s *Server) GetChannelInfo(ctx context.Context, req *pb.ChannelInfoRequest)
 // Seabird introspection
 func (s *Server) GetCoreInfo(ctx context.Context, req *pb.CoreInfoRequest) (*pb.CoreInfoResponse, error) {
 	resp := &pb.CoreInfoResponse{
-		StartupTimestamp: s.startTime.Unix(),
+		// NOTE: Go uses an int64 for unixtime so it can technically go
+		// negative, however for our cases, it will always be positive. In order
+		// for compatibility with the rust version (and forward compatibility
+		// with timestamps), we've opted for a uint64.
+		StartupTimestamp: uint64(s.startTime.Unix()),
 	}
 
 	return resp, nil

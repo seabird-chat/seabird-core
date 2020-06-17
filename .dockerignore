@@ -1,3 +1,4 @@
 README.md
-pb/*.pb.go
-.env
+go/pb/*.pb.go
+rust/target
+**/.env

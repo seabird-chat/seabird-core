@@ -9,6 +9,10 @@ to easily interact with chat services.
 There are currently two server implementations. They export the same interface
 and should respond almost exactly the same. They are both designed to use the
 same environment variables for configuration and the same config file format.
+Either one can be used interchangeably.
+
+This server acts only as an event broker - you will need both a running chat
+backend and some sort of plugin in order for anything visible to happen.
 
 ### Go
 
@@ -22,10 +26,12 @@ The Rust version uses `tonic` for a gRPC server implementation.
 ## Building
 
 The easiest way to build and deploy `seabird-core` is to use the [official
-docker images](https://hub.docker.com/r/belak/seabird-core). The `go` and `rust`
-tags point to the Go and Rust implementations respectively on the master branch.
+docker images](https://hub.docker.com/r/seabirdchat/seabird-core). The `go` and
+`rust` tags point to the Go and Rust implementations respectively on the master
+branch. Additionally, the `latest` tag will point to whichever implementation is
+given focus when implementing. This is currently the `rust` version.
 
-In order to build these, you can use the following:
+In order to build these, you can use one of the following:
 
 ```sh
 docker build -t seabird-core:go -f Dockerfile-go .
@@ -48,16 +54,15 @@ service.
   the gRPC service to. Note that it will not be tls encrypted, so you may want
   to put it behind a reverse proxy.
 - `SEABIRD_TOKEN_FILE` - the file to load tokens from.
-- `SEABIRD_ENABLE_WEB` (optional, defaults to true) - whether or not to enable
-  grpc-web. This is only supported in the Go implementation.
 
 ### Token File
 
-The tokens key is a mapping of `tag` to `auth_token`. Each tag will be
+The tokens file contains a mapping of `tag` to `auth_token`. Each tag will be
 associated with a given auth token. It is meant as a convenience to make it
 easier to identify where incoming requests are coming from.
 
-Sending a `SIGHUP` can be used to reload the configuration file.
+Sending a `SIGHUP` to the server process can be used to reload the configuration
+file.
 
 As an example, the following tokens file defines the `belak` tag with an
 auth_token of `hunter2`.

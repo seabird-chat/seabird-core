@@ -2,8 +2,11 @@ use std::collections::BTreeMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use futures::future::{select, Either};
+use futures::StreamExt;
+use hyper::{Body, Request as HyperRequest, Response as HyperResponse};
 use tokio::sync::{broadcast, mpsc, oneshot, Mutex, RwLock};
-use tonic::{Request, Response};
+use tonic::{body::BoxBody, transport::NamedService, Request, Response};
+use tower::Service;
 
 use crate::prelude::*;
 
@@ -13,32 +16,137 @@ use proto::{
     ChatEventInner, EventInner,
 };
 
+// TODO: make these configurable using environment variables
 const CHAT_INGEST_SEND_BUFFER: usize = 10;
 const CHAT_INGEST_RECEIVE_BUFFER: usize = 10;
 const BROADCAST_BUFFER: usize = 32;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(1);
 
-#[derive(Debug)]
-struct ChatBackend {
-    receiver: mpsc::Receiver<proto::ChatRequest>,
-    sender: broadcast::Sender<proto::Event>,
-    // TODO: add Drop impl which sends message to cleanup thread
+// AuthedService is a frustratingly necessary evil because there is no async
+// tonic::Interceptor. This means we can't .await on the RwLock protecting
+// server.tokens. We get around this by implementing a middleware which pulls
+// the request header out (since the http2 headers map to gRPC request metadata
+// directly) to check it before we even get into the gRPC/Tonic code.
+#[derive(Debug, Clone)]
+struct AuthedService<S> {
+    server: Arc<Server>,
+    inner: S,
+}
+
+impl<S> Service<HyperRequest<Body>> for AuthedService<S>
+where
+    S: Service<HyperRequest<Body>, Response = HyperResponse<BoxBody>>
+        + NamedService
+        + Clone
+        + Send
+        + 'static,
+    S::Future: Send + 'static,
+{
+    type Response = S::Response;
+    type Error = S::Error;
+    type Future = futures::future::BoxFuture<'static, Result<Self::Response, Self::Error>>;
+
+    fn poll_ready(
+        &mut self,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, req: HyperRequest<Body>) -> Self::Future {
+        let mut svc = self.inner.clone();
+        let server = self.server.clone();
+
+        Box::pin(async move {
+            let req: HyperRequest<Body> = match req.headers().get("authorization") {
+                Some(token) => {
+                    let token = match token.to_str() {
+                        Ok(token) => token,
+                        Err(_) => {
+                            return Ok(Status::unauthenticated("invalid token data").to_http())
+                        }
+                    };
+
+                    let mut split = token.splitn(2, ' ');
+                    match (split.next(), split.next()) {
+                        (Some("Bearer"), Some(token)) => {
+                            let tokens = server.tokens.read().await;
+                            if !tokens.contains_key(token) {
+                                return Ok(Status::unauthenticated("invalid auth token").to_http());
+                            }
+
+                            req
+                        }
+                        (Some("Bearer"), None) => {
+                            return Ok(Status::unauthenticated("missing auth token").to_http())
+                        }
+                        (Some(_), _) => {
+                            return Ok(Status::unauthenticated("unknown auth method").to_http())
+                        }
+                        (None, _) => {
+                            return Ok(Status::unauthenticated("missing auth method").to_http())
+                        }
+                    }
+                }
+                None => return Ok(Status::unauthenticated("missing authorization").to_http()),
+            };
+
+            info!("Authenticated request: {}", req.uri());
+
+            let resp = svc.call(req).await?;
+
+            info!("Sending response: {:?}", resp.headers());
+
+            Ok(resp)
+        })
+    }
+}
+
+impl<S: NamedService> NamedService for AuthedService<S> {
+    const NAME: &'static str = S::NAME;
 }
 
 #[derive(Debug)]
 struct ChatBackendHandle {
+    id: BackendId,
+    receiver: mpsc::Receiver<proto::ChatRequest>,
+    sender: broadcast::Sender<proto::Event>,
+    cleanup: mpsc::UnboundedSender<BackendId>,
+}
+
+impl Drop for ChatBackendHandle {
+    fn drop(&mut self) {
+        debug!("dropping backend {}", self.id);
+        if let Err(err) = self.cleanup.send(self.id.clone()) {
+            warn!("failed to notify cleanup of backend {}: {}", self.id, err);
+        }
+    }
+}
+
+#[derive(Debug)]
+struct ChatBackend {
     sender: mpsc::Sender<proto::ChatRequest>,
     channels: RwLock<BTreeMap<String, proto::Channel>>,
 }
 
 #[derive(Debug)]
-struct ChatRequest {
+struct ChatRequestHandle {
+    id: String,
     receiver: oneshot::Receiver<proto::ChatEventInner>,
-    // TODO: add Drop impl which sends message to cleanup thread
+    cleanup: mpsc::UnboundedSender<String>,
+}
+
+impl Drop for ChatRequestHandle {
+    fn drop(&mut self) {
+        debug!("dropping request {}", self.id);
+        if let Err(err) = self.cleanup.send(self.id.clone()) {
+            warn!("failed to notify cleanup of request {}: {}", self.id, err);
+        }
+    }
 }
 
 #[derive(Debug)]
-struct ChatRequestHandle {
+struct ChatRequest {
     sender: oneshot::Sender<proto::ChatEventInner>,
 }
 
@@ -47,9 +155,14 @@ pub struct Server {
     bind_host: String,
     startup_timestamp: u64,
     sender: broadcast::Sender<proto::Event>,
-    requests: Mutex<BTreeMap<String, ChatRequestHandle>>,
-    backends: RwLock<BTreeMap<BackendId, Arc<ChatBackendHandle>>>,
+    requests: Mutex<BTreeMap<String, Option<ChatRequest>>>,
+    backends: RwLock<BTreeMap<BackendId, Arc<ChatBackend>>>,
     tokens: RwLock<BTreeMap<String, String>>,
+
+    cleanup_request_receiver: Mutex<mpsc::UnboundedReceiver<String>>,
+    cleanup_request_sender: mpsc::UnboundedSender<String>,
+    cleanup_backend_receiver: Mutex<mpsc::UnboundedReceiver<BackendId>>,
+    cleanup_backend_sender: mpsc::UnboundedSender<BackendId>,
 }
 
 impl Server {
@@ -57,6 +170,8 @@ impl Server {
         // We actually don't care about the receiving side - the clients will
         // subscribe to it later.
         let (sender, _) = broadcast::channel(BROADCAST_BUFFER);
+        let (cleanup_request_sender, cleanup_request_receiver) = mpsc::unbounded_channel();
+        let (cleanup_backend_sender, cleanup_backend_receiver) = mpsc::unbounded_channel();
 
         Ok(Arc::new(Server {
             bind_host,
@@ -65,6 +180,10 @@ impl Server {
             requests: Mutex::new(BTreeMap::new()),
             backends: RwLock::new(BTreeMap::new()),
             tokens: RwLock::new(BTreeMap::new()),
+            cleanup_request_receiver: Mutex::new(cleanup_request_receiver),
+            cleanup_request_sender,
+            cleanup_backend_receiver: Mutex::new(cleanup_backend_receiver),
+            cleanup_backend_sender,
         }))
     }
 
@@ -74,62 +193,90 @@ impl Server {
     }
 
     pub async fn run(self: &Arc<Self>) -> Result<()> {
-        self.clone().run_grpc_server().await
+        futures::future::try_join(self.clone().run_grpc_server(), self.cleanup_task()).await?;
+        Ok(())
     }
 }
 
 impl Server {
+    async fn cleanup_task(&self) -> Result<()> {
+        let mut cleanup_backend_receiver = self.cleanup_backend_receiver.try_lock()?;
+        let mut cleanup_request_receiver = self.cleanup_request_receiver.try_lock()?;
+
+        loop {
+            // NOTE: for some reason, the receiver's recv() future doesn't
+            // implement Unpin, so select doesn't work properly.
+            match select(
+                cleanup_backend_receiver.next(),
+                cleanup_request_receiver.next(),
+            )
+            .await
+            {
+                Either::Left((Some(backend_id), _)) => {
+                    debug!("cleaning backend {}", backend_id);
+                    let mut backends = self.backends.write().await;
+                    if let None = backends.remove(&backend_id) {
+                        warn!("tried to clean backend {} but it didn't exist", backend_id);
+                    };
+                }
+                Either::Right((Some(request_id), _)) => {
+                    debug!("cleaning request {}", request_id);
+                    let mut requests = self.requests.lock().await;
+                    if let None = requests.remove(&request_id) {
+                        warn!("tried to clean request {} but it didn't exist", request_id);
+                    };
+                }
+                Either::Left((None, _)) => {
+                    anyhow::bail!("cleanup_backend_receiver closed unexpectedly")
+                }
+                Either::Right((None, _)) => {
+                    anyhow::bail!("cleanup_request_receiver closed unexpectedly")
+                }
+            }
+        }
+    }
+
     async fn register_backend(
         &self,
         id: &BackendId,
-    ) -> RpcResult<(ChatBackend, Arc<ChatBackendHandle>)> {
+    ) -> RpcResult<(ChatBackendHandle, Arc<ChatBackend>)> {
         let mut backends = self.backends.write().await;
 
         if backends.contains_key(id) {
-            return Err(Status::new(Code::AlreadyExists, "id already exists"));
+            return Err(Status::already_exists("id already exists"));
         }
 
         let (sender, receiver) = mpsc::channel(CHAT_INGEST_RECEIVE_BUFFER);
 
-        let backend = ChatBackend {
+        let handle = ChatBackendHandle {
+            id: id.clone(),
             receiver,
             sender: self.sender.clone(),
+            cleanup: self.cleanup_backend_sender.clone(),
         };
-        let handle = Arc::new(ChatBackendHandle {
+        let backend = Arc::new(ChatBackend {
             sender,
             channels: RwLock::new(BTreeMap::new()),
         });
 
-        backends.insert(id.clone(), handle.clone());
+        backends.insert(id.clone(), backend.clone());
 
-        Ok((backend, handle))
-    }
-
-    fn check_auth(&self, req: Request<()>) -> RpcResult<Request<()>> {
-        println!("{:?}", req.metadata());
-
-        match req.metadata().get("authorization") {
-            Some(token) => {
-                if token != "Bearer helloworld" {
-                    Err(Status::new(
-                        Code::Unauthenticated,
-                        "invalid authorization token",
-                    ))
-                } else {
-                    Ok(req)
-                }
-            }
-            None => Err(Status::new(Code::Unauthenticated, "missing authorization")),
-        }
+        Ok((handle, backend))
     }
 
     async fn respond(&self, id: &str, event: proto::ChatEventInner) {
         let mut requests = self.requests.lock().await;
 
         match requests.remove(id) {
-            Some(handle) => {
-                // TODO: log failures, but don't actually return an error
-                let _ = handle.sender.send(event);
+            Some(Some(handle)) => {
+                debug!("responding to request {}", id);
+                if let Err(err) = handle.sender.send(event) {
+                    warn!("failed to respond to request {}: {:?}", id, err);
+                }
+                requests.insert(id.to_string(), None);
+            }
+            Some(None) => {
+                warn!("request has already been responded to {}", id);
             }
             None => {}
         }
@@ -140,41 +287,53 @@ impl Server {
         backend_id: BackendId,
         req: proto::ChatRequestInner,
     ) -> RpcResult<ChatEventInner> {
-        let mut requests = self.requests.lock().await;
-
         let request_id = uuid::Uuid::new_v4().to_string();
 
-        if requests.contains_key(&request_id) {
-            return Err(Status::new(
-                Code::Internal,
-                "failed to generate unique request ID",
-            ));
-        }
+        // This needs to be done in a block to ensure the locks for requests and
+        // backends properly get dropped before waiting for a response.
+        let mut handle = {
+            let mut requests = self.requests.lock().await;
 
-        let (sender, receiver) = oneshot::channel();
-        requests.insert(request_id.clone(), ChatRequestHandle { sender });
-        let handle = ChatRequest { receiver };
+            debug!("issuing request {}", request_id);
 
-        let backends = self.backends.read().await;
-        let backend_sender = backends
-            .get(&backend_id)
-            .ok_or_else(|| Status::new(Code::NotFound, "unknown backend"))?
-            .sender
-            .clone();
+            if requests.contains_key(&request_id) {
+                return Err(Status::internal("failed to generate unique request ID"));
+            }
 
-        backend_sender
-            .clone()
-            .send(proto::ChatRequest {
-                id: request_id,
-                inner: Some(req),
-            })
+            let (sender, receiver) = oneshot::channel();
+            requests.insert(request_id.clone(), Some(ChatRequest { sender }));
+
+            let backends = self.backends.read().await;
+            let backend_sender = backends
+                .get(&backend_id)
+                .ok_or_else(|| Status::not_found("unknown backend"))?
+                .sender
+                .clone();
+
+            backend_sender
+                .clone()
+                .send(proto::ChatRequest {
+                    id: request_id.clone(),
+                    inner: Some(req),
+                })
+                .await
+                .map_err(|_| Status::internal("failed to send request"))?;
+
+            ChatRequestHandle {
+                id: request_id.clone(),
+                receiver,
+                cleanup: self.cleanup_request_sender.clone(),
+            }
+        };
+
+        debug!("waiting for request response {}", request_id);
+
+        let resp = tokio::time::timeout(REQUEST_TIMEOUT, &mut handle.receiver)
             .await
-            .map_err(|_| Status::new(Code::Internal, "failed to send request"))?;
+            .map_err(|_| Status::deadline_exceeded("request timed out"))?
+            .map_err(|_| Status::internal("request channel closed"))?;
 
-        let resp = tokio::time::timeout(REQUEST_TIMEOUT, handle.receiver)
-            .await
-            .map_err(|_| Status::new(Code::DeadlineExceeded, "request timed out"))?
-            .map_err(|_| Status::new(Code::Internal, "request channel closed"))?;
+        debug!("got request response for {}: {:?}", request_id, resp);
 
         Ok(resp)
     }
@@ -182,15 +341,15 @@ impl Server {
     async fn run_grpc_server(self: &Arc<Self>) -> Result<()> {
         let addr = self.bind_host.parse()?;
 
-        // Build a chat ingest server which also checks the authorization token.
-        let chat_ingest_auth = self.clone();
-        let chat_ingest = ChatIngestServer::with_interceptor(self.clone(), move |req| {
-            chat_ingest_auth.check_auth(req)
-        });
+        let chat_ingest = AuthedService {
+            server: self.clone(),
+            inner: ChatIngestServer::new(self.clone()),
+        };
 
-        let seabird_auth = self.clone();
-        let seabird =
-            SeabirdServer::with_interceptor(self.clone(), move |req| seabird_auth.check_auth(req));
+        let seabird = AuthedService {
+            server: self.clone(),
+            inner: SeabirdServer::new(self.clone()),
+        };
 
         tonic::transport::Server::builder()
             .add_service(seabird)
@@ -221,50 +380,45 @@ impl ChatIngest for Arc<Server> {
                 let first_message = input_stream
                     .message()
                     .await?
-                    .ok_or_else(|| Status::new(Code::InvalidArgument, "missing hello message"))?;
+                    .ok_or_else(|| Status::invalid_argument("missing hello message"))?;
 
                 match first_message.inner {
                     Some(ChatEventInner::Hello(hello)) => hello,
                     Some(_) => {
-                        return Err(Status::new(
-                            Code::InvalidArgument,
+                        return Err(Status::invalid_argument(
                             "hello message inner is wrong type",
                         ))
                     }
-                    None => {
-                        return Err(Status::new(
-                            Code::InvalidArgument,
-                            "missing hello message inner",
-                        ))
-                    }
+                    None => return Err(Status::invalid_argument("missing hello message inner")),
                 }
             };
 
             let backend_info = hello
                 .backend_info
-                .ok_or_else(|| Status::new(Code::InvalidArgument, "missing backend_info inner"))?;
+                .ok_or_else(|| Status::invalid_argument("missing backend_info inner"))?;
 
             let id = BackendId::new(backend_info.r#type, backend_info.id);
 
-            let (mut backend, backend_handle) = server.register_backend(&id).await?;
+            let (mut backend_handle, backend) = server.register_backend(&id).await?;
 
             loop {
-                match select(backend.receiver.next(), input_stream.next()).await {
+                match select(backend_handle.receiver.next(), input_stream.next()).await {
                     Either::Left((Some(req), _)) => {
-                        println!("Req: {:?}", req);
+                        debug!("got request: {:?}", req);
 
-                        sender.send(Ok(req)).await.map_err(|_| {
-                            Status::new(Code::Internal, "failed to send event to backend")
-                        })?;
+                        sender
+                            .send(Ok(req))
+                            .await
+                            .map_err(|_| Status::internal("failed to send event to backend"))?;
                     }
                     Either::Right((Some(event), _)) => {
                         let event = event?;
 
-                        println!("Event: {:?}", event);
+                        debug!("got event: {:?}", event);
 
                         let inner = event
                             .inner
-                            .ok_or_else(|| Status::new(Code::Internal, "missing inner event"))?;
+                            .ok_or_else(|| Status::internal("missing inner event"))?;
 
                         if event.id != "" {
                             server.respond(&event.id, inner.clone()).await;
@@ -278,51 +432,49 @@ impl ChatIngest for Arc<Server> {
                             ChatEventInner::Failed(_) => {}
 
                             ChatEventInner::Message(msg) => {
-                                let _ = backend.sender.send(proto::Event {
+                                let _ = backend_handle.sender.send(proto::Event {
                                     inner: Some(EventInner::Message(proto::MessageEvent {
-                                        source: msg
-                                            .source
-                                            .map(|source| id.source_to_relative(source)),
+                                        source: msg.source.map(|source| source.into_relative(&id)),
                                         text: msg.text,
                                     })),
                                 });
                             }
                             ChatEventInner::PrivateMessage(private_msg) => {
-                                let _ = backend.sender.send(proto::Event {
+                                let _ = backend_handle.sender.send(proto::Event {
                                     inner: Some(EventInner::PrivateMessage(
                                         proto::PrivateMessageEvent {
                                             source: private_msg
                                                 .source
-                                                .map(|user| id.user_to_relative(user)),
+                                                .map(|user| user.into_relative(&id)),
                                             text: private_msg.text,
                                         },
                                     )),
                                 });
                             }
                             ChatEventInner::Command(cmd_msg) => {
-                                let _ = backend.sender.send(proto::Event {
+                                let _ = backend_handle.sender.send(proto::Event {
                                     inner: Some(EventInner::Command(proto::CommandEvent {
                                         source: cmd_msg
                                             .source
-                                            .map(|source| id.source_to_relative(source)),
+                                            .map(|source| source.into_relative(&id)),
                                         command: cmd_msg.command,
                                         arg: cmd_msg.arg,
                                     })),
                                 });
                             }
                             ChatEventInner::Mention(mention_msg) => {
-                                let _ = backend.sender.send(proto::Event {
+                                let _ = backend_handle.sender.send(proto::Event {
                                     inner: Some(EventInner::Mention(proto::MentionEvent {
                                         source: mention_msg
                                             .source
-                                            .map(|source| id.source_to_relative(source)),
+                                            .map(|source| source.into_relative(&id)),
                                         text: mention_msg.text,
                                     })),
                                 });
                             }
 
                             ChatEventInner::JoinChannel(join) => {
-                                let mut channels = backend_handle.channels.write().await;
+                                let mut channels = backend.channels.write().await;
 
                                 channels.insert(
                                     join.channel_id.clone(),
@@ -334,12 +486,12 @@ impl ChatIngest for Arc<Server> {
                                 );
                             }
                             ChatEventInner::LeaveChannel(leave) => {
-                                let mut channels = backend_handle.channels.write().await;
+                                let mut channels = backend.channels.write().await;
 
                                 channels.remove(&leave.channel_id);
                             }
                             ChatEventInner::ChangeChannel(change) => {
-                                let mut channels = backend_handle.channels.write().await;
+                                let mut channels = backend.channels.write().await;
 
                                 if let Some(channel) = channels.get_mut(&change.channel_id) {
                                     channel.display_name = change.display_name;
@@ -350,18 +502,15 @@ impl ChatIngest for Arc<Server> {
                             // If a hello comes through, this client has broken
                             // the protocol contract, so we kill the connection.
                             ChatEventInner::Hello(_) => {
-                                return Err(Status::new(
-                                    Code::InvalidArgument,
-                                    "unexpected chat event type",
-                                ))
+                                return Err(Status::invalid_argument("unexpected chat event type"))
                             }
                         }
                     }
                     Either::Left((None, _)) => {
-                        return Err(Status::new(Code::Internal, "internal request stream ended"))
+                        return Err(Status::internal("internal request stream ended"))
                     }
                     Either::Right((None, _)) => {
-                        return Err(Status::new(Code::Internal, "chat event stream ended"))
+                        return Err(Status::internal("chat event stream ended"))
                     }
                 };
             }
@@ -391,12 +540,12 @@ impl Seabird for Arc<Server> {
                 let event = events
                     .recv()
                     .await
-                    .map_err(|_| Status::new(Code::Internal, "failed to read internal event"))?;
+                    .map_err(|_| Status::internal("failed to read internal event"))?;
 
                 sender
                     .send(Ok(event))
                     .await
-                    .map_err(|_| Status::new(Code::Internal, "failed to send event"))?;
+                    .map_err(|err| Status::internal(format!("failed to send event: {}", err)))?;
             }
         });
 
@@ -411,8 +560,8 @@ impl Seabird for Arc<Server> {
         let (backend_id, channel_id) = req
             .channel_id
             .parse::<FullId>()
-            .map_err(|_| Status::new(Code::InvalidArgument, "failed to parse channel_id"))?
-            .split();
+            .map_err(|_| Status::invalid_argument("failed to parse channel_id"))?
+            .into_inner();
 
         let resp = self
             .issue_request(
@@ -426,8 +575,8 @@ impl Seabird for Arc<Server> {
 
         match resp {
             ChatEventInner::Success(_) => Ok(Response::new(proto::SendMessageResponse {})),
-            ChatEventInner::Failed(failed) => Err(Status::new(Code::Unknown, failed.reason)),
-            _ => Err(Status::new(Code::Internal, "unexpected chat event")),
+            ChatEventInner::Failed(failed) => Err(Status::unknown(failed.reason)),
+            _ => Err(Status::internal("unexpected chat event")),
         }
     }
 
@@ -439,8 +588,8 @@ impl Seabird for Arc<Server> {
         let (backend_id, user_id) = req
             .user_id
             .parse::<FullId>()
-            .map_err(|_| Status::new(Code::InvalidArgument, "failed to parse user_id"))?
-            .split();
+            .map_err(|_| Status::invalid_argument("failed to parse user_id"))?
+            .into_inner();
 
         let resp = self
             .issue_request(
@@ -454,8 +603,8 @@ impl Seabird for Arc<Server> {
 
         match resp {
             ChatEventInner::Success(_) => Ok(Response::new(proto::SendPrivateMessageResponse {})),
-            ChatEventInner::Failed(failed) => Err(Status::new(Code::Unknown, failed.reason)),
-            _ => Err(Status::new(Code::Internal, "unexpected chat event")),
+            ChatEventInner::Failed(failed) => Err(Status::unknown(failed.reason)),
+            _ => Err(Status::internal("unexpected chat event")),
         }
     }
 
@@ -467,7 +616,7 @@ impl Seabird for Arc<Server> {
         let backend_id: BackendId = req
             .backend_id
             .parse()
-            .map_err(|_| Status::new(Code::InvalidArgument, "failed to parse backend_id"))?;
+            .map_err(|_| Status::invalid_argument("failed to parse backend_id"))?;
 
         let resp = self
             .issue_request(
@@ -482,8 +631,8 @@ impl Seabird for Arc<Server> {
             ChatEventInner::Success(_) | ChatEventInner::JoinChannel(_) => {
                 Ok(Response::new(proto::JoinChannelResponse {}))
             }
-            ChatEventInner::Failed(failed) => Err(Status::new(Code::Unknown, failed.reason)),
-            _ => Err(Status::new(Code::Internal, "unexpected chat event")),
+            ChatEventInner::Failed(failed) => Err(Status::unknown(failed.reason)),
+            _ => Err(Status::internal("unexpected chat event")),
         }
     }
 
@@ -495,8 +644,8 @@ impl Seabird for Arc<Server> {
         let (backend_id, channel_id) = req
             .channel_id
             .parse::<FullId>()
-            .map_err(|_| Status::new(Code::InvalidArgument, "failed to parse channel_id"))?
-            .split();
+            .map_err(|_| Status::invalid_argument("failed to parse channel_id"))?
+            .into_inner();
 
         let resp = self
             .issue_request(
@@ -511,8 +660,8 @@ impl Seabird for Arc<Server> {
             ChatEventInner::Success(_) | ChatEventInner::LeaveChannel(_) => {
                 Ok(Response::new(proto::LeaveChannelResponse {}))
             }
-            ChatEventInner::Failed(failed) => Err(Status::new(Code::Unknown, failed.reason)),
-            _ => Err(Status::new(Code::Internal, "unexpected chat event")),
+            ChatEventInner::Failed(failed) => Err(Status::unknown(failed.reason)),
+            _ => Err(Status::internal("unexpected chat event")),
         }
     }
 
@@ -524,8 +673,8 @@ impl Seabird for Arc<Server> {
         let (backend_id, channel_id) = req
             .channel_id
             .parse::<FullId>()
-            .map_err(|_| Status::new(Code::InvalidArgument, "failed to parse channel_id"))?
-            .split();
+            .map_err(|_| Status::invalid_argument("failed to parse channel_id"))?
+            .into_inner();
 
         let resp = self
             .issue_request(
@@ -541,8 +690,8 @@ impl Seabird for Arc<Server> {
             ChatEventInner::Success(_) | ChatEventInner::ChangeChannel(_) => {
                 Ok(Response::new(proto::UpdateChannelInfoResponse {}))
             }
-            ChatEventInner::Failed(failed) => Err(Status::new(Code::Unknown, failed.reason)),
-            _ => Err(Status::new(Code::Internal, "unexpected chat event")),
+            ChatEventInner::Failed(failed) => Err(Status::unknown(failed.reason)),
+            _ => Err(Status::internal("unexpected chat event")),
         }
     }
 
@@ -574,12 +723,12 @@ impl Seabird for Arc<Server> {
         let backend_id: BackendId = req
             .backend_id
             .parse()
-            .map_err(|_| Status::new(Code::InvalidArgument, "failed to parse backend_id"))?;
+            .map_err(|_| Status::invalid_argument("failed to parse backend_id"))?;
 
         let backends = self.backends.read().await;
         let _backend = backends
             .get(&backend_id)
-            .ok_or_else(|| Status::new(Code::NotFound, "backend not found"))?;
+            .ok_or_else(|| Status::not_found("backend not found"))?;
 
         Ok(Response::new(proto::BackendInfoResponse {
             backend: Some(proto::Backend {
@@ -598,12 +747,12 @@ impl Seabird for Arc<Server> {
         let backend_id: BackendId = req
             .backend_id
             .parse()
-            .map_err(|_| Status::new(Code::InvalidArgument, "failed to parse backend_id"))?;
+            .map_err(|_| Status::invalid_argument("failed to parse backend_id"))?;
 
         let backends = self.backends.read().await;
         let channels = backends
             .get(&backend_id)
-            .ok_or_else(|| Status::new(Code::NotFound, "backend not found"))?
+            .ok_or_else(|| Status::not_found("backend not found"))?
             .channels
             .read()
             .await;
@@ -629,13 +778,13 @@ impl Seabird for Arc<Server> {
         let (backend_id, channel_id) = req
             .channel_id
             .parse::<FullId>()
-            .map_err(|_| Status::new(Code::InvalidArgument, "failed to parse channel_id"))?
-            .split();
+            .map_err(|_| Status::invalid_argument("failed to parse channel_id"))?
+            .into_inner();
 
         let backends = self.backends.read().await;
         let channels = backends
             .get(&backend_id)
-            .ok_or_else(|| Status::new(Code::NotFound, "backend not found"))?
+            .ok_or_else(|| Status::not_found("backend not found"))?
             .channels
             .read()
             .await;
@@ -650,7 +799,7 @@ impl Seabird for Arc<Server> {
                         topic: channel.topic.clone(),
                     }),
                 })
-                .ok_or_else(|| Status::new(Code::NotFound, "channel not found"))?,
+                .ok_or_else(|| Status::not_found("channel not found"))?,
         ))
     }
 

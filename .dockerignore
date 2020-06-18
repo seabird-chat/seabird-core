@@ -2,3 +2,4 @@ README.md
 go/pb/*.pb.go
 rust/target
 **/.env
+*.json

@@ -1,36 +1,19 @@
-#[macro_use]
-extern crate log;
-
 use std::collections::BTreeMap;
 
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 use tokio::signal::unix::{signal, SignalKind};
 
-mod error;
 mod id;
 mod prelude;
+pub mod proto;
 mod server;
 
 use crate::prelude::*;
 
-pub mod proto {
-    pub mod common {
-        tonic::include_proto!("common");
-    }
-
-    pub mod seabird {
-        tonic::include_proto!("seabird");
-    }
-
-    pub use self::common::*;
-    pub use self::seabird::*;
-
-    // The nested types are fairly annoying to reference, so we make some
-    // convenience aliases.
-    pub use self::chat_event::Inner as ChatEventInner;
-    pub use self::chat_request::Inner as ChatRequestInner;
-    pub use self::event::Inner as EventInner;
+pub mod error {
+    pub use anyhow::{Error, Result};
+    pub type RpcResult<T> = std::result::Result<T, tonic::Status>;
 }
 
 pub fn spawn<T, V>(mut sender: tokio::sync::mpsc::Sender<T::Output>, task: T)
@@ -40,9 +23,7 @@ where
     V: Send + 'static,
 {
     tokio::spawn(async move {
-        let res = task.await;
-
-        if let Err(err) = res {
+        if let Err(err) = task.await {
             error!("error when running stream: {}", err);
 
             let _ = sender.send(Err(err)).await;
@@ -79,7 +60,8 @@ async fn main() -> Result<()> {
         std::env::set_var("RUST_LOG", "info,seabird::server=trace");
     }
 
-    // Now that everything is set up, load up the logger.
+    // Now that everything is set up, load up the logger and configure it to
+    // include timestamps.
     pretty_env_logger::init_timed();
 
     match env_res {
@@ -100,8 +82,8 @@ async fn main() -> Result<()> {
     let token_file = dotenv::var("SEABIRD_TOKEN_FILE")
         .context("Missing $SEABIRD_TOKEN_FILE. You must specify a token file for the bot.")?;
 
-    // Read in the tokens so the server can have them set without needing a
-    // SIGHUP.
+    // Read in the tokens so the server can have them set initially without
+    // needing a SIGHUP.
     let tokens = read_tokens(&token_file).await?;
     server.set_tokens(tokens).await;
 
@@ -112,14 +94,14 @@ async fn main() -> Result<()> {
         loop {
             signal_stream.recv().await;
 
-            info!("got SIGHUP, reloading tokens");
+            info!("got SIGHUP, attempting to reload tokens");
 
             match read_tokens(&token_file).await {
                 Ok(tokens) => {
                     tokens_server.set_tokens(tokens).await;
                     info!("reloaded tokens");
-                },
-                Err(err) => warn!("failed to reload tokens: {}", err)
+                }
+                Err(err) => warn!("failed to reload tokens: {}", err),
             }
         }
     });

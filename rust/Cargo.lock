@@ -741,9 +741,9 @@ name = "seabird-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-trait",
  "dotenv",
  "futures",
+ "hyper",
  "log",
  "percent-encoding",
  "pretty_env_logger",
@@ -753,6 +753,7 @@ dependencies = [
  "tokio",
  "tonic",
  "tonic-build",
+ "tower",
  "uuid",
 ]
 
@@ -919,8 +920,7 @@ dependencies = [
 [[package]]
 name = "tonic"
 version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4afef9ce97ea39593992cf3fa00ff33b1ad5eb07665b31355df63a690e38c736"
+source = "git+https://github.com/belak/tonic.git?branch=status-into-http#054531aed48f4c6c30042afda229cd556be4397d"
 dependencies = [
  "async-stream",
  "async-trait",

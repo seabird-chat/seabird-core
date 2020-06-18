@@ -49,26 +49,32 @@ pub struct Server {
     sender: broadcast::Sender<proto::Event>,
     requests: Mutex<BTreeMap<String, ChatRequestHandle>>,
     backends: RwLock<BTreeMap<BackendId, Arc<ChatBackendHandle>>>,
+    tokens: RwLock<BTreeMap<String, String>>,
 }
 
 impl Server {
-    pub fn new(bind_host: String) -> Result<Self> {
+    pub fn new(bind_host: String) -> Result<Arc<Self>> {
         // We actually don't care about the receiving side - the clients will
         // subscribe to it later.
         let (sender, _) = broadcast::channel(BROADCAST_BUFFER);
 
-        Ok(Server {
+        Ok(Arc::new(Server {
             bind_host,
             startup_timestamp: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
             sender,
             requests: Mutex::new(BTreeMap::new()),
             backends: RwLock::new(BTreeMap::new()),
-        })
+            tokens: RwLock::new(BTreeMap::new()),
+        }))
     }
 
-    pub async fn run(self) -> Result<()> {
-        let server = Arc::new(self);
-        server.run_grpc_server().await
+    pub async fn set_tokens(&self, tokens: BTreeMap<String, String>) {
+        let mut tokens_guard = self.tokens.write().await;
+        *tokens_guard = tokens;
+    }
+
+    pub async fn run(self: &Arc<Self>) -> Result<()> {
+        self.clone().run_grpc_server().await
     }
 }
 

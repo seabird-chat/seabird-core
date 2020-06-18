@@ -47,8 +47,7 @@ service.
 - `SEABIRD_BIND_HOST` (optional, defaults to `0.0.0.0:11235`) - which host/port to bind
   the gRPC service to. Note that it will not be tls encrypted, so you may want
   to put it behind a reverse proxy.
-- `SEABIRD_TOKEN_FILE` - the file to load tokens from. Note that this file will
-  be watched for changes so a token change will not require a bot restart.
+- `SEABIRD_TOKEN_FILE` - the file to load tokens from.
 - `SEABIRD_ENABLE_WEB` (optional, defaults to true) - whether or not to enable
   grpc-web. This is only supported in the Go implementation.
 
@@ -58,8 +57,7 @@ The tokens key is a mapping of `tag` to `auth_token`. Each tag will be
 associated with a given auth token. It is meant as a convenience to make it
 easier to identify where incoming requests are coming from.
 
-As was mentioned before, this file will be watched for changes so tokens will go
-into effect without a restart of the service.
+Sending a `SIGHUP` can be used to reload the configuration file.
 
 As an example, the following tokens file defines the `belak` tag with an
 auth_token of `hunter2`.

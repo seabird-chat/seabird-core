@@ -431,6 +431,22 @@ impl ChatIngest for Arc<Server> {
                             ChatEventInner::Success(_) => {}
                             ChatEventInner::Failed(_) => {}
 
+                            ChatEventInner::Action(action) => {
+                                let _ = backend_handle.sender.send(proto::Event {
+                                    inner: Some(EventInner::Action(proto::ActionEvent {
+                                        source: action.source.map(|source| source.into_relative(&id)),
+                                        text: action.text,
+                                    })),
+                                });
+                            }
+                            ChatEventInner::PrivateAction(private_action) => {
+                                let _ = backend_handle.sender.send(proto::Event {
+                                    inner: Some(EventInner::PrivateAction(proto::PrivateActionEvent {
+                                        source: private_action.source.map(|source| source.into_relative(&id)),
+                                        text: private_action.text,
+                                    })),
+                                });
+                            }
                             ChatEventInner::Message(msg) => {
                                 let _ = backend_handle.sender.send(proto::Event {
                                     inner: Some(EventInner::Message(proto::MessageEvent {
@@ -550,6 +566,62 @@ impl Seabird for Arc<Server> {
         });
 
         Ok(Response::new(receiver))
+    }
+
+    async fn perform_action(
+        &self,
+        req: Request<proto::PerformActionRequest>,
+    ) -> RpcResult<Response<proto::PerformActionResponse>> {
+        let req = req.into_inner();
+        let (backend_id, channel_id) = req
+            .channel_id
+            .parse::<FullId>()
+            .map_err(|_| Status::invalid_argument("failed to parse channel_id"))?
+            .into_inner();
+
+        let resp = self
+            .issue_request(
+                backend_id,
+                proto::ChatRequestInner::PerformAction(proto::PerformActionChatRequest {
+                    channel_id,
+                    text: req.text,
+                }),
+            )
+            .await?;
+
+        match resp {
+            ChatEventInner::Success(_) => Ok(Response::new(proto::PerformActionResponse {})),
+            ChatEventInner::Failed(failed) => Err(Status::unknown(failed.reason)),
+            _ => Err(Status::internal("unexpected chat event")),
+        }
+    }
+
+    async fn perform_private_action(
+        &self,
+        req: Request<proto::PerformPrivateActionRequest>,
+    ) -> RpcResult<Response<proto::PerformPrivateActionResponse>> {
+        let req = req.into_inner();
+        let (backend_id, user_id) = req
+            .user_id
+            .parse::<FullId>()
+            .map_err(|_| Status::invalid_argument("failed to parse user_id"))?
+            .into_inner();
+
+        let resp = self
+            .issue_request(
+                backend_id,
+                proto::ChatRequestInner::PerformPrivateAction(proto::PerformPrivateActionChatRequest {
+                    user_id,
+                    text: req.text,
+                }),
+            )
+            .await?;
+
+        match resp {
+            ChatEventInner::Success(_) => Ok(Response::new(proto::PerformPrivateActionResponse {})),
+            ChatEventInner::Failed(failed) => Err(Status::unknown(failed.reason)),
+            _ => Err(Status::internal("unexpected chat event")),
+        }
     }
 
     async fn send_message(

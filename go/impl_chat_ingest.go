@@ -52,6 +52,19 @@ func (cs *ChatStream) handleEvents(ctx context.Context, stream pb.ChatIngest_Ing
 		case *pb.ChatEvent_Failed:
 			cs.requestResponseBox.Send(msg.Id, v.Failed)
 
+		case *pb.ChatEvent_Action:
+			inner := v.Action
+
+			inner.Source.ChannelId = cs.RelativeID(inner.Source.ChannelId)
+			inner.Source.User.Id = cs.RelativeID(inner.Source.User.Id)
+
+			event = inner
+		case *pb.ChatEvent_PrivateAction:
+			inner := v.PrivateAction
+
+			inner.Source.Id = cs.RelativeID(inner.Source.Id)
+
+			event = inner
 		case *pb.ChatEvent_Message:
 			inner := v.Message
 

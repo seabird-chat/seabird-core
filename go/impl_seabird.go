@@ -39,6 +39,10 @@ func (s *Server) StreamEvents(req *pb.StreamEventsRequest, stream pb.Seabird_Str
 		var out *pb.Event
 
 		switch v := event.(type) {
+		case *pb.ActionEvent:
+			out = &pb.Event{Inner: &pb.Event_Action{Action: v}}
+		case *pb.PrivateActionEvent:
+			out = &pb.Event{Inner: &pb.Event_PrivateAction{PrivateAction: v}}
 		case *pb.MessageEvent:
 			out = &pb.Event{Inner: &pb.Event_Message{Message: v}}
 		case *pb.PrivateMessageEvent:
@@ -91,6 +95,54 @@ func (s *Server) handleChatRequest(ctx context.Context, baseID string, req *pb.C
 	return resp, nil
 }
 
+func (s *Server) PerformAction(ctx context.Context, req *pb.PerformActionRequest) (*pb.PerformActionResponse, error) {
+	baseID, localID, ok := idParts(req.ChannelId)
+	if !ok {
+		return nil, status.Error(codes.InvalidArgument, "invalid channel ID")
+	}
+
+	resp, err := s.handleChatRequest(ctx, baseID, &pb.ChatRequest{Inner: &pb.ChatRequest_PerformAction{PerformAction: &pb.PerformActionChatRequest{
+		ChannelId: localID,
+		Text:      req.Text,
+	}}})
+	if err != nil {
+		return nil, err
+	}
+
+	switch v := resp.(type) {
+	case *pb.SuccessChatEvent:
+		return &pb.PerformActionResponse{}, nil
+	case *pb.FailedChatEvent:
+		return nil, status.Error(codes.Aborted, v.Reason)
+	default:
+		return nil, status.Errorf(codes.Internal, "unexpected response type: %T", v)
+	}
+}
+
+func (s *Server) PerformPrivateAction(ctx context.Context, req *pb.PerformPrivateActionRequest) (*pb.PerformPrivateActionResponse, error) {
+	baseID, localID, ok := idParts(req.UserId)
+	if !ok {
+		return nil, status.Error(codes.InvalidArgument, "invalid channel ID")
+	}
+
+	resp, err := s.handleChatRequest(ctx, baseID, &pb.ChatRequest{Inner: &pb.ChatRequest_PerformPrivateAction{PerformPrivateAction: &pb.PerformPrivateActionChatRequest{
+		UserId: localID,
+		Text:   req.Text,
+	}}})
+	if err != nil {
+		return nil, err
+	}
+
+	switch v := resp.(type) {
+	case *pb.SuccessChatEvent:
+		return &pb.PerformPrivateActionResponse{}, nil
+	case *pb.FailedChatEvent:
+		return nil, status.Error(codes.Aborted, v.Reason)
+	default:
+		return nil, status.Errorf(codes.Internal, "unexpected response type: %T", v)
+	}
+}
+
 func (s *Server) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*pb.SendMessageResponse, error) {
 	baseID, localID, ok := idParts(req.ChannelId)
 	if !ok {
@@ -114,6 +166,7 @@ func (s *Server) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*
 		return nil, status.Errorf(codes.Internal, "unexpected response type: %T", v)
 	}
 }
+
 func (s *Server) SendPrivateMessage(ctx context.Context, req *pb.SendPrivateMessageRequest) (*pb.SendPrivateMessageResponse, error) {
 	baseID, localID, ok := idParts(req.UserId)
 	if !ok {

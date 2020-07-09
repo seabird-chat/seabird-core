@@ -920,7 +920,7 @@ dependencies = [
 [[package]]
 name = "tonic"
 version = "0.2.1"
-source = "git+https://github.com/belak/tonic.git?branch=status-into-http#054531aed48f4c6c30042afda229cd556be4397d"
+source = "git+https://github.com/hyperium/tonic.git?rev=327b4fff#327b4fffa3381345ee4620df7e9998efe2aa9454"
 dependencies = [
  "async-stream",
  "async-trait",

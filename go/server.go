@@ -119,10 +119,10 @@ func (s *Server) SetTokens(tokens map[string]string) {
 	}
 }
 
-func (s *Server) authenticate(ctx context.Context) error {
+func (s *Server) authenticate(ctx context.Context) (context.Context, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return status.Error(codes.Unauthenticated, "missing request metadata")
+		return ctx, status.Error(codes.Unauthenticated, "missing request metadata")
 	}
 
 	authTokens := md.Get("authorization")
@@ -130,29 +130,30 @@ func (s *Server) authenticate(ctx context.Context) error {
 	case 1:
 		// This is the valid case, so we don't need to do anything else here.
 	case 0:
-		return status.Errorf(codes.Unauthenticated, "missing auth token")
+		return ctx, status.Errorf(codes.Unauthenticated, "missing auth token")
 	default:
-		return status.Errorf(codes.Unauthenticated, "wrong number of auth tokens: got %d, expected 1", len(authTokens))
+		return ctx, status.Errorf(codes.Unauthenticated, "wrong number of auth tokens: got %d, expected 1", len(authTokens))
 	}
 
 	authToken := authTokens[0]
 	if !strings.HasPrefix(authToken, "Bearer ") {
-		return status.Error(codes.Unauthenticated, "invalid token format")
+		return ctx, status.Error(codes.Unauthenticated, "invalid token format")
 	}
 	authToken = strings.TrimPrefix(authToken, "Bearer ")
 
 	s.configLock.RLock()
 	defer s.configLock.RUnlock()
 
-	if s.config.Tokens[authToken] == "" {
-		return status.Error(codes.Unauthenticated, "invalid auth token")
+	tag := s.config.Tokens[authToken]
+	if tag == "" {
+		return ctx, status.Error(codes.Unauthenticated, "invalid auth token")
 	}
 
-	return nil
+	return WithTag(ctx, tag), nil
 }
 
 func (s *Server) unaryAuthInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-	err := s.authenticate(ctx)
+	ctx, err := s.authenticate(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -163,14 +164,17 @@ func (s *Server) unaryAuthInterceptor(ctx context.Context, req interface{}, info
 }
 
 func (s *Server) streamAuthInterceptor(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-	err := s.authenticate(stream.Context())
+	ctx, err := s.authenticate(stream.Context())
 	if err != nil {
 		return err
 	}
 
 	fmt.Println(info.FullMethod)
 
-	return handler(srv, stream)
+	return handler(srv, &wrappedServerStream{
+		ServerStream: stream,
+		ctx:          ctx,
+	})
 }
 
 func (s *Server) Run() error {

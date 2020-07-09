@@ -22,6 +22,18 @@ const CHAT_INGEST_RECEIVE_BUFFER: usize = 10;
 const BROADCAST_BUFFER: usize = 32;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(1);
 
+const X_AUTH_TAG: &str = "x-auth-tag";
+
+fn extract_auth_tag<T>(req: &Request<T>) -> RpcResult<String> {
+    Ok(req
+        .metadata()
+        .get(X_AUTH_TAG)
+        .ok_or_else(|| Status::internal("missing auth tag"))?
+        .to_str()
+        .map_err(|_| Status::internal("failed to decode auth tag"))?
+        .to_string())
+}
+
 // AuthedService is a frustratingly necessary evil because there is no async
 // tonic::Interceptor. This means we can't .await on the RwLock protecting
 // server.tokens. We get around this by implementing a middleware which pulls
@@ -58,7 +70,7 @@ where
         let server = self.server.clone();
 
         Box::pin(async move {
-            let req: HyperRequest<Body> = match req.headers().get("authorization") {
+            let (mut req, tag): (HyperRequest<Body>, _) = match req.headers().get("authorization") {
                 Some(token) => {
                     let token = match token.to_str() {
                         Ok(token) => token,
@@ -71,11 +83,21 @@ where
                     match (split.next(), split.next()) {
                         (Some("Bearer"), Some(token)) => {
                             let tokens = server.tokens.read().await;
-                            if !tokens.contains_key(token) {
-                                return Ok(Status::unauthenticated("invalid auth token").to_http());
+                            match tokens.get(token) {
+                                Some(val) => match val.parse() {
+                                    Ok(tag) => (req, tag),
+                                    Err(_) => {
+                                        return Ok(
+                                            Status::internal("invalid auth token tag").to_http()
+                                        )
+                                    }
+                                },
+                                None => {
+                                    return Ok(
+                                        Status::unauthenticated("invalid auth token").to_http()
+                                    )
+                                }
                             }
-
-                            req
                         }
                         (Some("Bearer"), None) => {
                             return Ok(Status::unauthenticated("missing auth token").to_http())
@@ -90,6 +112,8 @@ where
                 }
                 None => return Ok(Status::unauthenticated("missing authorization").to_http()),
             };
+
+            req.headers_mut().insert(X_AUTH_TAG, tag);
 
             info!("Authenticated request: {}", req.uri());
 
@@ -359,6 +383,11 @@ impl Server {
 
         anyhow::bail!("run_grpc_server exited early");
     }
+
+    fn broadcast(self: &Arc<Self>, inner: EventInner) {
+        // We ignore send errors because they're not relevant to us here
+        let _ = self.sender.send(proto::Event { inner: Some(inner) });
+    }
 }
 
 #[async_trait]
@@ -434,17 +463,23 @@ impl ChatIngest for Arc<Server> {
                             ChatEventInner::Action(action) => {
                                 let _ = backend_handle.sender.send(proto::Event {
                                     inner: Some(EventInner::Action(proto::ActionEvent {
-                                        source: action.source.map(|source| source.into_relative(&id)),
+                                        source: action
+                                            .source
+                                            .map(|source| source.into_relative(&id)),
                                         text: action.text,
                                     })),
                                 });
                             }
                             ChatEventInner::PrivateAction(private_action) => {
                                 let _ = backend_handle.sender.send(proto::Event {
-                                    inner: Some(EventInner::PrivateAction(proto::PrivateActionEvent {
-                                        source: private_action.source.map(|source| source.into_relative(&id)),
-                                        text: private_action.text,
-                                    })),
+                                    inner: Some(EventInner::PrivateAction(
+                                        proto::PrivateActionEvent {
+                                            source: private_action
+                                                .source
+                                                .map(|source| source.into_relative(&id)),
+                                            text: private_action.text,
+                                        },
+                                    )),
                                 });
                             }
                             ChatEventInner::Message(msg) => {
@@ -568,72 +603,25 @@ impl Seabird for Arc<Server> {
         Ok(Response::new(receiver))
     }
 
-    async fn perform_action(
-        &self,
-        req: Request<proto::PerformActionRequest>,
-    ) -> RpcResult<Response<proto::PerformActionResponse>> {
-        let req = req.into_inner();
-        let (backend_id, channel_id) = req
-            .channel_id
-            .parse::<FullId>()
-            .map_err(|_| Status::invalid_argument("failed to parse channel_id"))?
-            .into_inner();
-
-        let resp = self
-            .issue_request(
-                backend_id,
-                proto::ChatRequestInner::PerformAction(proto::PerformActionChatRequest {
-                    channel_id,
-                    text: req.text,
-                }),
-            )
-            .await?;
-
-        match resp {
-            ChatEventInner::Success(_) => Ok(Response::new(proto::PerformActionResponse {})),
-            ChatEventInner::Failed(failed) => Err(Status::unknown(failed.reason)),
-            _ => Err(Status::internal("unexpected chat event")),
-        }
-    }
-
-    async fn perform_private_action(
-        &self,
-        req: Request<proto::PerformPrivateActionRequest>,
-    ) -> RpcResult<Response<proto::PerformPrivateActionResponse>> {
-        let req = req.into_inner();
-        let (backend_id, user_id) = req
-            .user_id
-            .parse::<FullId>()
-            .map_err(|_| Status::invalid_argument("failed to parse user_id"))?
-            .into_inner();
-
-        let resp = self
-            .issue_request(
-                backend_id,
-                proto::ChatRequestInner::PerformPrivateAction(proto::PerformPrivateActionChatRequest {
-                    user_id,
-                    text: req.text,
-                }),
-            )
-            .await?;
-
-        match resp {
-            ChatEventInner::Success(_) => Ok(Response::new(proto::PerformPrivateActionResponse {})),
-            ChatEventInner::Failed(failed) => Err(Status::unknown(failed.reason)),
-            _ => Err(Status::internal("unexpected chat event")),
-        }
-    }
-
     async fn send_message(
         &self,
         req: Request<proto::SendMessageRequest>,
     ) -> RpcResult<Response<proto::SendMessageResponse>> {
+        let tag = extract_auth_tag(&req)?;
         let req = req.into_inner();
         let (backend_id, channel_id) = req
             .channel_id
             .parse::<FullId>()
             .map_err(|_| Status::invalid_argument("failed to parse channel_id"))?
             .into_inner();
+
+        self.broadcast(EventInner::SendMessage(proto::SendMessageEvent {
+            sender: tag.to_string(),
+            inner: Some(proto::SendMessageRequest {
+                channel_id: req.channel_id,
+                text: req.text.clone(),
+            }),
+        }));
 
         let resp = self
             .issue_request(
@@ -656,12 +644,23 @@ impl Seabird for Arc<Server> {
         &self,
         req: Request<proto::SendPrivateMessageRequest>,
     ) -> RpcResult<Response<proto::SendPrivateMessageResponse>> {
+        let tag = extract_auth_tag(&req)?;
         let req = req.into_inner();
         let (backend_id, user_id) = req
             .user_id
             .parse::<FullId>()
             .map_err(|_| Status::invalid_argument("failed to parse user_id"))?
             .into_inner();
+
+        self.broadcast(EventInner::SendPrivateMessage(
+            proto::SendPrivateMessageEvent {
+                sender: tag.to_string(),
+                inner: Some(proto::SendPrivateMessageRequest {
+                    user_id: req.user_id,
+                    text: req.text.clone(),
+                }),
+            },
+        ));
 
         let resp = self
             .issue_request(
@@ -675,6 +674,84 @@ impl Seabird for Arc<Server> {
 
         match resp {
             ChatEventInner::Success(_) => Ok(Response::new(proto::SendPrivateMessageResponse {})),
+            ChatEventInner::Failed(failed) => Err(Status::unknown(failed.reason)),
+            _ => Err(Status::internal("unexpected chat event")),
+        }
+    }
+
+    async fn perform_action(
+        &self,
+        req: Request<proto::PerformActionRequest>,
+    ) -> RpcResult<Response<proto::PerformActionResponse>> {
+        let tag = extract_auth_tag(&req)?;
+        let req = req.into_inner();
+        let (backend_id, channel_id) = req
+            .channel_id
+            .parse::<FullId>()
+            .map_err(|_| Status::invalid_argument("failed to parse channel_id"))?
+            .into_inner();
+
+        self.broadcast(EventInner::PerformAction(proto::PerformActionEvent {
+            sender: tag.to_string(),
+            inner: Some(proto::PerformActionRequest {
+                channel_id: req.channel_id,
+                text: req.text.clone(),
+            }),
+        }));
+
+        let resp = self
+            .issue_request(
+                backend_id,
+                proto::ChatRequestInner::PerformAction(proto::PerformActionChatRequest {
+                    channel_id,
+                    text: req.text,
+                }),
+            )
+            .await?;
+
+        match resp {
+            ChatEventInner::Success(_) => Ok(Response::new(proto::PerformActionResponse {})),
+            ChatEventInner::Failed(failed) => Err(Status::unknown(failed.reason)),
+            _ => Err(Status::internal("unexpected chat event")),
+        }
+    }
+
+    async fn perform_private_action(
+        &self,
+        req: Request<proto::PerformPrivateActionRequest>,
+    ) -> RpcResult<Response<proto::PerformPrivateActionResponse>> {
+        let tag = extract_auth_tag(&req)?;
+        let req = req.into_inner();
+        let (backend_id, user_id) = req
+            .user_id
+            .parse::<FullId>()
+            .map_err(|_| Status::invalid_argument("failed to parse user_id"))?
+            .into_inner();
+
+        self.broadcast(EventInner::PerformPrivateAction(
+            proto::PerformPrivateActionEvent {
+                sender: tag.to_string(),
+                inner: Some(proto::PerformPrivateActionRequest {
+                    user_id: req.user_id,
+                    text: req.text.clone(),
+                }),
+            },
+        ));
+
+        let resp = self
+            .issue_request(
+                backend_id,
+                proto::ChatRequestInner::PerformPrivateAction(
+                    proto::PerformPrivateActionChatRequest {
+                        user_id,
+                        text: req.text,
+                    },
+                ),
+            )
+            .await?;
+
+        match resp {
+            ChatEventInner::Success(_) => Ok(Response::new(proto::PerformPrivateActionResponse {})),
             ChatEventInner::Failed(failed) => Err(Status::unknown(failed.reason)),
             _ => Err(Status::internal("unexpected chat event")),
         }

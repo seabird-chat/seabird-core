@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"io/ioutil"
 	"os"
 	"os/signal"
@@ -16,19 +17,37 @@ import (
 	seabird "github.com/seabird-irc/seabird-core"
 )
 
+type tokensConfig struct {
+	Tokens map[string][]string
+}
+
+// Note that this needs to also reverse the order of the tokens because the
+// config has it in the more human readable user : token, but we need it the
+// other way around.
 func ReadTokenFile(filename string) (map[string]string, error) {
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
 
-	var config seabird.ServerConfig
+	var config tokensConfig
 	err = json.Unmarshal(data, &config)
 	if err != nil {
 		return nil, err
 	}
 
-	return config.Tokens, nil
+	tokens := make(map[string]string)
+	for k, v := range config.Tokens {
+		for _, vInner := range v {
+			if _, ok := tokens[vInner]; ok {
+				return nil, errors.New("duplicate tokens")
+			}
+
+			tokens[vInner] = k
+		}
+	}
+
+	return tokens, nil
 }
 
 func EnvDefault(key string, def string) string {

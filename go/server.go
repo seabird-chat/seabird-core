@@ -21,9 +21,9 @@ import (
 )
 
 type ServerConfig struct {
-	BindHost  string            `json:"bind_host"`
-	EnableWeb bool              `json:"enable_web"`
-	Tokens    map[string]string `json:"tokens"`
+	BindHost  string
+	EnableWeb bool
+	Tokens    map[string]string
 }
 
 type Server struct {
@@ -110,13 +110,7 @@ func (s *Server) SetTokens(tokens map[string]string) {
 	s.configLock.Lock()
 	defer s.configLock.Unlock()
 
-	// Note that we need to reverse the order of the tokens because the config
-	// has it in the more human readable user : token, but we need it the other
-	// way around.
-	s.config.Tokens = make(map[string]string)
-	for k, v := range tokens {
-		s.config.Tokens[v] = k
-	}
+	s.config.Tokens = tokens
 }
 
 func (s *Server) authenticate(ctx context.Context) error {

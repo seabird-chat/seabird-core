@@ -33,7 +33,7 @@ where
 
 #[derive(serde::Deserialize)]
 struct Tokens {
-    tokens: BTreeMap<String, String>,
+    tokens: BTreeMap<String, Vec<String>>,
 }
 
 async fn read_tokens(filename: &str) -> Result<BTreeMap<String, String>> {
@@ -44,9 +44,15 @@ async fn read_tokens(filename: &str) -> Result<BTreeMap<String, String>> {
 
     let tokens: Tokens = serde_json::from_str(&buf)?;
 
-    // In the config file we use tag -> token because that makes the most
-    // sense, but we need to reverse it before passing it in to the server.
-    Ok(tokens.tokens.into_iter().map(|(k, v)| (v, k)).collect())
+    // In the config file we use tag -> token array because that makes the most
+    // sense, but we need to reverse and flatten it before passing it in to the
+    // server.
+    Ok(tokens
+        .tokens
+        .into_iter()
+        .map(|(k, v)| v.into_iter().map(move |v_inner| (v_inner, k.clone())))
+        .flatten()
+        .collect())
 }
 
 #[tokio::main]

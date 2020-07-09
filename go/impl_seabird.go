@@ -51,6 +51,15 @@ func (s *Server) StreamEvents(req *pb.StreamEventsRequest, stream pb.Seabird_Str
 			out = &pb.Event{Inner: &pb.Event_Command{Command: v}}
 		case *pb.MentionEvent:
 			out = &pb.Event{Inner: &pb.Event_Mention{Mention: v}}
+
+		case *pb.SendMessageEvent:
+			out = &pb.Event{Inner: &pb.Event_SendMessage{SendMessage: v}}
+		case *pb.SendPrivateMessageEvent:
+			out = &pb.Event{Inner: &pb.Event_SendPrivateMessage{SendPrivateMessage: v}}
+		case *pb.PerformActionEvent:
+			out = &pb.Event{Inner: &pb.Event_PerformAction{PerformAction: v}}
+		case *pb.PerformPrivateActionEvent:
+			out = &pb.Event{Inner: &pb.Event_PerformPrivateAction{PerformPrivateAction: v}}
 		default:
 			// Unexpected event type
 			continue
@@ -95,59 +104,19 @@ func (s *Server) handleChatRequest(ctx context.Context, baseID string, req *pb.C
 	return resp, nil
 }
 
-func (s *Server) PerformAction(ctx context.Context, req *pb.PerformActionRequest) (*pb.PerformActionResponse, error) {
-	baseID, localID, ok := idParts(req.ChannelId)
-	if !ok {
-		return nil, status.Error(codes.InvalidArgument, "invalid channel ID")
-	}
-
-	resp, err := s.handleChatRequest(ctx, baseID, &pb.ChatRequest{Inner: &pb.ChatRequest_PerformAction{PerformAction: &pb.PerformActionChatRequest{
-		ChannelId: localID,
-		Text:      req.Text,
-	}}})
-	if err != nil {
-		return nil, err
-	}
-
-	switch v := resp.(type) {
-	case *pb.SuccessChatEvent:
-		return &pb.PerformActionResponse{}, nil
-	case *pb.FailedChatEvent:
-		return nil, status.Error(codes.Aborted, v.Reason)
-	default:
-		return nil, status.Errorf(codes.Internal, "unexpected response type: %T", v)
-	}
-}
-
-func (s *Server) PerformPrivateAction(ctx context.Context, req *pb.PerformPrivateActionRequest) (*pb.PerformPrivateActionResponse, error) {
-	baseID, localID, ok := idParts(req.UserId)
-	if !ok {
-		return nil, status.Error(codes.InvalidArgument, "invalid channel ID")
-	}
-
-	resp, err := s.handleChatRequest(ctx, baseID, &pb.ChatRequest{Inner: &pb.ChatRequest_PerformPrivateAction{PerformPrivateAction: &pb.PerformPrivateActionChatRequest{
-		UserId: localID,
-		Text:   req.Text,
-	}}})
-	if err != nil {
-		return nil, err
-	}
-
-	switch v := resp.(type) {
-	case *pb.SuccessChatEvent:
-		return &pb.PerformPrivateActionResponse{}, nil
-	case *pb.FailedChatEvent:
-		return nil, status.Error(codes.Aborted, v.Reason)
-	default:
-		return nil, status.Errorf(codes.Internal, "unexpected response type: %T", v)
-	}
-}
-
 func (s *Server) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*pb.SendMessageResponse, error) {
 	baseID, localID, ok := idParts(req.ChannelId)
 	if !ok {
 		return nil, status.Error(codes.InvalidArgument, "invalid channel ID")
 	}
+
+	s.eventBox.Broadcast(&pb.SendMessageEvent{
+		Sender: CtxTag(ctx),
+		Inner: &pb.SendMessageRequest{
+			ChannelId: req.ChannelId,
+			Text:      req.Text,
+		},
+	})
 
 	resp, err := s.handleChatRequest(ctx, baseID, &pb.ChatRequest{Inner: &pb.ChatRequest_SendMessage{SendMessage: &pb.SendMessageChatRequest{
 		ChannelId: localID,
@@ -173,6 +142,14 @@ func (s *Server) SendPrivateMessage(ctx context.Context, req *pb.SendPrivateMess
 		return nil, status.Error(codes.InvalidArgument, "invalid channel ID")
 	}
 
+	s.eventBox.Broadcast(&pb.SendPrivateMessageEvent{
+		Sender: CtxTag(ctx),
+		Inner: &pb.SendPrivateMessageRequest{
+			UserId: req.UserId,
+			Text:   req.Text,
+		},
+	})
+
 	resp, err := s.handleChatRequest(ctx, baseID, &pb.ChatRequest{Inner: &pb.ChatRequest_SendPrivateMessage{SendPrivateMessage: &pb.SendPrivateMessageChatRequest{
 		UserId: localID,
 		Text:   req.Text,
@@ -189,8 +166,72 @@ func (s *Server) SendPrivateMessage(ctx context.Context, req *pb.SendPrivateMess
 	default:
 		return nil, status.Errorf(codes.Internal, "unexpected response type: %T", v)
 	}
-
 }
+
+func (s *Server) PerformAction(ctx context.Context, req *pb.PerformActionRequest) (*pb.PerformActionResponse, error) {
+	baseID, localID, ok := idParts(req.ChannelId)
+	if !ok {
+		return nil, status.Error(codes.InvalidArgument, "invalid channel ID")
+	}
+
+	s.eventBox.Broadcast(&pb.PerformActionEvent{
+		Sender: CtxTag(ctx),
+		Inner: &pb.PerformActionRequest{
+			ChannelId: req.ChannelId,
+			Text:      req.Text,
+		},
+	})
+
+	resp, err := s.handleChatRequest(ctx, baseID, &pb.ChatRequest{Inner: &pb.ChatRequest_PerformAction{PerformAction: &pb.PerformActionChatRequest{
+		ChannelId: localID,
+		Text:      req.Text,
+	}}})
+	if err != nil {
+		return nil, err
+	}
+
+	switch v := resp.(type) {
+	case *pb.SuccessChatEvent:
+		return &pb.PerformActionResponse{}, nil
+	case *pb.FailedChatEvent:
+		return nil, status.Error(codes.Aborted, v.Reason)
+	default:
+		return nil, status.Errorf(codes.Internal, "unexpected response type: %T", v)
+	}
+}
+
+func (s *Server) PerformPrivateAction(ctx context.Context, req *pb.PerformPrivateActionRequest) (*pb.PerformPrivateActionResponse, error) {
+	baseID, localID, ok := idParts(req.UserId)
+	if !ok {
+		return nil, status.Error(codes.InvalidArgument, "invalid channel ID")
+	}
+
+	s.eventBox.Broadcast(&pb.PerformPrivateActionEvent{
+		Sender: CtxTag(ctx),
+		Inner: &pb.PerformPrivateActionRequest{
+			UserId: req.UserId,
+			Text:   req.Text,
+		},
+	})
+
+	resp, err := s.handleChatRequest(ctx, baseID, &pb.ChatRequest{Inner: &pb.ChatRequest_PerformPrivateAction{PerformPrivateAction: &pb.PerformPrivateActionChatRequest{
+		UserId: localID,
+		Text:   req.Text,
+	}}})
+	if err != nil {
+		return nil, err
+	}
+
+	switch v := resp.(type) {
+	case *pb.SuccessChatEvent:
+		return &pb.PerformPrivateActionResponse{}, nil
+	case *pb.FailedChatEvent:
+		return nil, status.Error(codes.Aborted, v.Reason)
+	default:
+		return nil, status.Errorf(codes.Internal, "unexpected response type: %T", v)
+	}
+}
+
 func (s *Server) JoinChannel(ctx context.Context, req *pb.JoinChannelRequest) (*pb.JoinChannelResponse, error) {
 	resp, err := s.handleChatRequest(ctx, req.BackendId, &pb.ChatRequest{Inner: &pb.ChatRequest_JoinChannel{JoinChannel: &pb.JoinChannelChatRequest{
 		ChannelName: req.ChannelName,

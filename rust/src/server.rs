@@ -70,7 +70,7 @@ where
         let server = self.server.clone();
 
         Box::pin(async move {
-            let (mut req, tag): (HyperRequest<Body>, _) = match req.headers().get("authorization") {
+            let (mut req, tag): (HyperRequest<Body>, tonic::codegen::http::HeaderValue) = match req.headers().get("authorization") {
                 Some(token) => {
                     let token = match token.to_str() {
                         Ok(token) => token,
@@ -113,9 +113,14 @@ where
                 None => return Ok(Status::unauthenticated("missing authorization").to_http()),
             };
 
-            req.headers_mut().insert(X_AUTH_TAG, tag);
+            let tag_str = match tag.to_str() {
+                Ok(tag) => tag,
+                Err(_) => return Ok(Status::internal("failed to parse tag").to_http()),
+            };
 
-            info!("Authenticated request: {}", req.uri());
+            info!("Authenticated request with tag {}: {}", tag_str, req.uri());
+
+            req.headers_mut().insert(X_AUTH_TAG, tag);
 
             let resp = svc.call(req).await?;
 

@@ -44,9 +44,9 @@ async fn read_tokens(filename: &str) -> Result<BTreeMap<String, String>> {
 
     let tokens: Tokens = serde_json::from_str(&buf)?;
 
-    // In the config file we use tag -> token because that makes the most
+    // In the config file we use username -> token because that makes the most
     // sense, but we need to reverse it before passing it in to the server.
-    Ok(tokens.tokens.into_iter().map(|(k, v)| (v, k)).collect())
+    Ok(tokens.tokens.into_iter().map(|(username, token)| (token, username)).collect())
 }
 
 #[tokio::main]

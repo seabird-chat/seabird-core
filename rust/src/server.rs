@@ -22,15 +22,15 @@ const CHAT_INGEST_RECEIVE_BUFFER: usize = 10;
 const BROADCAST_BUFFER: usize = 32;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(1);
 
-const X_AUTH_TAG: &str = "x-auth-tag";
+const X_AUTH_USERNAME: &str = "x-auth-username";
 
-fn extract_auth_tag<T>(req: &Request<T>) -> RpcResult<String> {
+fn extract_auth_username<T>(req: &Request<T>) -> RpcResult<String> {
     Ok(req
         .metadata()
-        .get(X_AUTH_TAG)
-        .ok_or_else(|| Status::internal("missing auth tag"))?
+        .get(X_AUTH_USERNAME)
+        .ok_or_else(|| Status::internal("missing auth username"))?
         .to_str()
-        .map_err(|_| Status::internal("failed to decode auth tag"))?
+        .map_err(|_| Status::internal("failed to decode auth username"))?
         .to_string())
 }
 
@@ -70,57 +70,65 @@ where
         let server = self.server.clone();
 
         Box::pin(async move {
-            let (mut req, tag): (HyperRequest<Body>, tonic::codegen::http::HeaderValue) = match req.headers().get("authorization") {
-                Some(token) => {
-                    let token = match token.to_str() {
-                        Ok(token) => token,
-                        Err(_) => {
-                            return Ok(Status::unauthenticated("invalid token data").to_http())
-                        }
-                    };
+            let (mut req, username): (HyperRequest<Body>, tonic::codegen::http::HeaderValue) =
+                match req.headers().get("authorization") {
+                    Some(token) => {
+                        let token = match token.to_str() {
+                            Ok(token) => token,
+                            Err(_) => {
+                                return Ok(Status::unauthenticated("invalid token data").to_http())
+                            }
+                        };
 
-                    let mut split = token.splitn(2, ' ');
-                    match (split.next(), split.next()) {
-                        (Some("Bearer"), Some(token)) => {
-                            let tokens = server.tokens.read().await;
-                            match tokens.get(token) {
-                                Some(val) => match val.parse() {
-                                    Ok(tag) => (req, tag),
-                                    Err(_) => {
+                        let mut split = token.splitn(2, ' ');
+                        match (split.next(), split.next()) {
+                            (Some("Bearer"), Some(token)) => {
+                                let tokens = server.tokens.read().await;
+                                match tokens.get(token) {
+                                    Some(maybe_username) => match maybe_username.parse() {
+                                        Ok(username) => (req, username),
+                                        Err(_) => {
+                                            return Ok(Status::internal(
+                                                "invalid auth token username",
+                                            )
+                                            .to_http())
+                                        }
+                                    },
+                                    None => {
                                         return Ok(
-                                            Status::internal("invalid auth token tag").to_http()
+                                            Status::unauthenticated("invalid auth token").to_http()
                                         )
                                     }
-                                },
-                                None => {
-                                    return Ok(
-                                        Status::unauthenticated("invalid auth token").to_http()
-                                    )
                                 }
                             }
-                        }
-                        (Some("Bearer"), None) => {
-                            return Ok(Status::unauthenticated("missing auth token").to_http())
-                        }
-                        (Some(_), _) => {
-                            return Ok(Status::unauthenticated("unknown auth method").to_http())
-                        }
-                        (None, _) => {
-                            return Ok(Status::unauthenticated("missing auth method").to_http())
+                            (Some("Bearer"), None) => {
+                                return Ok(Status::unauthenticated("missing auth token").to_http())
+                            }
+                            (Some(_), _) => {
+                                return Ok(Status::unauthenticated("unknown auth method").to_http())
+                            }
+                            (None, _) => {
+                                return Ok(Status::unauthenticated("missing auth method").to_http())
+                            }
                         }
                     }
-                }
-                None => return Ok(Status::unauthenticated("missing authorization").to_http()),
-            };
+                    None => {
+                        return Ok(Status::unauthenticated("missing authorization header").to_http())
+                    }
+                };
 
-            let tag_str = match tag.to_str() {
-                Ok(tag) => tag,
+            let username_str = match username.to_str() {
+                Ok(username) => username,
                 Err(_) => return Ok(Status::internal("failed to parse tag").to_http()),
             };
 
-            info!("Authenticated request with tag {}: {}", tag_str, req.uri());
+            info!(
+                "Authenticated request by user {}: {}",
+                username_str,
+                req.uri()
+            );
 
-            req.headers_mut().insert(X_AUTH_TAG, tag);
+            req.headers_mut().insert(X_AUTH_USERNAME, username);
 
             let resp = svc.call(req).await?;
 
@@ -390,7 +398,10 @@ impl Server {
     }
 
     fn broadcast(self: &Arc<Self>, inner: EventInner) {
-        // We ignore send errors because they're not relevant to us here
+        // We ignore send errors because they're not relevant to us here. The
+        // only time this will return an error is if all the receivers have been
+        // dropped which is a valid state because a client can call .subscribe
+        // at any time.
         let _ = self.sender.send(proto::Event { inner: Some(inner) });
     }
 }
@@ -440,10 +451,9 @@ impl ChatIngest for Arc<Server> {
                     Either::Left((Some(req), _)) => {
                         debug!("got request: {:?}", req);
 
-                        sender
-                            .send(Ok(req))
-                            .await
-                            .map_err(|_| Status::internal("failed to send event to backend"))?;
+                        sender.send(Ok(req)).await.map_err(|err| {
+                            Status::internal(format!("failed to send event to backend: {:?}", err))
+                        })?;
                     }
                     Either::Right((Some(event), _)) => {
                         let event = event?;
@@ -593,10 +603,9 @@ impl Seabird for Arc<Server> {
         // Spawn a task to handle the stream
         crate::spawn(sender.clone(), async move {
             loop {
-                let event = events
-                    .recv()
-                    .await
-                    .map_err(|_| Status::internal("failed to read internal event"))?;
+                let event = events.recv().await.map_err(|err| {
+                    Status::internal(format!("failed to read internal event: {:?}", err))
+                })?;
 
                 sender
                     .send(Ok(event))
@@ -612,7 +621,7 @@ impl Seabird for Arc<Server> {
         &self,
         req: Request<proto::SendMessageRequest>,
     ) -> RpcResult<Response<proto::SendMessageResponse>> {
-        let tag = extract_auth_tag(&req)?;
+        let username = extract_auth_username(&req)?;
         let req = req.into_inner();
         let (backend_id, channel_id) = req
             .channel_id
@@ -621,7 +630,7 @@ impl Seabird for Arc<Server> {
             .into_inner();
 
         self.broadcast(EventInner::SendMessage(proto::SendMessageEvent {
-            sender: tag.to_string(),
+            sender: username.to_string(),
             inner: Some(proto::SendMessageRequest {
                 channel_id: req.channel_id,
                 text: req.text.clone(),
@@ -649,7 +658,7 @@ impl Seabird for Arc<Server> {
         &self,
         req: Request<proto::SendPrivateMessageRequest>,
     ) -> RpcResult<Response<proto::SendPrivateMessageResponse>> {
-        let tag = extract_auth_tag(&req)?;
+        let username = extract_auth_username(&req)?;
         let req = req.into_inner();
         let (backend_id, user_id) = req
             .user_id
@@ -659,7 +668,7 @@ impl Seabird for Arc<Server> {
 
         self.broadcast(EventInner::SendPrivateMessage(
             proto::SendPrivateMessageEvent {
-                sender: tag.to_string(),
+                sender: username.to_string(),
                 inner: Some(proto::SendPrivateMessageRequest {
                     user_id: req.user_id,
                     text: req.text.clone(),
@@ -688,7 +697,7 @@ impl Seabird for Arc<Server> {
         &self,
         req: Request<proto::PerformActionRequest>,
     ) -> RpcResult<Response<proto::PerformActionResponse>> {
-        let tag = extract_auth_tag(&req)?;
+        let username = extract_auth_username(&req)?;
         let req = req.into_inner();
         let (backend_id, channel_id) = req
             .channel_id
@@ -697,7 +706,7 @@ impl Seabird for Arc<Server> {
             .into_inner();
 
         self.broadcast(EventInner::PerformAction(proto::PerformActionEvent {
-            sender: tag.to_string(),
+            sender: username.to_string(),
             inner: Some(proto::PerformActionRequest {
                 channel_id: req.channel_id,
                 text: req.text.clone(),
@@ -725,7 +734,7 @@ impl Seabird for Arc<Server> {
         &self,
         req: Request<proto::PerformPrivateActionRequest>,
     ) -> RpcResult<Response<proto::PerformPrivateActionResponse>> {
-        let tag = extract_auth_tag(&req)?;
+        let username = extract_auth_username(&req)?;
         let req = req.into_inner();
         let (backend_id, user_id) = req
             .user_id
@@ -735,7 +744,7 @@ impl Seabird for Arc<Server> {
 
         self.broadcast(EventInner::PerformPrivateAction(
             proto::PerformPrivateActionEvent {
-                sender: tag.to_string(),
+                sender: username.to_string(),
                 inner: Some(proto::PerformPrivateActionRequest {
                     user_id: req.user_id,
                     text: req.text.clone(),

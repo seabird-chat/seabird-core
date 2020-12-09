@@ -6,8 +6,8 @@ fn main() {
         .build_client(false)
         .build_server(true)
         .compile(
-            &["../proto/seabird.proto", "../proto/seabird_chat_ingest.proto"],
-            &["../proto"],
+            &["./proto/seabird.proto", "./proto/seabird_chat_ingest.proto"],
+            &["./proto"],
         )
         .unwrap();
 }

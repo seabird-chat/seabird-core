@@ -1,23 +1,18 @@
 FROM rust:1.43 as builder
-WORKDIR /usr/src/seabird-core/rust
-
-# We also need the proto directory
-RUN mkdir /usr/src/seabird-core/proto
+WORKDIR /usr/src/seabird-core
 
 # NOTE: tonic_build uses rustfmt to properly format the output files and give
 # better errors.
 RUN rustup component add rustfmt
 
 # Copy over only the files which specify dependencies
-COPY ./rust/Cargo.toml ./rust/Cargo.lock ./
+COPY ./Cargo.toml ./Cargo.lock ./
 
 # We need to create a dummy main in order to get this to properly build.
-RUN mkdir src /tmp/seabird-target && echo 'fn main() {}' > src/main.rs && cargo build --release
-
-COPY ./proto/ /usr/src/seabird-core/proto
+RUN mkdir src && echo 'fn main() {}' > src/main.rs && cargo build --release
 
 # Copy over the files to actually build the application.
-COPY ./rust/ .
+COPY . .
 
 # We need to make sure the update time on main.rs is newer than the temporary
 # file or there are weird cargo caching issues we run into.

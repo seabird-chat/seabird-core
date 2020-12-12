@@ -13,12 +13,12 @@ implementation.
 ## Building
 
 The easiest way to build and deploy `seabird-core` is to use the [official
-docker images](https://hub.docker.com/r/seabirdchat/seabird-core).
+docker image](https://hub.docker.com/r/seabirdchat/seabird-core).
 
-In order to build these, you can use one of the following:
+In order to build this, you can use the following:
 
 ```sh
-docker build -t seabird-core:rust .
+docker build -t seabird-core:latest .
 ```
 
 If you want to develop locally, simply use the normal cargo workflow in order to
@@ -27,6 +27,9 @@ build/run seabird-core:
 ```sh
 cargo run
 ```
+
+Note that because this generates code based on the protobufs, you may need to run
+`git submodule update --init` to make sure they are up to date. 
 
 ## Configuring
 

@@ -469,11 +469,12 @@ impl ChatIngest for Arc<Server> {
                         }
 
                         match inner {
-                            // Success/Failed are only used for responding to
+                            // These are only used for responding to
                             // requests, so we ignore them here because they
                             // don't need to be handled specially.
                             ChatEventInner::Success(_) => {}
                             ChatEventInner::Failed(_) => {}
+                            ChatEventInner::Metadata(_) => {}
 
                             ChatEventInner::Action(action) => {
                                 let _ = backend_handle.sender.send(proto::Event {
@@ -893,12 +894,24 @@ impl Seabird for Arc<Server> {
             .get(&backend_id)
             .ok_or_else(|| Status::not_found("backend not found"))?;
 
-        Ok(Response::new(proto::BackendInfoResponse {
-            backend: Some(proto::Backend {
-                id: backend_id.to_string(),
-                r#type: backend_id.scheme.clone(),
-            }),
-        }))
+        let resp = self
+            .issue_request(
+                backend_id.clone(),
+                proto::ChatRequestInner::Metadata(proto::MetadataChatRequest {}),
+            )
+            .await?;
+
+        match resp {
+            ChatEventInner::Metadata(metadata) => Ok(Response::new(proto::BackendInfoResponse {
+                backend: Some(proto::Backend {
+                    id: backend_id.to_string(),
+                    r#type: backend_id.scheme.clone(),
+                }),
+                metadata: metadata.values,
+            })),
+            ChatEventInner::Failed(failed) => Err(Status::unknown(failed.reason)),
+            _ => Err(Status::internal("unexpected chat event")),
+        }
     }
 
     async fn list_channels(

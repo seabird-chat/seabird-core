@@ -902,12 +902,12 @@ impl Seabird for Arc<Server> {
             .await?;
 
         match resp {
-            ChatEventInner::Metadata(config) => Ok(Response::new(proto::BackendInfoResponse {
+            ChatEventInner::Metadata(metadata) => Ok(Response::new(proto::BackendInfoResponse {
                 backend: Some(proto::Backend {
                     id: backend_id.to_string(),
                     r#type: backend_id.scheme.clone(),
                 }),
-                config: config.config,
+                metadata: metadata.values,
             })),
             ChatEventInner::Failed(failed) => Err(Status::unknown(failed.reason)),
             _ => Err(Status::internal("unexpected chat event")),

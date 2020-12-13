@@ -987,6 +987,10 @@ impl Seabird for Arc<Server> {
 
         Ok(Response::new(proto::CoreInfoResponse {
             startup_timestamp: self.startup_timestamp,
+            current_timestamp: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_err(|_e| Status::not_found("backend not found"))?
+                .as_secs(),
         }))
     }
 }

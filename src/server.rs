@@ -195,6 +195,7 @@ pub struct Server {
     requests: Mutex<BTreeMap<String, Option<ChatRequest>>>,
     backends: RwLock<BTreeMap<BackendId, Arc<ChatBackend>>>,
     tokens: RwLock<BTreeMap<String, String>>,
+    commands: Arc<RwLock<BTreeMap<String, proto::CommandMetadata>>>,
 
     cleanup_request_receiver: Mutex<mpsc::UnboundedReceiver<String>>,
     cleanup_request_sender: mpsc::UnboundedSender<String>,
@@ -217,6 +218,7 @@ impl Server {
             requests: Mutex::new(BTreeMap::new()),
             backends: RwLock::new(BTreeMap::new()),
             tokens: RwLock::new(BTreeMap::new()),
+            commands: Arc::new(RwLock::new(BTreeMap::new())),
             cleanup_request_receiver: Mutex::new(cleanup_request_receiver),
             cleanup_request_sender,
             cleanup_backend_receiver: Mutex::new(cleanup_backend_receiver),
@@ -587,15 +589,45 @@ impl ChatIngest for Arc<Server> {
     }
 }
 
+async fn remove_from_commands(
+    commands_lock: Arc<RwLock<BTreeMap<String, proto::CommandMetadata>>>,
+    command_names: Vec<String>,
+) {
+    info!("removing {} command(s)", command_names.len());
+    debug!("command(s) removed: {:?}", command_names);
+
+    let mut commands = commands_lock.write().await;
+    for name in command_names.into_iter() {
+        commands.remove(&name);
+    }
+}
+
 #[async_trait]
 impl Seabird for Arc<Server> {
     type StreamEventsStream = mpsc::Receiver<RpcResult<proto::Event>>;
 
     async fn stream_events(
         &self,
-        _req: Request<proto::StreamEventsRequest>,
+        req: Request<proto::StreamEventsRequest>,
     ) -> RpcResult<Response<Self::StreamEventsStream>> {
-        // TODO: properly use req
+        let req = req.into_inner();
+
+        // Track registered commands
+        let mut commands = self.commands.write().await;
+        let mut to_cleanup = Vec::new();
+        for (name, metadata) in req.commands.into_iter() {
+            if commands.contains_key(&name) {
+                return Err(Status::already_exists(format!(
+                    "command \"{}\" already registered by another plugin",
+                    name
+                )));
+            }
+
+            to_cleanup.push(name.clone());
+            commands.insert(name, metadata);
+        }
+
+        let commands_lock = self.commands.clone();
 
         let (mut sender, receiver) = mpsc::channel(CHAT_INGEST_SEND_BUFFER);
 
@@ -604,14 +636,26 @@ impl Seabird for Arc<Server> {
         // Spawn a task to handle the stream
         crate::spawn(sender.clone(), async move {
             loop {
-                let event = events.recv().await.map_err(|err| {
+                let event = match events.recv().await.map_err(|err| {
                     Status::internal(format!("failed to read internal event: {:?}", err))
-                })?;
+                }) {
+                    Ok(event) => event,
+                    Err(e) => {
+                        remove_from_commands(commands_lock, to_cleanup).await;
 
-                sender
+                        return Err(e);
+                    }
+                };
+
+                if let Err(e) = sender
                     .send(Ok(event))
                     .await
-                    .map_err(|err| Status::internal(format!("failed to send event: {}", err)))?;
+                    .map_err(|err| Status::internal(format!("failed to send event: {}", err)))
+                {
+                    remove_from_commands(commands_lock, to_cleanup).await;
+
+                    return Err(e);
+                }
             }
         });
 
@@ -991,6 +1035,17 @@ impl Seabird for Arc<Server> {
                 .duration_since(UNIX_EPOCH)
                 .map_err(|_e| Status::not_found("backend not found"))?
                 .as_secs(),
+        }))
+    }
+
+    async fn registered_commands(
+        &self,
+        req: Request<proto::CommandsRequest>,
+    ) -> RpcResult<Response<proto::CommandsResponse>> {
+        let _req = req.into_inner();
+
+        Ok(Response::new(proto::CommandsResponse {
+            commands: self.commands.read().await.clone().into_iter().collect(),
         }))
     }
 }

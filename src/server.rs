@@ -148,13 +148,13 @@ struct ChatBackendHandle {
     id: BackendId,
     receiver: mpsc::Receiver<proto::ChatRequest>,
     sender: broadcast::Sender<proto::Event>,
-    cleanup: mpsc::UnboundedSender<BackendId>,
+    cleanup: mpsc::UnboundedSender<CleanupRequest>,
 }
 
 impl Drop for ChatBackendHandle {
     fn drop(&mut self) {
         debug!("dropping backend {}", self.id);
-        if let Err(err) = self.cleanup.send(self.id.clone()) {
+        if let Err(err) = self.cleanup.send(CleanupRequest::Backend(self.id.clone())) {
             warn!("failed to notify cleanup of backend {}: {}", self.id, err);
         }
     }
@@ -170,13 +170,13 @@ struct ChatBackend {
 struct ChatRequestHandle {
     id: String,
     receiver: oneshot::Receiver<proto::ChatEventInner>,
-    cleanup: mpsc::UnboundedSender<String>,
+    cleanup: mpsc::UnboundedSender<CleanupRequest>,
 }
 
 impl Drop for ChatRequestHandle {
     fn drop(&mut self) {
         debug!("dropping request {}", self.id);
-        if let Err(err) = self.cleanup.send(self.id.clone()) {
+        if let Err(err) = self.cleanup.send(CleanupRequest::Request(self.id.clone())) {
             warn!("failed to notify cleanup of request {}: {}", self.id, err);
         }
     }
@@ -185,6 +185,12 @@ impl Drop for ChatRequestHandle {
 #[derive(Debug)]
 struct ChatRequest {
     sender: oneshot::Sender<proto::ChatEventInner>,
+}
+
+#[derive(Debug)]
+enum CleanupRequest {
+    Request(String),
+    Backend(BackendId),
 }
 
 #[derive(Debug)]
@@ -197,10 +203,8 @@ pub struct Server {
     tokens: RwLock<BTreeMap<String, String>>,
     commands: Arc<RwLock<BTreeMap<String, proto::CommandMetadata>>>,
 
-    cleanup_request_receiver: Mutex<mpsc::UnboundedReceiver<String>>,
-    cleanup_request_sender: mpsc::UnboundedSender<String>,
-    cleanup_backend_receiver: Mutex<mpsc::UnboundedReceiver<BackendId>>,
-    cleanup_backend_sender: mpsc::UnboundedSender<BackendId>,
+    cleanup_receiver: Mutex<mpsc::UnboundedReceiver<CleanupRequest>>,
+    cleanup_sender: mpsc::UnboundedSender<CleanupRequest>,
 }
 
 impl Server {
@@ -208,8 +212,7 @@ impl Server {
         // We actually don't care about the receiving side - the clients will
         // subscribe to it later.
         let (sender, _) = broadcast::channel(BROADCAST_BUFFER);
-        let (cleanup_request_sender, cleanup_request_receiver) = mpsc::unbounded_channel();
-        let (cleanup_backend_sender, cleanup_backend_receiver) = mpsc::unbounded_channel();
+        let (cleanup_sender, cleanup_receiver) = mpsc::unbounded_channel();
 
         Ok(Arc::new(Server {
             bind_host,
@@ -219,10 +222,8 @@ impl Server {
             backends: RwLock::new(BTreeMap::new()),
             tokens: RwLock::new(BTreeMap::new()),
             commands: Arc::new(RwLock::new(BTreeMap::new())),
-            cleanup_request_receiver: Mutex::new(cleanup_request_receiver),
-            cleanup_request_sender,
-            cleanup_backend_receiver: Mutex::new(cleanup_backend_receiver),
-            cleanup_backend_sender,
+            cleanup_receiver: Mutex::new(cleanup_receiver),
+            cleanup_sender,
         }))
     }
 
@@ -239,37 +240,26 @@ impl Server {
 
 impl Server {
     async fn cleanup_task(&self) -> Result<()> {
-        let mut cleanup_backend_receiver = self.cleanup_backend_receiver.try_lock()?;
-        let mut cleanup_request_receiver = self.cleanup_request_receiver.try_lock()?;
+        let mut cleanup_receiver = self.cleanup_receiver.try_lock()?;
 
         loop {
-            // NOTE: for some reason, the receiver's recv() future doesn't
-            // implement Unpin, so select doesn't work properly.
-            match select(
-                cleanup_backend_receiver.next(),
-                cleanup_request_receiver.next(),
-            )
-            .await
-            {
-                Either::Left((Some(backend_id), _)) => {
+            match cleanup_receiver.next().await {
+                Some(CleanupRequest::Backend(backend_id)) => {
                     debug!("cleaning backend {}", backend_id);
                     let mut backends = self.backends.write().await;
                     if let None = backends.remove(&backend_id) {
                         warn!("tried to clean backend {} but it didn't exist", backend_id);
                     };
                 }
-                Either::Right((Some(request_id), _)) => {
+                Some(CleanupRequest::Request(request_id)) => {
                     debug!("cleaning request {}", request_id);
                     let mut requests = self.requests.lock().await;
                     if let None = requests.remove(&request_id) {
                         warn!("tried to clean request {} but it didn't exist", request_id);
                     };
                 }
-                Either::Left((None, _)) => {
-                    anyhow::bail!("cleanup_backend_receiver closed unexpectedly")
-                }
-                Either::Right((None, _)) => {
-                    anyhow::bail!("cleanup_request_receiver closed unexpectedly")
+                None => {
+                    anyhow::bail!("cleanup_receiver closed unexpectedly")
                 }
             }
         }
@@ -291,7 +281,7 @@ impl Server {
             id: id.clone(),
             receiver,
             sender: self.sender.clone(),
-            cleanup: self.cleanup_backend_sender.clone(),
+            cleanup: self.cleanup_sender.clone(),
         };
         let backend = Arc::new(ChatBackend {
             sender,
@@ -361,7 +351,7 @@ impl Server {
             ChatRequestHandle {
                 id: request_id.clone(),
                 receiver,
-                cleanup: self.cleanup_request_sender.clone(),
+                cleanup: self.cleanup_sender.clone(),
             }
         };
 

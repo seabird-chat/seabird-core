@@ -148,13 +148,13 @@ struct ChatBackendHandle {
     id: BackendId,
     receiver: mpsc::Receiver<proto::ChatRequest>,
     sender: broadcast::Sender<proto::Event>,
-    cleanup: mpsc::UnboundedSender<BackendId>,
+    cleanup: mpsc::UnboundedSender<CleanupRequest>,
 }
 
 impl Drop for ChatBackendHandle {
     fn drop(&mut self) {
         debug!("dropping backend {}", self.id);
-        if let Err(err) = self.cleanup.send(self.id.clone()) {
+        if let Err(err) = self.cleanup.send(CleanupRequest::Backend(self.id.clone())) {
             warn!("failed to notify cleanup of backend {}: {}", self.id, err);
         }
     }
@@ -170,14 +170,31 @@ struct ChatBackend {
 struct ChatRequestHandle {
     id: String,
     receiver: oneshot::Receiver<proto::ChatEventInner>,
-    cleanup: mpsc::UnboundedSender<String>,
+    cleanup: mpsc::UnboundedSender<CleanupRequest>,
 }
 
 impl Drop for ChatRequestHandle {
     fn drop(&mut self) {
         debug!("dropping request {}", self.id);
-        if let Err(err) = self.cleanup.send(self.id.clone()) {
+        if let Err(err) = self.cleanup.send(CleanupRequest::Request(self.id.clone())) {
             warn!("failed to notify cleanup of request {}: {}", self.id, err);
+        }
+    }
+}
+
+#[derive(Debug)]
+struct CommandsHandle {
+    commands: Vec<String>,
+    cleanup: mpsc::UnboundedSender<CleanupRequest>,
+}
+
+impl Drop for CommandsHandle {
+    fn drop(&mut self) {
+        debug!("dropping commands {:?}", self.commands);
+        if let Err(err) = self.cleanup.send(CleanupRequest::Commands(
+            self.commands.clone(),
+        )) {
+            warn!("failed to notify cleanup of commands {:?}: {}", self.commands, err);
         }
     }
 }
@@ -188,6 +205,13 @@ struct ChatRequest {
 }
 
 #[derive(Debug)]
+enum CleanupRequest {
+    Request(String),
+    Backend(BackendId),
+    Commands(Vec<String>),
+}
+
+#[derive(Debug)]
 pub struct Server {
     bind_host: String,
     startup_timestamp: u64,
@@ -195,11 +219,10 @@ pub struct Server {
     requests: Mutex<BTreeMap<String, Option<ChatRequest>>>,
     backends: RwLock<BTreeMap<BackendId, Arc<ChatBackend>>>,
     tokens: RwLock<BTreeMap<String, String>>,
+    commands: Arc<RwLock<BTreeMap<String, proto::CommandMetadata>>>,
 
-    cleanup_request_receiver: Mutex<mpsc::UnboundedReceiver<String>>,
-    cleanup_request_sender: mpsc::UnboundedSender<String>,
-    cleanup_backend_receiver: Mutex<mpsc::UnboundedReceiver<BackendId>>,
-    cleanup_backend_sender: mpsc::UnboundedSender<BackendId>,
+    cleanup_receiver: Mutex<mpsc::UnboundedReceiver<CleanupRequest>>,
+    cleanup_sender: mpsc::UnboundedSender<CleanupRequest>,
 }
 
 impl Server {
@@ -207,8 +230,7 @@ impl Server {
         // We actually don't care about the receiving side - the clients will
         // subscribe to it later.
         let (sender, _) = broadcast::channel(BROADCAST_BUFFER);
-        let (cleanup_request_sender, cleanup_request_receiver) = mpsc::unbounded_channel();
-        let (cleanup_backend_sender, cleanup_backend_receiver) = mpsc::unbounded_channel();
+        let (cleanup_sender, cleanup_receiver) = mpsc::unbounded_channel();
 
         Ok(Arc::new(Server {
             bind_host,
@@ -217,10 +239,9 @@ impl Server {
             requests: Mutex::new(BTreeMap::new()),
             backends: RwLock::new(BTreeMap::new()),
             tokens: RwLock::new(BTreeMap::new()),
-            cleanup_request_receiver: Mutex::new(cleanup_request_receiver),
-            cleanup_request_sender,
-            cleanup_backend_receiver: Mutex::new(cleanup_backend_receiver),
-            cleanup_backend_sender,
+            commands: Arc::new(RwLock::new(BTreeMap::new())),
+            cleanup_receiver: Mutex::new(cleanup_receiver),
+            cleanup_sender,
         }))
     }
 
@@ -237,37 +258,35 @@ impl Server {
 
 impl Server {
     async fn cleanup_task(&self) -> Result<()> {
-        let mut cleanup_backend_receiver = self.cleanup_backend_receiver.try_lock()?;
-        let mut cleanup_request_receiver = self.cleanup_request_receiver.try_lock()?;
+        let mut cleanup_receiver = self.cleanup_receiver.try_lock()?;
 
         loop {
-            // NOTE: for some reason, the receiver's recv() future doesn't
-            // implement Unpin, so select doesn't work properly.
-            match select(
-                cleanup_backend_receiver.next(),
-                cleanup_request_receiver.next(),
-            )
-            .await
-            {
-                Either::Left((Some(backend_id), _)) => {
+            match cleanup_receiver.next().await {
+                Some(CleanupRequest::Backend(backend_id)) => {
                     debug!("cleaning backend {}", backend_id);
                     let mut backends = self.backends.write().await;
                     if let None = backends.remove(&backend_id) {
                         warn!("tried to clean backend {} but it didn't exist", backend_id);
                     };
                 }
-                Either::Right((Some(request_id), _)) => {
+                Some(CleanupRequest::Request(request_id)) => {
                     debug!("cleaning request {}", request_id);
                     let mut requests = self.requests.lock().await;
                     if let None = requests.remove(&request_id) {
                         warn!("tried to clean request {} but it didn't exist", request_id);
                     };
                 }
-                Either::Left((None, _)) => {
-                    anyhow::bail!("cleanup_backend_receiver closed unexpectedly")
+                Some(CleanupRequest::Commands(cleanup_commands)) => {
+                    info!("cleaning {} command(s)", cleanup_commands.len());
+                    let mut commands = self.commands.write().await;
+                    for name in cleanup_commands.into_iter() {
+                        if let None = commands.remove(&name) {
+                            warn!("tried to clean command {} but it didn't exist", name);
+                        };
+                    }
                 }
-                Either::Right((None, _)) => {
-                    anyhow::bail!("cleanup_request_receiver closed unexpectedly")
+                None => {
+                    anyhow::bail!("cleanup_receiver closed unexpectedly")
                 }
             }
         }
@@ -289,7 +308,7 @@ impl Server {
             id: id.clone(),
             receiver,
             sender: self.sender.clone(),
-            cleanup: self.cleanup_backend_sender.clone(),
+            cleanup: self.cleanup_sender.clone(),
         };
         let backend = Arc::new(ChatBackend {
             sender,
@@ -359,7 +378,7 @@ impl Server {
             ChatRequestHandle {
                 id: request_id.clone(),
                 receiver,
-                cleanup: self.cleanup_request_sender.clone(),
+                cleanup: self.cleanup_sender.clone(),
             }
         };
 
@@ -593,16 +612,38 @@ impl Seabird for Arc<Server> {
 
     async fn stream_events(
         &self,
-        _req: Request<proto::StreamEventsRequest>,
+        req: Request<proto::StreamEventsRequest>,
     ) -> RpcResult<Response<Self::StreamEventsStream>> {
-        // TODO: properly use req
+        let req = req.into_inner();
+
+        // Track registered commands
+        let mut commands = self.commands.write().await;
+        let mut to_cleanup = Vec::new();
+        for (name, metadata) in req.commands.into_iter() {
+            if commands.contains_key(&name) {
+                return Err(Status::already_exists(format!(
+                    "command \"{}\" already registered by another plugin",
+                    name
+                )));
+            }
+
+            to_cleanup.push(name.clone());
+            commands.insert(name, metadata);
+        }
 
         let (mut sender, receiver) = mpsc::channel(CHAT_INGEST_SEND_BUFFER);
 
         let mut events = self.sender.subscribe();
 
+        let cleanup_sender = self.cleanup_sender.clone();
+
         // Spawn a task to handle the stream
         crate::spawn(sender.clone(), async move {
+            let _handle = CommandsHandle {
+                commands: to_cleanup,
+                cleanup: cleanup_sender,
+            };
+
             loop {
                 let event = events.recv().await.map_err(|err| {
                     Status::internal(format!("failed to read internal event: {:?}", err))
@@ -991,6 +1032,17 @@ impl Seabird for Arc<Server> {
                 .duration_since(UNIX_EPOCH)
                 .map_err(|_e| Status::not_found("backend not found"))?
                 .as_secs(),
+        }))
+    }
+
+    async fn registered_commands(
+        &self,
+        req: Request<proto::CommandsRequest>,
+    ) -> RpcResult<Response<proto::CommandsResponse>> {
+        let _req = req.into_inner();
+
+        Ok(Response::new(proto::CommandsResponse {
+            commands: self.commands.read().await.clone().into_iter().collect(),
         }))
     }
 }

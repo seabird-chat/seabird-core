@@ -183,6 +183,23 @@ impl Drop for ChatRequestHandle {
 }
 
 #[derive(Debug)]
+struct CommandsHandle {
+    commands: Vec<String>,
+    cleanup: mpsc::UnboundedSender<CleanupRequest>,
+}
+
+impl Drop for CommandsHandle {
+    fn drop(&mut self) {
+        debug!("dropping commands {:?}", self.commands);
+        if let Err(err) = self.cleanup.send(CleanupRequest::Commands(
+            self.commands.clone(),
+        )) {
+            warn!("failed to notify cleanup of commands {:?}: {}", self.commands, err);
+        }
+    }
+}
+
+#[derive(Debug)]
 struct ChatRequest {
     sender: oneshot::Sender<proto::ChatEventInner>,
 }
@@ -191,6 +208,7 @@ struct ChatRequest {
 enum CleanupRequest {
     Request(String),
     Backend(BackendId),
+    Commands(Vec<String>),
 }
 
 #[derive(Debug)]
@@ -257,6 +275,15 @@ impl Server {
                     if let None = requests.remove(&request_id) {
                         warn!("tried to clean request {} but it didn't exist", request_id);
                     };
+                }
+                Some(CleanupRequest::Commands(cleanup_commands)) => {
+                    info!("cleaning {} command(s)", cleanup_commands.len());
+                    let mut commands = self.commands.write().await;
+                    for name in cleanup_commands.into_iter() {
+                        if let None = commands.remove(&name) {
+                            warn!("tried to clean command {} but it didn't exist", name);
+                        };
+                    }
                 }
                 None => {
                     anyhow::bail!("cleanup_receiver closed unexpectedly")
@@ -579,19 +606,6 @@ impl ChatIngest for Arc<Server> {
     }
 }
 
-async fn remove_from_commands(
-    commands_lock: Arc<RwLock<BTreeMap<String, proto::CommandMetadata>>>,
-    command_names: Vec<String>,
-) {
-    info!("removing {} command(s)", command_names.len());
-    debug!("command(s) removed: {:?}", command_names);
-
-    let mut commands = commands_lock.write().await;
-    for name in command_names.into_iter() {
-        commands.remove(&name);
-    }
-}
-
 #[async_trait]
 impl Seabird for Arc<Server> {
     type StreamEventsStream = mpsc::Receiver<RpcResult<proto::Event>>;
@@ -617,35 +631,28 @@ impl Seabird for Arc<Server> {
             commands.insert(name, metadata);
         }
 
-        let commands_lock = self.commands.clone();
-
         let (mut sender, receiver) = mpsc::channel(CHAT_INGEST_SEND_BUFFER);
 
         let mut events = self.sender.subscribe();
 
+        let cleanup_sender = self.cleanup_sender.clone();
+
         // Spawn a task to handle the stream
         crate::spawn(sender.clone(), async move {
+            let _handle = CommandsHandle {
+                commands: to_cleanup,
+                cleanup: cleanup_sender,
+            };
+
             loop {
-                let event = match events.recv().await.map_err(|err| {
+                let event = events.recv().await.map_err(|err| {
                     Status::internal(format!("failed to read internal event: {:?}", err))
-                }) {
-                    Ok(event) => event,
-                    Err(e) => {
-                        remove_from_commands(commands_lock, to_cleanup).await;
+                })?;
 
-                        return Err(e);
-                    }
-                };
-
-                if let Err(e) = sender
+                sender
                     .send(Ok(event))
                     .await
-                    .map_err(|err| Status::internal(format!("failed to send event: {}", err)))
-                {
-                    remove_from_commands(commands_lock, to_cleanup).await;
-
-                    return Err(e);
-                }
+                    .map_err(|err| Status::internal(format!("failed to send event: {}", err)))?;
             }
         });
 

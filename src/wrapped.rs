@@ -4,6 +4,11 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::prelude::*;
 
+// channel returns a writer, reader, and a notification channel. Send/receive
+// mechanics are the same as an mpsc::channel, but there is an additional
+// oneshot notification channel which will fire when the receiver is dropped.
+// This is a workaround which lets us detect when a client has cleanly
+// disconnected with tonic gRPC streams.
 pub fn channel<T>(
     buffer_size: usize,
 ) -> (
@@ -24,6 +29,7 @@ pub fn channel<T>(
     )
 }
 
+// WrappedChannelSender is the Send side of a wrapped channel.
 #[derive(Debug, Clone)]
 pub struct WrappedChannelSender<T> {
     inner: mpsc::Sender<T>,
@@ -35,6 +41,7 @@ impl<T> WrappedChannelSender<T> {
     }
 }
 
+// WrappedChannelSender is the Stream side of a wrapped channel.
 #[derive(Debug)]
 pub struct WrappedChannelReceiver<T> {
     inner: mpsc::Receiver<T>,

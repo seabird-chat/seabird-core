@@ -56,10 +56,10 @@ impl<T> Drop for WrappedChannelReceiver<T> {
     fn drop(&mut self) {
         if let Some(oneshot) = self.oneshot.take() {
             if let Err(_err) = oneshot.send(()) {
-                warn!("failed to notify");
+                error!("failed to notify");
             }
         } else {
-            warn!("oneshot already triggered");
+            error!("oneshot already triggered");
         }
     }
 }

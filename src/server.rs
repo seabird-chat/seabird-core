@@ -656,13 +656,17 @@ impl Seabird for Arc<Server> {
                         })
                     }
                     Either::Left((Some(Err(err)), _)) => {
-                        Err(Status::internal(format!("failed to read internal event: {:?}", err)))
+                        Err(Status::internal(format!("failed to read internal event: {}", err)))
                     }
                     Either::Left((None, _)) => {
-                        Err(Status::internal(format!("this means something")))
+                        // Stream was closed by the server. In the future, maybe
+                        // this could be used to notify client streams that
+                        // seabird-core is restarting.
+                        Err(Status::internal("input stream ended unexpectedly".to_string()))
                     }
-                    Either::Right((_, _evt)) => {
-                        Err(Status::internal(format!("stream closed")))
+                    Either::Right((_, _)) => {
+                        // Stream was closed by the client - this is not actually an error.
+                        Ok(())
                     }
                 }?;
             }

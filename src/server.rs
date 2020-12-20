@@ -191,10 +191,14 @@ struct CommandsHandle {
 impl Drop for CommandsHandle {
     fn drop(&mut self) {
         debug!("dropping commands {:?}", self.commands);
-        if let Err(err) = self.cleanup.send(CleanupRequest::Commands(
-            self.commands.clone(),
-        )) {
-            warn!("failed to notify cleanup of commands {:?}: {}", self.commands, err);
+        if let Err(err) = self
+            .cleanup
+            .send(CleanupRequest::Commands(self.commands.clone()))
+        {
+            warn!(
+                "failed to notify cleanup of commands {:?}: {}",
+                self.commands, err
+            );
         }
     }
 }
@@ -608,7 +612,7 @@ impl ChatIngest for Arc<Server> {
 
 #[async_trait]
 impl Seabird for Arc<Server> {
-    type StreamEventsStream = mpsc::Receiver<RpcResult<proto::Event>>;
+    type StreamEventsStream = crate::wrapped::WrappedChannelReceiver<RpcResult<proto::Event>>;
 
     async fn stream_events(
         &self,
@@ -631,7 +635,7 @@ impl Seabird for Arc<Server> {
             commands.insert(name, metadata);
         }
 
-        let (mut sender, receiver) = mpsc::channel(CHAT_INGEST_SEND_BUFFER);
+        let (mut sender, receiver, mut notifier) = crate::wrapped::channel(CHAT_INGEST_SEND_BUFFER);
 
         let mut events = self.sender.subscribe();
 
@@ -645,14 +649,26 @@ impl Seabird for Arc<Server> {
             };
 
             loop {
-                let event = events.recv().await.map_err(|err| {
-                    Status::internal(format!("failed to read internal event: {:?}", err))
-                })?;
-
-                sender
-                    .send(Ok(event))
-                    .await
-                    .map_err(|err| Status::internal(format!("failed to send event: {}", err)))?;
+                match select(events.next(), &mut notifier).await {
+                    Either::Left((Some(Ok(event)), _)) => {
+                        sender.send(Ok(event)).await.map_err(|err| {
+                            Status::internal(format!("failed to send event: {}", err))
+                        })
+                    }
+                    Either::Left((Some(Err(err)), _)) => {
+                        Err(Status::internal(format!("failed to read internal event: {}", err)))
+                    }
+                    Either::Left((None, _)) => {
+                        // Stream was closed by the server. In the future, maybe
+                        // this could be used to notify client streams that
+                        // seabird-core is restarting.
+                        Err(Status::internal("input stream ended unexpectedly".to_string()))
+                    }
+                    Either::Right((_, _)) => {
+                        // Stream was closed by the client - this is not actually an error.
+                        Ok(())
+                    }
+                }?;
             }
         });
 

@@ -8,16 +8,19 @@ mod id;
 mod prelude;
 pub mod proto;
 mod server;
+mod wrapped;
 
 use crate::prelude::*;
+use wrapped::GenericSender;
 
 pub mod error {
     pub use anyhow::{Error, Result};
     pub type RpcResult<T> = std::result::Result<T, tonic::Status>;
 }
 
-pub fn spawn<T, V>(mut sender: tokio::sync::mpsc::Sender<T::Output>, task: T)
+pub fn spawn<S, T, V>(mut sender: S, task: T)
 where
+    S: GenericSender<T::Output> + Send + 'static,
     T: futures::Future<Output = RpcResult<V>> + Send + 'static,
     T::Output: Send + 'static,
     V: Send + 'static,
@@ -25,8 +28,7 @@ where
     tokio::spawn(async move {
         if let Err(err) = task.await {
             error!("error when running stream: {}", err);
-
-            let _ = sender.send(Err(err)).await;
+            let _ = sender.send_value(Err(err)).await;
         }
     });
 }
@@ -46,7 +48,11 @@ async fn read_tokens(filename: &str) -> Result<BTreeMap<String, String>> {
 
     // In the config file we use username -> token because that makes the most
     // sense, but we need to reverse it before passing it in to the server.
-    Ok(tokens.tokens.into_iter().map(|(username, token)| (token, username)).collect())
+    Ok(tokens
+        .tokens
+        .into_iter()
+        .map(|(username, token)| (token, username))
+        .collect())
 }
 
 #[tokio::main]

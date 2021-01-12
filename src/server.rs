@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use futures::future::{select, Either};
@@ -420,12 +421,15 @@ impl Server {
         anyhow::bail!("run_grpc_server exited early");
     }
 
-    fn broadcast(self: &Arc<Self>, inner: EventInner) {
+    fn broadcast(self: &Arc<Self>, inner: EventInner, tags: HashMap<String, String>) {
         // We ignore send errors because they're not relevant to us here. The
         // only time this will return an error is if all the receivers have been
         // dropped which is a valid state because a client can call .subscribe
         // at any time.
-        let _ = self.sender.send(proto::Event { inner: Some(inner) });
+        let _ = self.sender.send(proto::Event {
+            inner: Some(inner),
+            tags,
+        });
     }
 }
 
@@ -507,6 +511,7 @@ impl ChatIngest for Arc<Server> {
                                             .map(|source| source.into_relative(&id)),
                                         text: action.text,
                                     })),
+                                    tags: event.tags,
                                 });
                             }
                             ChatEventInner::PrivateAction(private_action) => {
@@ -519,6 +524,7 @@ impl ChatIngest for Arc<Server> {
                                             text: private_action.text,
                                         },
                                     )),
+                                    tags: event.tags,
                                 });
                             }
                             ChatEventInner::Message(msg) => {
@@ -527,6 +533,7 @@ impl ChatIngest for Arc<Server> {
                                         source: msg.source.map(|source| source.into_relative(&id)),
                                         text: msg.text,
                                     })),
+                                    tags: event.tags,
                                 });
                             }
                             ChatEventInner::PrivateMessage(private_msg) => {
@@ -539,6 +546,7 @@ impl ChatIngest for Arc<Server> {
                                             text: private_msg.text,
                                         },
                                     )),
+                                    tags: event.tags,
                                 });
                             }
                             ChatEventInner::Command(cmd_msg) => {
@@ -550,6 +558,7 @@ impl ChatIngest for Arc<Server> {
                                         command: cmd_msg.command,
                                         arg: cmd_msg.arg,
                                     })),
+                                    tags: event.tags,
                                 });
                             }
                             ChatEventInner::Mention(mention_msg) => {
@@ -560,6 +569,7 @@ impl ChatIngest for Arc<Server> {
                                             .map(|source| source.into_relative(&id)),
                                         text: mention_msg.text,
                                     })),
+                                    tags: event.tags,
                                 });
                             }
 
@@ -650,19 +660,21 @@ impl Seabird for Arc<Server> {
 
             loop {
                 match select(events.next(), &mut notifier).await {
-                    Either::Left((Some(Ok(event)), _)) => {
-                        sender.send(Ok(event)).await.map_err(|err| {
-                            Status::internal(format!("failed to send event: {}", err))
-                        })
-                    }
-                    Either::Left((Some(Err(err)), _)) => {
-                        Err(Status::internal(format!("failed to read internal event: {}", err)))
-                    }
+                    Either::Left((Some(Ok(event)), _)) => sender
+                        .send(Ok(event))
+                        .await
+                        .map_err(|err| Status::internal(format!("failed to send event: {}", err))),
+                    Either::Left((Some(Err(err)), _)) => Err(Status::internal(format!(
+                        "failed to read internal event: {}",
+                        err
+                    ))),
                     Either::Left((None, _)) => {
                         // Stream was closed by the server. In the future, maybe
                         // this could be used to notify client streams that
                         // seabird-core is restarting.
-                        Err(Status::internal("input stream ended unexpectedly".to_string()))
+                        Err(Status::internal(
+                            "input stream ended unexpectedly".to_string(),
+                        ))
                     }
                     Either::Right((_, _)) => {
                         // Stream was closed by the client - this is not actually an error.
@@ -687,13 +699,14 @@ impl Seabird for Arc<Server> {
             .map_err(|_| Status::invalid_argument("failed to parse channel_id"))?
             .into_inner();
 
-        self.broadcast(EventInner::SendMessage(proto::SendMessageEvent {
-            sender: username.to_string(),
-            inner: Some(proto::SendMessageRequest {
+        self.broadcast(
+            EventInner::SendMessage(proto::SendMessageEvent {
+                sender: username.to_string(),
                 channel_id: req.channel_id,
                 text: req.text.clone(),
             }),
-        }));
+            req.tags.clone(),
+        );
 
         let resp = self
             .issue_request(
@@ -701,6 +714,7 @@ impl Seabird for Arc<Server> {
                 proto::ChatRequestInner::SendMessage(proto::SendMessageChatRequest {
                     channel_id,
                     text: req.text,
+                    tags: req.tags,
                 }),
             )
             .await?;
@@ -724,15 +738,14 @@ impl Seabird for Arc<Server> {
             .map_err(|_| Status::invalid_argument("failed to parse user_id"))?
             .into_inner();
 
-        self.broadcast(EventInner::SendPrivateMessage(
-            proto::SendPrivateMessageEvent {
+        self.broadcast(
+            EventInner::SendPrivateMessage(proto::SendPrivateMessageEvent {
                 sender: username.to_string(),
-                inner: Some(proto::SendPrivateMessageRequest {
-                    user_id: req.user_id,
-                    text: req.text.clone(),
-                }),
-            },
-        ));
+                user_id: req.user_id,
+                text: req.text.clone(),
+            }),
+            req.tags.clone(),
+        );
 
         let resp = self
             .issue_request(
@@ -740,6 +753,7 @@ impl Seabird for Arc<Server> {
                 proto::ChatRequestInner::SendPrivateMessage(proto::SendPrivateMessageChatRequest {
                     user_id,
                     text: req.text,
+                    tags: req.tags,
                 }),
             )
             .await?;
@@ -763,13 +777,14 @@ impl Seabird for Arc<Server> {
             .map_err(|_| Status::invalid_argument("failed to parse channel_id"))?
             .into_inner();
 
-        self.broadcast(EventInner::PerformAction(proto::PerformActionEvent {
-            sender: username.to_string(),
-            inner: Some(proto::PerformActionRequest {
+        self.broadcast(
+            EventInner::PerformAction(proto::PerformActionEvent {
+                sender: username.to_string(),
                 channel_id: req.channel_id,
                 text: req.text.clone(),
             }),
-        }));
+            req.tags.clone(),
+        );
 
         let resp = self
             .issue_request(
@@ -777,6 +792,7 @@ impl Seabird for Arc<Server> {
                 proto::ChatRequestInner::PerformAction(proto::PerformActionChatRequest {
                     channel_id,
                     text: req.text,
+                    tags: req.tags,
                 }),
             )
             .await?;
@@ -800,15 +816,14 @@ impl Seabird for Arc<Server> {
             .map_err(|_| Status::invalid_argument("failed to parse user_id"))?
             .into_inner();
 
-        self.broadcast(EventInner::PerformPrivateAction(
-            proto::PerformPrivateActionEvent {
+        self.broadcast(
+            EventInner::PerformPrivateAction(proto::PerformPrivateActionEvent {
                 sender: username.to_string(),
-                inner: Some(proto::PerformPrivateActionRequest {
-                    user_id: req.user_id,
-                    text: req.text.clone(),
-                }),
-            },
-        ));
+                user_id: req.user_id,
+                text: req.text.clone(),
+            }),
+            req.tags.clone(),
+        );
 
         let resp = self
             .issue_request(
@@ -817,6 +832,7 @@ impl Seabird for Arc<Server> {
                     proto::PerformPrivateActionChatRequest {
                         user_id,
                         text: req.text,
+                        tags: req.tags,
                     },
                 ),
             )
@@ -844,6 +860,7 @@ impl Seabird for Arc<Server> {
                 backend_id,
                 proto::ChatRequestInner::JoinChannel(proto::JoinChannelChatRequest {
                     channel_name: req.channel_name,
+                    tags: req.tags,
                 }),
             )
             .await?;
@@ -873,6 +890,7 @@ impl Seabird for Arc<Server> {
                 backend_id,
                 proto::ChatRequestInner::LeaveChannel(proto::LeaveChannelChatRequest {
                     channel_id,
+                    tags: req.tags,
                 }),
             )
             .await?;
@@ -903,6 +921,7 @@ impl Seabird for Arc<Server> {
                 proto::ChatRequestInner::UpdateChannelInfo(proto::UpdateChannelInfoChatRequest {
                     channel_id,
                     topic: req.topic,
+                    tags: req.tags,
                 }),
             )
             .await?;

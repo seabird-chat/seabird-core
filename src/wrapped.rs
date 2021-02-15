@@ -70,26 +70,3 @@ impl<T> Drop for WrappedChannelReceiver<T> {
         }
     }
 }
-
-#[async_trait]
-pub trait GenericSender<T> {
-    async fn send_value(&mut self, value: T) -> Result<(), mpsc::error::SendError<T>>;
-}
-
-#[async_trait]
-impl<T> GenericSender<T> for mpsc::Sender<T> where
-T: Send{
-    async fn send_value(&mut self, value: T) -> Result<(), mpsc::error::SendError<T>> {
-        self.send(value).await
-    }
-}
-
-#[async_trait]
-impl<T> GenericSender<T> for WrappedChannelSender<T>
-where
-    T: Send,
-{
-    async fn send_value(&mut self, value: T) -> Result<(), mpsc::error::SendError<T>> {
-        self.send(value).await
-    }
-}

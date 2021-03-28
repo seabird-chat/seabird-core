@@ -4,145 +4,27 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use futures::future::{select, Either};
 use futures::StreamExt;
-use hyper::{Body, Request as HyperRequest, Response as HyperResponse};
 use tokio::sync::{broadcast, mpsc, oneshot, Mutex, RwLock};
-use tonic::{body::BoxBody, transport::NamedService, Request, Response};
-use tower::Service;
+use tonic::{Request, Response};
 
 use crate::prelude::*;
 
-use proto::seabird::seabird_server::{Seabird, SeabirdServer};
 use proto::{
     seabird::chat_ingest_server::{ChatIngest, ChatIngestServer},
+    seabird::seabird_server::{Seabird, SeabirdServer},
     ChatEventInner, EventInner,
 };
 
+mod auth;
+mod ingest_events;
+
+use auth::extract_auth_username;
+use ingest_events::IngestEventsHandle;
+
 // TODO: make these configurable using environment variables
-const CHAT_INGEST_SEND_BUFFER: usize = 10;
 const CHAT_INGEST_RECEIVE_BUFFER: usize = 10;
 const BROADCAST_BUFFER: usize = 32;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(1);
-
-const X_AUTH_USERNAME: &str = "x-auth-username";
-
-fn extract_auth_username<T>(req: &Request<T>) -> RpcResult<String> {
-    Ok(req
-        .metadata()
-        .get(X_AUTH_USERNAME)
-        .ok_or_else(|| Status::internal("missing auth username"))?
-        .to_str()
-        .map_err(|_| Status::internal("failed to decode auth username"))?
-        .to_string())
-}
-
-// AuthedService is a frustratingly necessary evil because there is no async
-// tonic::Interceptor. This means we can't .await on the RwLock protecting
-// server.tokens. We get around this by implementing a middleware which pulls
-// the request header out (since the http2 headers map to gRPC request metadata
-// directly) to check it before we even get into the gRPC/Tonic code.
-#[derive(Debug, Clone)]
-struct AuthedService<S> {
-    server: Arc<Server>,
-    inner: S,
-}
-
-impl<S> Service<HyperRequest<Body>> for AuthedService<S>
-where
-    S: Service<HyperRequest<Body>, Response = HyperResponse<BoxBody>>
-        + NamedService
-        + Clone
-        + Send
-        + 'static,
-    S::Future: Send + 'static,
-{
-    type Response = S::Response;
-    type Error = S::Error;
-    type Future = futures::future::BoxFuture<'static, Result<Self::Response, Self::Error>>;
-
-    fn poll_ready(
-        &mut self,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx)
-    }
-
-    fn call(&mut self, req: HyperRequest<Body>) -> Self::Future {
-        let mut svc = self.inner.clone();
-        let server = self.server.clone();
-
-        Box::pin(async move {
-            let (mut req, username): (HyperRequest<Body>, tonic::codegen::http::HeaderValue) =
-                match req.headers().get("authorization") {
-                    Some(token) => {
-                        let token = match token.to_str() {
-                            Ok(token) => token,
-                            Err(_) => {
-                                return Ok(Status::unauthenticated("invalid token data").to_http())
-                            }
-                        };
-
-                        let mut split = token.splitn(2, ' ');
-                        match (split.next(), split.next()) {
-                            (Some("Bearer"), Some(token)) => {
-                                let tokens = server.tokens.read().await;
-                                match tokens.get(token) {
-                                    Some(maybe_username) => match maybe_username.parse() {
-                                        Ok(username) => (req, username),
-                                        Err(_) => {
-                                            return Ok(Status::internal(
-                                                "invalid auth token username",
-                                            )
-                                            .to_http())
-                                        }
-                                    },
-                                    None => {
-                                        return Ok(
-                                            Status::unauthenticated("invalid auth token").to_http()
-                                        )
-                                    }
-                                }
-                            }
-                            (Some("Bearer"), None) => {
-                                return Ok(Status::unauthenticated("missing auth token").to_http())
-                            }
-                            (Some(_), _) => {
-                                return Ok(Status::unauthenticated("unknown auth method").to_http())
-                            }
-                            (None, _) => {
-                                return Ok(Status::unauthenticated("missing auth method").to_http())
-                            }
-                        }
-                    }
-                    None => {
-                        return Ok(Status::unauthenticated("missing authorization header").to_http())
-                    }
-                };
-
-            let username_str = match username.to_str() {
-                Ok(username) => username,
-                Err(_) => return Ok(Status::internal("failed to parse tag").to_http()),
-            };
-
-            info!(
-                "Authenticated request by user {}: {}",
-                username_str,
-                req.uri()
-            );
-
-            req.headers_mut().insert(X_AUTH_USERNAME, username);
-
-            let resp = svc.call(req).await?;
-
-            info!("Sending response: {:?}", resp.headers());
-
-            Ok(resp)
-        })
-    }
-}
-
-impl<S: NamedService> NamedService for AuthedService<S> {
-    const NAME: &'static str = S::NAME;
-}
 
 #[derive(Debug)]
 struct ChatBackendHandle {
@@ -210,7 +92,7 @@ struct ChatRequest {
 }
 
 #[derive(Debug)]
-enum CleanupRequest {
+pub enum CleanupRequest {
     Request(String),
     Backend(BackendId),
     Commands(Vec<String>),
@@ -402,15 +284,10 @@ impl Server {
     async fn run_grpc_server(self: &Arc<Self>) -> Result<()> {
         let addr = self.bind_host.parse()?;
 
-        let chat_ingest = AuthedService {
-            server: self.clone(),
-            inner: ChatIngestServer::new(self.clone()),
-        };
+        let chat_ingest =
+            auth::AuthedService::new(self.clone(), ChatIngestServer::new(self.clone()));
 
-        let seabird = AuthedService {
-            server: self.clone(),
-            inner: SeabirdServer::new(self.clone()),
-        };
+        let seabird = auth::AuthedService::new(self.clone(), SeabirdServer::new(self.clone()));
 
         tonic::transport::Server::builder()
             .add_service(seabird)
@@ -435,188 +312,19 @@ impl Server {
 
 #[async_trait]
 impl ChatIngest for Arc<Server> {
-    type IngestEventsStream = mpsc::Receiver<RpcResult<proto::ChatRequest>>;
+    type IngestEventsStream = IngestEventsHandle;
 
     async fn ingest_events(
         &self,
         request: Request<tonic::Streaming<proto::ChatEvent>>,
     ) -> RpcResult<Response<Self::IngestEventsStream>> {
-        let mut input_stream = request.into_inner();
-        let (mut sender, receiver) = mpsc::channel(CHAT_INGEST_SEND_BUFFER);
+        let input_stream = request.into_inner();
         let server = self.clone();
 
-        // Spawn a task to handle the stream
-        crate::spawn(sender.clone(), async move {
-            let hello = {
-                // TODO: send to the stream and print
-                let first_message = input_stream
-                    .message()
-                    .await?
-                    .ok_or_else(|| Status::invalid_argument("missing hello message"))?;
-
-                match first_message.inner {
-                    Some(ChatEventInner::Hello(hello)) => hello,
-                    Some(_) => {
-                        return Err(Status::invalid_argument(
-                            "hello message inner is wrong type",
-                        ))
-                    }
-                    None => return Err(Status::invalid_argument("missing hello message inner")),
-                }
-            };
-
-            let backend_info = hello
-                .backend_info
-                .ok_or_else(|| Status::invalid_argument("missing backend_info inner"))?;
-
-            let id = BackendId::new(backend_info.r#type, backend_info.id);
-
-            let (mut backend_handle, backend) = server.register_backend(&id).await?;
-
-            loop {
-                match select(backend_handle.receiver.next(), input_stream.next()).await {
-                    Either::Left((Some(req), _)) => {
-                        debug!("got request: {:?}", req);
-
-                        sender.send(Ok(req)).await.map_err(|err| {
-                            Status::internal(format!("failed to send event to backend: {:?}", err))
-                        })?;
-                    }
-                    Either::Right((Some(event), _)) => {
-                        let event = event?;
-
-                        debug!("got event: {:?}", event);
-
-                        let inner = event
-                            .inner
-                            .ok_or_else(|| Status::internal("missing inner event"))?;
-
-                        if event.id != "" {
-                            server.respond(&event.id, inner.clone()).await;
-                        }
-
-                        match inner {
-                            // These are only used for responding to
-                            // requests, so we ignore them here because they
-                            // don't need to be handled specially.
-                            ChatEventInner::Success(_) => {}
-                            ChatEventInner::Failed(_) => {}
-                            ChatEventInner::Metadata(_) => {}
-
-                            ChatEventInner::Action(action) => {
-                                let _ = backend_handle.sender.send(proto::Event {
-                                    inner: Some(EventInner::Action(proto::ActionEvent {
-                                        source: action
-                                            .source
-                                            .map(|source| source.into_relative(&id)),
-                                        text: action.text,
-                                    })),
-                                    tags: event.tags,
-                                });
-                            }
-                            ChatEventInner::PrivateAction(private_action) => {
-                                let _ = backend_handle.sender.send(proto::Event {
-                                    inner: Some(EventInner::PrivateAction(
-                                        proto::PrivateActionEvent {
-                                            source: private_action
-                                                .source
-                                                .map(|source| source.into_relative(&id)),
-                                            text: private_action.text,
-                                        },
-                                    )),
-                                    tags: event.tags,
-                                });
-                            }
-                            ChatEventInner::Message(msg) => {
-                                let _ = backend_handle.sender.send(proto::Event {
-                                    inner: Some(EventInner::Message(proto::MessageEvent {
-                                        source: msg.source.map(|source| source.into_relative(&id)),
-                                        text: msg.text,
-                                    })),
-                                    tags: event.tags,
-                                });
-                            }
-                            ChatEventInner::PrivateMessage(private_msg) => {
-                                let _ = backend_handle.sender.send(proto::Event {
-                                    inner: Some(EventInner::PrivateMessage(
-                                        proto::PrivateMessageEvent {
-                                            source: private_msg
-                                                .source
-                                                .map(|user| user.into_relative(&id)),
-                                            text: private_msg.text,
-                                        },
-                                    )),
-                                    tags: event.tags,
-                                });
-                            }
-                            ChatEventInner::Command(cmd_msg) => {
-                                let _ = backend_handle.sender.send(proto::Event {
-                                    inner: Some(EventInner::Command(proto::CommandEvent {
-                                        source: cmd_msg
-                                            .source
-                                            .map(|source| source.into_relative(&id)),
-                                        command: cmd_msg.command,
-                                        arg: cmd_msg.arg,
-                                    })),
-                                    tags: event.tags,
-                                });
-                            }
-                            ChatEventInner::Mention(mention_msg) => {
-                                let _ = backend_handle.sender.send(proto::Event {
-                                    inner: Some(EventInner::Mention(proto::MentionEvent {
-                                        source: mention_msg
-                                            .source
-                                            .map(|source| source.into_relative(&id)),
-                                        text: mention_msg.text,
-                                    })),
-                                    tags: event.tags,
-                                });
-                            }
-
-                            ChatEventInner::JoinChannel(join) => {
-                                let mut channels = backend.channels.write().await;
-
-                                channels.insert(
-                                    join.channel_id.clone(),
-                                    proto::Channel {
-                                        id: join.channel_id,
-                                        display_name: join.display_name,
-                                        topic: join.topic,
-                                    },
-                                );
-                            }
-                            ChatEventInner::LeaveChannel(leave) => {
-                                let mut channels = backend.channels.write().await;
-
-                                channels.remove(&leave.channel_id);
-                            }
-                            ChatEventInner::ChangeChannel(change) => {
-                                let mut channels = backend.channels.write().await;
-
-                                if let Some(channel) = channels.get_mut(&change.channel_id) {
-                                    channel.display_name = change.display_name;
-                                    channel.topic = change.topic;
-                                }
-                            }
-
-                            // If a hello comes through, this client has broken
-                            // the protocol contract, so we kill the connection.
-                            ChatEventInner::Hello(_) => {
-                                return Err(Status::invalid_argument("unexpected chat event type"))
-                            }
-                        }
-                    }
-                    Either::Left((None, _)) => {
-                        return Err(Status::internal("internal request stream ended"))
-                    }
-                    Either::Right((None, _)) => {
-                        return Err(Status::internal("chat event stream ended"))
-                    }
-                };
-            }
-        });
-
-        Ok(tonic::Response::new(receiver))
+        Ok(tonic::Response::new(IngestEventsHandle::new(
+            server,
+            input_stream,
+        )))
     }
 }
 
@@ -645,14 +353,15 @@ impl Seabird for Arc<Server> {
             commands.insert(name, metadata);
         }
 
-        let (mut sender, receiver, mut notifier) = crate::wrapped::channel(CHAT_INGEST_SEND_BUFFER);
+        let (mut sender, receiver, mut notifier) =
+            crate::wrapped::channel(CHAT_INGEST_RECEIVE_BUFFER);
 
         let mut events = self.sender.subscribe();
 
         let cleanup_sender = self.cleanup_sender.clone();
 
         // Spawn a task to handle the stream
-        crate::spawn(sender.clone(), async move {
+        crate::spawn(async move {
             let _handle = CommandsHandle {
                 commands: to_cleanup,
                 cleanup: cleanup_sender,
@@ -678,7 +387,7 @@ impl Seabird for Arc<Server> {
                     }
                     Either::Right((_, _)) => {
                         // Stream was closed by the client - this is not actually an error.
-                        Ok(())
+                        return Ok(());
                     }
                 }?;
             }

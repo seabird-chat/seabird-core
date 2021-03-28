@@ -11,16 +11,14 @@ mod server;
 mod wrapped;
 
 use crate::prelude::*;
-use wrapped::GenericSender;
 
 pub mod error {
     pub use anyhow::{Error, Result};
     pub type RpcResult<T> = std::result::Result<T, tonic::Status>;
 }
 
-pub fn spawn<S, T, V>(mut sender: S, task: T)
+pub fn spawn<T, V>(task: T)
 where
-    S: GenericSender<T::Output> + Send + 'static,
     T: futures::Future<Output = RpcResult<V>> + Send + 'static,
     T::Output: Send + 'static,
     V: Send + 'static,
@@ -28,7 +26,6 @@ where
     tokio::spawn(async move {
         if let Err(err) = task.await {
             error!("error when running stream: {}", err);
-            let _ = sender.send_value(Err(err)).await;
         }
     });
 }

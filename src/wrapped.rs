@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use tokio::stream::Stream;
 use tokio::sync::{mpsc, oneshot};
 

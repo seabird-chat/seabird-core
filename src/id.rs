@@ -14,7 +14,7 @@ impl FullId {
     }
 
     pub fn into_inner(self) -> (BackendId, String) {
-        return (self.backend, self.path);
+        (self.backend, self.path)
     }
 }
 
@@ -81,7 +81,7 @@ impl FromStr for FullId {
 
         match (split.next(), split.next()) {
             (Some(scheme), Some(id)) => {
-                let mut split = id.splitn(2, "/");
+                let mut split = id.splitn(2, '/');
 
                 match (split.next(), split.next()) {
                     (Some(id), Some(rel)) => Ok(FullId::new(

@@ -1,10 +1,11 @@
 use futures::future::{select, Either};
+use futures::StreamExt;
 use tokio::sync::mpsc;
+use tonic::{Request, Response};
 
 use crate::prelude::*;
-use crate::proto::{ChatEventInner, EventInner};
 
-const CHAT_INGEST_SEND_BUFFER: usize = 10;
+use proto::{seabird::chat_ingest_server::ChatIngest, ChatEventInner, EventInner};
 
 pub struct IngestEvents {
     id: BackendId,
@@ -41,7 +42,7 @@ impl IngestEvents {
             .inner
             .ok_or_else(|| Status::internal("missing inner event"))?;
 
-        if event.id != "" {
+        if !event.id.is_empty() {
             self.server.respond(&event.id, inner.clone()).await;
         }
 
@@ -188,7 +189,7 @@ impl IngestEventsHandle {
         server: Arc<super::Server>,
         mut input_stream: tonic::Streaming<proto::ChatEvent>,
     ) -> IngestEventsHandle {
-        let (sender, receiver) = mpsc::channel(CHAT_INGEST_SEND_BUFFER);
+        let (sender, receiver) = mpsc::channel(super::CHAT_INGEST_SEND_BUFFER);
 
         crate::spawn(async move {
             let hello = {
@@ -231,5 +232,23 @@ impl futures::Stream for IngestEventsHandle {
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Option<Self::Item>> {
         self.receiver.poll_recv(cx)
+    }
+}
+
+#[async_trait]
+impl ChatIngest for Arc<super::Server> {
+    type IngestEventsStream = IngestEventsHandle;
+
+    async fn ingest_events(
+        &self,
+        request: Request<tonic::Streaming<proto::ChatEvent>>,
+    ) -> RpcResult<Response<Self::IngestEventsStream>> {
+        let input_stream = request.into_inner();
+        let server = self.clone();
+
+        Ok(tonic::Response::new(IngestEventsHandle::new(
+            server,
+            input_stream,
+        )))
     }
 }

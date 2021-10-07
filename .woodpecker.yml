@@ -7,14 +7,16 @@ pipeline:
 
   publish_latest:
     image: plugins/docker
-    repo: seabirdchat/seabird-core:latest
+    repo: seabirdchat/seabird-core
+    tags: latest
     secrets: [ docker_username, docker_password ]
     when:
       branch: main
 
   publish_next:
     image: plugins/docker
-    repo: seabirdchat/seabird-core:next
+    repo: seabirdchat/seabird-core
+    tags: next
     secrets: [ docker_username, docker_password ]
     when:
       branch: develop

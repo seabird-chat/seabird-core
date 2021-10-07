@@ -4,6 +4,10 @@ version = "0.1.0"
 authors = ["Kaleb Elwert <belak@coded.io>"]
 edition = "2018"
 
+[features]
+default = ["rustfmt"]
+rustfmt = ["tonic-build/rustfmt"]
+
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1"
@@ -22,4 +26,4 @@ tokio = { version = "0.2", features = ["dns", "fs", "io-util", "macros", "rt-cor
 uuid = { version = "0.8", features = ["v4"] }
 
 [build-dependencies]
-tonic-build = { version = "0.2", features = ["prost"] }
+tonic-build = { version = "0.2", default-features = false, features = ["prost"] }

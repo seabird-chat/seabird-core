@@ -133,7 +133,8 @@ impl Server {
     }
 
     pub async fn run(self: &Arc<Self>) -> Result<()> {
-        futures::future::try_join(self.clone().run_grpc_server(), self.cleanup_task()).await?;
+        let server = self.clone();
+        tokio::try_join!(server.run_grpc_server(), self.cleanup_task())?;
         Ok(())
     }
 }

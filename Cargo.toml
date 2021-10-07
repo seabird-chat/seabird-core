@@ -12,7 +12,6 @@ rustfmt = ["tonic-build/rustfmt"]
 anyhow = "1.0"
 async-trait = "0.1"
 dotenv = "0.15"
-futures = "0.3"
 hyper = "0.14"
 log = "0.4"
 percent-encoding = "2.1"

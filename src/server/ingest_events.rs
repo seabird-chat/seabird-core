@@ -222,7 +222,7 @@ impl IngestEventsHandle {
     }
 }
 
-impl futures::Stream for IngestEventsHandle {
+impl tokio_stream::Stream for IngestEventsHandle {
     type Item = RpcResult<proto::ChatRequest>;
 
     fn poll_next(

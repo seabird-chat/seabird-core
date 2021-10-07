@@ -19,7 +19,7 @@ pub mod error {
 
 pub fn spawn<T, V>(task: T)
 where
-    T: futures::Future<Output = RpcResult<V>> + Send + 'static,
+    T: std::future::Future<Output = RpcResult<V>> + Send + 'static,
     T::Output: Send + 'static,
     V: Send + 'static,
 {

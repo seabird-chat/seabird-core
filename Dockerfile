@@ -1,4 +1,4 @@
-FROM rust:1.43 as builder
+FROM rust:1.55 as builder
 WORKDIR /usr/src/seabird-core
 
 # NOTE: tonic_build uses rustfmt to properly format the output files and give
@@ -21,7 +21,6 @@ RUN touch src/main.rs && cargo build --release && cp -v target/release/seabird-c
 # Create a new base and copy in only what we need.
 FROM debian:buster-slim
 ENV RUST_LOG=info
-RUN apt-get update && apt-get install -y libssl1.1 ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /usr/local/bin/seabird-core /usr/local/bin/seabird-core
 EXPOSE 11235
 CMD ["seabird-core"]

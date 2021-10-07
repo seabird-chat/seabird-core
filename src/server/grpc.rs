@@ -1,7 +1,7 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use futures::future::{select, Either};
-use futures::StreamExt;
+use tokio::select;
+use tokio::sync::broadcast::error::RecvError;
 use tonic::{Request, Response};
 
 use crate::prelude::*;
@@ -43,35 +43,30 @@ impl Seabird for Arc<super::Server> {
         let cleanup_sender = self.cleanup_sender.clone();
 
         // Spawn a task to handle the stream
-        crate::spawn(async move {
+        crate::spawn::<_, ()>(async move {
             let _handle = super::CommandsHandle {
                 commands: to_cleanup,
                 cleanup: cleanup_sender,
             };
 
             loop {
-                match select(events.next(), &mut notifier).await {
-                    Either::Left((Some(Ok(event)), _)) => sender
-                        .send(Ok(event))
-                        .await
-                        .map_err(|err| Status::internal(format!("failed to send event: {}", err))),
-                    Either::Left((Some(Err(err)), _)) => Err(Status::internal(format!(
-                        "failed to read internal event: {}",
-                        err
-                    ))),
-                    Either::Left((None, _)) => {
-                        // Stream was closed by the server. In the future, maybe
-                        // this could be used to notify client streams that
-                        // seabird-core is restarting.
-                        Err(Status::internal(
+                let res: Result<(), Status> = select! {
+                    event = events.recv() => match event {
+                        Ok(event) => sender
+                            .send(Ok(event))
+                            .await
+                            .map_err(|err| Status::internal(format!("failed to send event: {}", err))),
+                        Err(RecvError::Closed) => Err(Status::internal(
                             "input stream ended unexpectedly".to_string(),
-                        ))
-                    }
-                    Either::Right((_, _)) => {
-                        // Stream was closed by the client - this is not actually an error.
-                        return Ok(());
-                    }
-                }?;
+                        )),
+                        Err(RecvError::Lagged(_)) => Err(Status::internal(
+                            "stream lagged behind".to_string(),
+                        )),
+                    },
+                    // Stream was closed by the client - this is not actually an error.
+                    _ = &mut notifier => Ok(()),
+                };
+                res?;
             }
         });
 

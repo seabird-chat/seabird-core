@@ -1,6 +1,5 @@
-use futures::future::{select, Either};
-use futures::StreamExt;
 use tokio::sync::mpsc;
+use tokio::select;
 use tonic::{Request, Response};
 
 use crate::prelude::*;
@@ -152,29 +151,28 @@ impl IngestEvents {
 
     async fn run(mut self) -> RpcResult<()> {
         loop {
-            match select(
-                self.backend_handle.receiver.next(),
-                self.input_stream.next(),
-            )
-            .await
-            {
-                Either::Left((Some(req), _)) => {
-                    debug!("got request: {:?}", req);
+            select! {
+                req = self.backend_handle.receiver.recv() => match req {
+                    Some(req) => {
+                        debug!("got request: {:?}", req);
 
-                    self.request_sender.send(Ok(req)).await.map_err(|err| {
-                        Status::internal(format!("failed to send request to backend: {:?}", err))
-                    })?;
-                }
-                Either::Right((Some(event), _)) => {
-                    let event = event?;
-                    self.handle_event(event).await?;
-                }
-                Either::Left((None, _)) => {
-                    return Err(Status::internal("internal request stream ended"))
-                }
-                Either::Right((None, _)) => {
-                    return Err(Status::internal("chat event stream ended"))
-                }
+                        self.request_sender.send(Ok(req)).await.map_err(|err| {
+                            Status::internal(format!("failed to send request to backend: {:?}", err))
+                        })?;
+                    }
+                    None => {
+                        return Err(Status::internal("internal request stream ended"));
+                    }
+                },
+                event = self.input_stream.next() => match event {
+                    Some(event) => {
+                        let event = event?;
+                        self.handle_event(event).await?;
+                    },
+                    None => {
+                        return Err(Status::internal("chat event stream ended"));
+                    },
+                },
             };
         }
     }

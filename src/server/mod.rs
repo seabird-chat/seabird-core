@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use futures::StreamExt;
 use tokio::sync::{broadcast, mpsc, oneshot, Mutex, RwLock};
 
 use crate::prelude::*;
@@ -144,7 +143,7 @@ impl Server {
         let mut cleanup_receiver = self.cleanup_receiver.try_lock()?;
 
         loop {
-            match cleanup_receiver.next().await {
+            match cleanup_receiver.recv().await {
                 Some(CleanupRequest::Backend(backend_id)) => {
                     debug!("cleaning backend {}", backend_id);
                     let mut backends = self.backends.write().await;

@@ -43,6 +43,13 @@ jobs:
         uses: docker/metadata-action@v4
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # This will result in the latest tagged version being released as
+          # vX.Y.Z, vX.Y, and latest. The most recent commit on main will also
+          # be tagged as edge.
+          tags: |
+            type=edge,branch=main
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
 
       - name: Build and push Docker image
         id: build-and-push

@@ -1,5 +1,4 @@
 FROM rust:1.68-bullseye as builder
-WORKDIR /usr/src/seabird-core
 
 RUN apt-get update && apt-get install -y protobuf-compiler && rm -rf /var/lib/apt/lists/*
 
@@ -20,6 +19,7 @@ RUN touch src/main.rs && cargo build --release && cp -v target/release/seabird-c
 FROM debian:bullseye-slim
 ENV RUST_LOG=info
 RUN apt-get update && apt-get install -y libssl1.1 ca-certificates && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /usr/local/bin/seabird-core /usr/local/bin/seabird-core
+COPY entrypoint.sh /usr/local/bin/seabird-entrypoint.sh
+COPY --from=builder /usr/local/bin/seabird-* /usr/local/bin/
 EXPOSE 11235
-CMD ["seabird-core"]
+CMD ["seabird-entrypoint.sh"]

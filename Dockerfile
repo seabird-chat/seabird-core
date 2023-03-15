@@ -19,7 +19,7 @@ COPY . .
 
 # We need to make sure the update time on main.rs is newer than the temporary
 # file or there are weird cargo caching issues we run into.
-RUN touch src/main.rs && cargo build --release && cp -v target/release/seabird-core /usr/local/bin
+RUN touch src/main.rs && cargo build --release && cp -v target/release/seabird-* /usr/local/bin
 
 # Create a new base and copy in only what we need.
 FROM debian:bullseye-slim

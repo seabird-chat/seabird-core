@@ -1,4 +1,5 @@
 FROM rust:1.68-bullseye as builder
+WORKDIR /usr/src/app
 
 RUN apt-get update && apt-get install -y protobuf-compiler && rm -rf /var/lib/apt/lists/*
 

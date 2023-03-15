@@ -4,6 +4,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use futures::StreamExt;
 use tokio::sync::{broadcast, mpsc, oneshot, Mutex, RwLock};
+use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::prelude::*;
 
@@ -25,7 +27,7 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(1);
 #[derive(Debug)]
 struct ChatBackendHandle {
     id: BackendId,
-    receiver: mpsc::Receiver<proto::ChatRequest>,
+    receiver: ReceiverStream<proto::ChatRequest>,
     sender: broadcast::Sender<proto::Event>,
     cleanup: mpsc::UnboundedSender<CleanupRequest>,
 }
@@ -104,7 +106,7 @@ pub struct Server {
     tokens: RwLock<BTreeMap<String, String>>,
     commands: Arc<RwLock<BTreeMap<String, proto::CommandMetadata>>>,
 
-    cleanup_receiver: Mutex<mpsc::UnboundedReceiver<CleanupRequest>>,
+    cleanup_receiver: Mutex<UnboundedReceiverStream<CleanupRequest>>,
     cleanup_sender: mpsc::UnboundedSender<CleanupRequest>,
 }
 
@@ -123,7 +125,7 @@ impl Server {
             backends: RwLock::new(BTreeMap::new()),
             tokens: RwLock::new(BTreeMap::new()),
             commands: Arc::new(RwLock::new(BTreeMap::new())),
-            cleanup_receiver: Mutex::new(cleanup_receiver),
+            cleanup_receiver: Mutex::new(UnboundedReceiverStream::new(cleanup_receiver)),
             cleanup_sender,
         }))
     }
@@ -189,7 +191,7 @@ impl Server {
 
         let handle = ChatBackendHandle {
             id: id.clone(),
-            receiver,
+            receiver: ReceiverStream::new(receiver),
             sender: self.sender.clone(),
             cleanup: self.cleanup_sender.clone(),
         };

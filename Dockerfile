@@ -1,4 +1,4 @@
-FROM rust:1.43 as builder
+FROM rust:1.68 as builder
 WORKDIR /usr/src/seabird-core
 
 # NOTE: tonic_build uses rustfmt to properly format the output files and give

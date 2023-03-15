@@ -2,6 +2,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use futures::future::{select, Either};
 use futures::StreamExt;
+use tokio_stream::wrappers::BroadcastStream;
 use tonic::{Request, Response};
 
 use crate::prelude::*;
@@ -38,7 +39,7 @@ impl Seabird for Arc<super::Server> {
         let (mut sender, receiver, mut notifier) =
             crate::wrapped::channel(super::CHAT_INGEST_RECEIVE_BUFFER);
 
-        let mut events = self.sender.subscribe();
+        let mut events = BroadcastStream::new(self.sender.subscribe());
 
         let cleanup_sender = self.cleanup_sender.clone();
 

@@ -23,4 +23,4 @@ RUN apt-get update && apt-get install -y libssl1.1 ca-certificates && rm -rf /va
 COPY entrypoint.sh /usr/local/bin/seabird-entrypoint.sh
 COPY --from=builder /usr/local/bin/seabird-* /usr/local/bin/
 EXPOSE 11235
-CMD ["seabird-entrypoint.sh"]
+CMD ["/usr/local/bin/seabird-entrypoint.sh"]

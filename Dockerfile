@@ -1,9 +1,7 @@
-FROM rust:1.68 as builder
+FROM rust:1.68-bullseye as builder
 WORKDIR /usr/src/seabird-core
 
-# NOTE: tonic_build uses rustfmt to properly format the output files and give
-# better errors.
-RUN rustup component add rustfmt
+RUN apt-get update && apt-get install -y protobuf-compiler && rm -rf /var/lib/apt/lists/*
 
 # Copy over only the files which specify dependencies
 COPY ./Cargo.toml ./Cargo.lock ./
@@ -19,7 +17,7 @@ COPY . .
 RUN touch src/main.rs && cargo build --release && cp -v target/release/seabird-core /usr/local/bin
 
 # Create a new base and copy in only what we need.
-FROM debian:buster-slim
+FROM debian:bullseye-slim
 ENV RUST_LOG=info
 RUN apt-get update && apt-get install -y libssl1.1 ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /usr/local/bin/seabird-core /usr/local/bin/seabird-core

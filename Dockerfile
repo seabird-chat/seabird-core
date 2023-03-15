@@ -1,6 +1,11 @@
 FROM rust:1.68-bullseye as builder
 WORKDIR /usr/src/app
 
+# Workaround to allow arm64 builds to work properly
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+
+# We currently use protoc rather than relying on the protobuf-sys package
+# because it greatly cuts down on build times. This may change in the future.
 RUN apt-get update && apt-get install -y protobuf-compiler && rm -rf /var/lib/apt/lists/*
 
 # Copy over only the files which specify dependencies

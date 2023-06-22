@@ -10,6 +10,10 @@ backend and some sort of plugin in order for anything visible to happen.
 The server is implemented in Rust and uses `tonic` for a gRPC server
 implementation.
 
+## Requirements
+
+- Rust 1.70
+
 ## Building
 
 The easiest way to build and deploy `seabird-core` is to use the [official
@@ -29,7 +33,7 @@ cargo run
 ```
 
 Note that because this generates code based on the protobufs, you may need to run
-`git submodule update --init` to make sure they are up to date. 
+`git submodule update --init` to make sure they are up to date.
 
 ## Configuring
 

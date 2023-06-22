@@ -64,11 +64,19 @@ async fn main() -> Result<()> {
         std::env::set_var("RUST_LOG", "info,seabird::server=trace");
     }
 
-    // Now that everything is set up, load up the logger.
+    // Now that everything is set up, load up the logger. We assume that if
+    // there is no tty on stdout, it's in production mode, and thus we configure
+    // it in json mode, otherwise, we make it look better for development.
     if !stdout().is_terminal() {
         tracing_subscriber::fmt().json().init();
     } else {
-        tracing_subscriber::fmt().init();
+        tracing_subscriber::fmt()
+            .compact()
+            .with_file(true)
+            .with_line_number(true)
+            .with_thread_ids(true)
+            .with_target(false)
+            .init();
     }
 
     match env_res {

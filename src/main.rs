@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::io::{stdout, IsTerminal};
 
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
@@ -63,9 +64,12 @@ async fn main() -> Result<()> {
         std::env::set_var("RUST_LOG", "info,seabird::server=trace");
     }
 
-    // Now that everything is set up, load up the logger and configure it to
-    // include timestamps.
-    pretty_env_logger::init_timed();
+    // Now that everything is set up, load up the logger.
+    if !stdout().is_terminal() {
+        tracing_subscriber::fmt().json().init();
+    } else {
+        tracing_subscriber::fmt().init();
+    }
 
     match env_res {
         Ok(path) => info!("Loaded env from {:?}", path),

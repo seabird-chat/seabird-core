@@ -2,7 +2,7 @@ pub use std::sync::Arc;
 
 pub use anyhow::{format_err, Context};
 pub use futures::{FutureExt, StreamExt};
-pub use log::{debug, error, info, warn};
+pub use tracing::{debug, error, info, warn};
 pub use tonic::{async_trait, Code, Status};
 
 pub use crate::error::{Result, RpcResult};

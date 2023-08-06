@@ -5,6 +5,7 @@ use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 use tokio::signal::unix::{signal, SignalKind};
 
+mod db;
 mod id;
 mod prelude;
 pub mod proto;

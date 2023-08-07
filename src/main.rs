@@ -57,7 +57,7 @@ async fn read_tokens(filename: &str) -> Result<BTreeMap<String, String>> {
 #[tokio::main]
 async fn main() -> Result<()> {
     // Try to load dotenv before loading the logger or trying to set defaults.
-    let env_res = dotenv::dotenv();
+    let env_res = dotenvy::dotenv();
 
     // There's a little bit of an oddity here, since we want to set it if it
     // hasn't already been set, but we want this done before the logger is loaded.
@@ -85,7 +85,7 @@ async fn main() -> Result<()> {
 
         // If the .env file doesn't exist, that's fine. All other errors are
         // actually an issue.
-        Err(dotenv::Error::Io(io_err)) if io_err.kind() == std::io::ErrorKind::NotFound => {}
+        Err(dotenvy::Error::Io(io_err)) if io_err.kind() == std::io::ErrorKind::NotFound => {}
         Err(_) => {
             env_res?;
         }
@@ -95,7 +95,7 @@ async fn main() -> Result<()> {
         std::env::var("SEABIRD_BIND_HOST").unwrap_or_else(|_| "0.0.0.0:11235".to_string()),
     )?;
 
-    let token_file = dotenv::var("SEABIRD_TOKEN_FILE")
+    let token_file = std::env::var("SEABIRD_TOKEN_FILE")
         .context("Missing $SEABIRD_TOKEN_FILE. You must specify a token file for the bot.")?;
 
     // Read in the tokens so the server can have them set initially without

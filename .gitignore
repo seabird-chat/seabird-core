@@ -1,6 +1,6 @@
 *.pb.go
 .env
-*.json
+*.db
 
 /.vscode
 /target

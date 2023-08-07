@@ -29,9 +29,16 @@
               })
               pkgs.rust-analyzer
               pkgs.sqlx-cli
+              pkgs.sqlite
             ];
 
             RUST_BACKTRACE = 1;
+
+            # We set the DATABASE_URL in a shell hook so we can reference the
+            # project directory, not a directory in the nix store.
+            shellHook = ''
+              export DATABASE_URL="sqlite://$(git rev-parse --show-toplevel)/seabird.db"
+            '';
           };
         }
       );

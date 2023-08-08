@@ -1,7 +1,6 @@
 use crate::prelude::*;
 
 use hyper::{Body, Request as HyperRequest, Response as HyperResponse};
-use sqlx::SqlitePool;
 use tonic::{body::BoxBody, transport::NamedService, Request};
 use tower::Service;
 
@@ -24,12 +23,12 @@ pub fn extract_auth_username<T>(req: &Request<T>) -> RpcResult<String> {
 // metadata directly) to check it before we even get into the gRPC/Tonic code.
 #[derive(Debug, Clone)]
 pub struct AuthedService<S> {
-    db: SqlitePool,
+    db: Arc<crate::db::DB>,
     inner: S,
 }
 
-impl<S> AuthedService<S> {
-    pub fn new(db: SqlitePool, inner: S) -> Self {
+impl<'a, S> AuthedService<S> {
+    pub fn new(db: Arc<crate::db::DB>, inner: S) -> Self {
         AuthedService { db, inner }
     }
 }
@@ -56,7 +55,7 @@ where
 
     fn call(&mut self, req: HyperRequest<Body>) -> Self::Future {
         let mut svc = self.inner.clone();
-        let db_pool = self.db.clone();
+        let db = self.db.clone();
 
         Box::pin(async move {
             let (mut req, username): (HyperRequest<Body>, tonic::codegen::http::HeaderValue) =
@@ -71,31 +70,22 @@ where
 
                         let mut split = token.splitn(2, ' ');
                         match (split.next(), split.next()) {
-                            (Some("Bearer"), Some(token)) => {
-                                match sqlx::query_as!(
-                                    crate::db::AuthToken,
-                                    "SELECT * FROM seabird_auth_tokens WHERE key = ? LIMIT 1",
-                                    token,
-                                )
-                                .fetch_optional(&db_pool)
-                                .await
-                                {
-                                    Ok(Some(row)) => match row.name.parse() {
-                                        Ok(name) => (req, name),
-                                        _ => {
-                                            return Ok(Status::unauthenticated(
-                                                "invalid auth token username",
-                                            )
-                                            .to_http())
-                                        }
-                                    },
+                            (Some("Bearer"), Some(token)) => match db.get_auth_token(token).await {
+                                Ok(Some(row)) => match row.name.parse() {
+                                    Ok(name) => (req, name),
                                     _ => {
-                                        return Ok(
-                                            Status::unauthenticated("invalid auth token").to_http()
+                                        return Ok(Status::unauthenticated(
+                                            "invalid auth token username",
                                         )
+                                        .to_http())
                                     }
+                                },
+                                _ => {
+                                    return Ok(
+                                        Status::unauthenticated("invalid auth token").to_http()
+                                    )
                                 }
-                            }
+                            },
                             (Some("Bearer"), None) => {
                                 return Ok(Status::unauthenticated("missing auth token").to_http())
                             }

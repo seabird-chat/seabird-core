@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use futures::StreamExt;
-use sqlx::sqlite::SqlitePoolOptions;
 use tokio::sync::{broadcast, mpsc, oneshot, Mutex, RwLock};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -278,7 +277,7 @@ impl Server {
     async fn run_grpc_server(self: &Arc<Self>) -> Result<()> {
         let addr = self.bind_host.parse()?;
 
-        let db_pool = SqlitePoolOptions::new().connect(&self.database_url).await?;
+        let db_pool = Arc::new(crate::db::DB::new(&self.database_url).await?);
 
         let chat_ingest =
             auth::AuthedService::new(db_pool.clone(), ChatIngestServer::new(self.clone()));

@@ -1,6 +1,8 @@
 *.pb.go
 .env
-*.db
+*.db*
+/tokens.json
 
 /.vscode
+/.direnv
 /target

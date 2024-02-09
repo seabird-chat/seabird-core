@@ -17,19 +17,19 @@ pub fn extract_auth_username<T>(req: &Request<T>) -> RpcResult<String> {
 }
 
 // AuthedService is a frustratingly necessary evil because there is no async
-// tonic::Interceptor. This means we can't .await on the RwLock protecting
-// server.tokens. We get around this by implementing a middleware which pulls
-// the request header out (since the http2 headers map to gRPC request metadata
-// directly) to check it before we even get into the gRPC/Tonic code.
+// tonic::Interceptor. This means we can't .await on the DB call we need to look
+// up the relevant tokens. We get around this by implementing a middleware which
+// pulls the request header out (since the http2 headers map to gRPC request
+// metadata directly) to check it before we even get into the gRPC/Tonic code.
 #[derive(Debug, Clone)]
 pub struct AuthedService<S> {
-    server: Arc<super::Server>,
+    db: Arc<crate::db::DB>,
     inner: S,
 }
 
-impl<S> AuthedService<S> {
-    pub fn new(server: Arc<super::Server>, inner: S) -> Self {
-        AuthedService { server, inner }
+impl<'a, S> AuthedService<S> {
+    pub fn new(db: Arc<crate::db::DB>, inner: S) -> Self {
+        AuthedService { db, inner }
     }
 }
 
@@ -55,7 +55,7 @@ where
 
     fn call(&mut self, req: HyperRequest<Body>) -> Self::Future {
         let mut svc = self.inner.clone();
-        let server = self.server.clone();
+        let db = self.db.clone();
 
         Box::pin(async move {
             let (mut req, username): (HyperRequest<Body>, tonic::codegen::http::HeaderValue) =
@@ -70,25 +70,22 @@ where
 
                         let mut split = token.splitn(2, ' ');
                         match (split.next(), split.next()) {
-                            (Some("Bearer"), Some(token)) => {
-                                let tokens = server.tokens.read().await;
-                                match tokens.get(token) {
-                                    Some(maybe_username) => match maybe_username.parse() {
-                                        Ok(username) => (req, username),
-                                        Err(_) => {
-                                            return Ok(Status::internal(
-                                                "invalid auth token username",
-                                            )
-                                            .to_http())
-                                        }
-                                    },
-                                    None => {
-                                        return Ok(
-                                            Status::unauthenticated("invalid auth token").to_http()
+                            (Some("Bearer"), Some(token)) => match db.get_auth_token(token).await {
+                                Ok(Some(row)) => match row.name.parse() {
+                                    Ok(name) => (req, name),
+                                    _ => {
+                                        return Ok(Status::unauthenticated(
+                                            "invalid auth token username",
                                         )
+                                        .to_http())
                                     }
+                                },
+                                _ => {
+                                    return Ok(
+                                        Status::unauthenticated("invalid auth token").to_http()
+                                    )
                                 }
-                            }
+                            },
                             (Some("Bearer"), None) => {
                                 return Ok(Status::unauthenticated("missing auth token").to_http())
                             }

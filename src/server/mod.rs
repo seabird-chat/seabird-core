@@ -99,11 +99,11 @@ pub enum CleanupRequest {
 #[derive(Debug)]
 pub struct Server {
     bind_host: String,
+    database_url: String,
     startup_timestamp: u64,
     sender: broadcast::Sender<proto::Event>,
     requests: Mutex<BTreeMap<String, Option<ChatRequest>>>,
     backends: RwLock<BTreeMap<BackendId, Arc<ChatBackend>>>,
-    tokens: RwLock<BTreeMap<String, String>>,
     commands: Arc<RwLock<BTreeMap<String, proto::CommandMetadata>>>,
 
     cleanup_receiver: Mutex<UnboundedReceiverStream<CleanupRequest>>,
@@ -111,7 +111,7 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new(bind_host: String) -> Result<Arc<Self>> {
+    pub fn new(bind_host: String, database_url: String) -> Result<Arc<Self>> {
         // We actually don't care about the receiving side - the clients will
         // subscribe to it later.
         let (sender, _) = broadcast::channel(BROADCAST_BUFFER);
@@ -119,20 +119,15 @@ impl Server {
 
         Ok(Arc::new(Server {
             bind_host,
+            database_url,
             startup_timestamp: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
             sender,
             requests: Mutex::new(BTreeMap::new()),
             backends: RwLock::new(BTreeMap::new()),
-            tokens: RwLock::new(BTreeMap::new()),
             commands: Arc::new(RwLock::new(BTreeMap::new())),
             cleanup_receiver: Mutex::new(UnboundedReceiverStream::new(cleanup_receiver)),
             cleanup_sender,
         }))
-    }
-
-    pub async fn set_tokens(&self, tokens: BTreeMap<String, String>) {
-        let mut tokens_guard = self.tokens.write().await;
-        *tokens_guard = tokens;
     }
 
     pub async fn run(self: &Arc<Self>) -> Result<()> {
@@ -282,10 +277,12 @@ impl Server {
     async fn run_grpc_server(self: &Arc<Self>) -> Result<()> {
         let addr = self.bind_host.parse()?;
 
-        let chat_ingest =
-            auth::AuthedService::new(self.clone(), ChatIngestServer::new(self.clone()));
+        let db_pool = Arc::new(crate::db::DB::new(&self.database_url).await?);
 
-        let seabird = auth::AuthedService::new(self.clone(), SeabirdServer::new(self.clone()));
+        let chat_ingest =
+            auth::AuthedService::new(db_pool.clone(), ChatIngestServer::new(self.clone()));
+
+        let seabird = auth::AuthedService::new(db_pool.clone(), SeabirdServer::new(self.clone()));
 
         tonic::transport::Server::builder()
             .add_service(seabird)

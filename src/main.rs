@@ -1,9 +1,4 @@
-use std::collections::BTreeMap;
 use std::io::{stdout, IsTerminal};
-
-use tokio::fs::File;
-use tokio::io::AsyncReadExt;
-use tokio::signal::unix::{signal, SignalKind};
 
 mod db;
 mod id;
@@ -30,28 +25,6 @@ where
             error!("error when running stream: {}", err);
         }
     });
-}
-
-#[derive(serde::Deserialize)]
-struct Tokens {
-    tokens: BTreeMap<String, String>,
-}
-
-async fn read_tokens(filename: &str) -> Result<BTreeMap<String, String>> {
-    let mut buf = String::new();
-    let mut file = File::open(filename).await?;
-
-    file.read_to_string(&mut buf).await?;
-
-    let tokens: Tokens = serde_json::from_str(&buf)?;
-
-    // In the config file we use username -> token because that makes the most
-    // sense, but we need to reverse it before passing it in to the server.
-    Ok(tokens
-        .tokens
-        .into_iter()
-        .map(|(username, token)| (token, username))
-        .collect())
 }
 
 #[tokio::main]
@@ -93,34 +66,8 @@ async fn main() -> Result<()> {
 
     let server = crate::server::Server::new(
         std::env::var("SEABIRD_BIND_HOST").unwrap_or_else(|_| "0.0.0.0:11235".to_string()),
+        std::env::var("DATABASE_URL").unwrap(),
     )?;
-
-    let token_file = std::env::var("SEABIRD_TOKEN_FILE")
-        .context("Missing $SEABIRD_TOKEN_FILE. You must specify a token file for the bot.")?;
-
-    // Read in the tokens so the server can have them set initially without
-    // needing a SIGHUP.
-    let tokens = read_tokens(&token_file).await?;
-    server.set_tokens(tokens).await;
-
-    // Spawn our token reader task
-    let mut signal_stream = signal(SignalKind::hangup())?;
-    let tokens_server = server.clone();
-    tokio::spawn(async move {
-        loop {
-            signal_stream.recv().await;
-
-            info!("got SIGHUP, attempting to reload tokens");
-
-            match read_tokens(&token_file).await {
-                Ok(tokens) => {
-                    tokens_server.set_tokens(tokens).await;
-                    info!("reloaded tokens");
-                }
-                Err(err) => warn!("failed to reload tokens: {}", err),
-            }
-        }
-    });
 
     // Wait on the server
     server.run().await

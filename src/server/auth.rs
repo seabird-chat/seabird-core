@@ -113,6 +113,8 @@ where
                 req.uri()
             );
 
+            req.extensions_mut().insert(username.clone());
+
             req.headers_mut().insert(X_AUTH_USERNAME, username);
 
             let resp = svc.call(req).await?;

@@ -22,7 +22,6 @@ pub mod common {
     impl Block {
         pub fn new_plain(text: String) -> Self {
             Block {
-                raw: text.clone(),
                 plain: text.clone(),
                 inner: Some(block::Inner::Text(TextBlock { text })),
             }

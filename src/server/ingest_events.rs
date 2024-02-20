@@ -5,7 +5,7 @@ use tonic::{Request, Response};
 
 use crate::prelude::*;
 
-use proto::{seabird::chat_ingest_server::ChatIngest, Block, ChatEventInner, EventInner};
+use proto::{seabird::chat_ingest_server::ChatIngest, ChatEventInner, EventInner};
 
 pub struct IngestEvents {
     id: BackendId,
@@ -55,43 +55,52 @@ impl IngestEvents {
             ChatEventInner::Metadata(_) => {}
 
             ChatEventInner::Action(action) => {
+                let (text, blocks) = normalize_message(&action.text, action.blocks)?;
+
                 let _ = self.backend_handle.sender.send(proto::Event {
                     inner: Some(EventInner::Action(proto::ActionEvent {
                         source: action.source.map(|source| source.into_relative(&self.id)),
-                        text: action.text.clone(),
-                        blocks: vec![Block::new_plain(action.text)],
+                        text,
+                        blocks,
                     })),
                     tags: event.tags,
                 });
             }
             ChatEventInner::PrivateAction(private_action) => {
+                let (text, blocks) =
+                    normalize_message(&private_action.text, private_action.blocks)?;
+
                 let _ = self.backend_handle.sender.send(proto::Event {
                     inner: Some(EventInner::PrivateAction(proto::PrivateActionEvent {
                         source: private_action
                             .source
                             .map(|source| source.into_relative(&self.id)),
-                        text: private_action.text.clone(),
-                        blocks: vec![Block::new_plain(private_action.text)],
+                        text,
+                        blocks,
                     })),
                     tags: event.tags,
                 });
             }
             ChatEventInner::Message(msg) => {
+                let (text, blocks) = normalize_message(&msg.text, msg.blocks)?;
+
                 let _ = self.backend_handle.sender.send(proto::Event {
                     inner: Some(EventInner::Message(proto::MessageEvent {
                         source: msg.source.map(|source| source.into_relative(&self.id)),
-                        text: msg.text.clone(),
-                        blocks: vec![Block::new_plain(msg.text)],
+                        text,
+                        blocks,
                     })),
                     tags: event.tags,
                 });
             }
             ChatEventInner::PrivateMessage(private_msg) => {
+                let (text, blocks) = normalize_message(&private_msg.text, private_msg.blocks)?;
+
                 let _ = self.backend_handle.sender.send(proto::Event {
                     inner: Some(EventInner::PrivateMessage(proto::PrivateMessageEvent {
                         source: private_msg.source.map(|user| user.into_relative(&self.id)),
-                        text: private_msg.text.clone(),
-                        blocks: vec![Block::new_plain(private_msg.text)],
+                        text,
+                        blocks,
                     })),
                     tags: event.tags,
                 });
@@ -107,13 +116,15 @@ impl IngestEvents {
                 });
             }
             ChatEventInner::Mention(mention_msg) => {
+                let (text, blocks) = normalize_message(&mention_msg.text, mention_msg.blocks)?;
+
                 let _ = self.backend_handle.sender.send(proto::Event {
                     inner: Some(EventInner::Mention(proto::MentionEvent {
                         source: mention_msg
                             .source
                             .map(|source| source.into_relative(&self.id)),
-                        text: mention_msg.text.clone(),
-                        blocks: vec![Block::new_plain(mention_msg.text)],
+                        text,
+                        blocks,
                     })),
                     tags: event.tags,
                 });

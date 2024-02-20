@@ -163,7 +163,7 @@ impl IngestEvents {
             }
         }
 
-        return Ok(());
+        Ok(())
     }
 
     async fn run(mut self) -> RpcResult<()> {

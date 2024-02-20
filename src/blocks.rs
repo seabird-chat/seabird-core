@@ -7,7 +7,7 @@ pub fn normalize_message(
     raw_text: &str,
     mut blocks: Vec<Block>,
 ) -> RpcResult<(String, Vec<Block>)> {
-    if blocks.len() == 0 {
+    if blocks.is_empty() {
         return Ok((
             raw_text.to_string(),
             vec![Block::new_plain(raw_text.to_string())],
@@ -18,7 +18,7 @@ pub fn normalize_message(
     Ok((plain_buf, blocks))
 }
 
-fn render_multiple_blocks(blocks: &mut Vec<Block>) -> RpcResult<String> {
+fn render_multiple_blocks(blocks: &mut [Block]) -> RpcResult<String> {
     let mut plain_buf = String::new();
 
     for block in blocks.iter_mut() {

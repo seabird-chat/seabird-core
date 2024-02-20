@@ -5,7 +5,7 @@ use tonic::{Request, Response};
 
 use crate::prelude::*;
 
-use proto::{seabird::chat_ingest_server::ChatIngest, ChatEventInner, EventInner};
+use proto::{seabird::chat_ingest_server::ChatIngest, Block, ChatEventInner, EventInner};
 
 pub struct IngestEvents {
     id: BackendId,
@@ -58,7 +58,8 @@ impl IngestEvents {
                 let _ = self.backend_handle.sender.send(proto::Event {
                     inner: Some(EventInner::Action(proto::ActionEvent {
                         source: action.source.map(|source| source.into_relative(&self.id)),
-                        text: action.text,
+                        text: action.text.clone(),
+                        blocks: vec![Block::new_plain(action.text)],
                     })),
                     tags: event.tags,
                 });
@@ -69,7 +70,8 @@ impl IngestEvents {
                         source: private_action
                             .source
                             .map(|source| source.into_relative(&self.id)),
-                        text: private_action.text,
+                        text: private_action.text.clone(),
+                        blocks: vec![Block::new_plain(private_action.text)],
                     })),
                     tags: event.tags,
                 });
@@ -78,7 +80,8 @@ impl IngestEvents {
                 let _ = self.backend_handle.sender.send(proto::Event {
                     inner: Some(EventInner::Message(proto::MessageEvent {
                         source: msg.source.map(|source| source.into_relative(&self.id)),
-                        text: msg.text,
+                        text: msg.text.clone(),
+                        blocks: vec![Block::new_plain(msg.text)],
                     })),
                     tags: event.tags,
                 });
@@ -87,7 +90,8 @@ impl IngestEvents {
                 let _ = self.backend_handle.sender.send(proto::Event {
                     inner: Some(EventInner::PrivateMessage(proto::PrivateMessageEvent {
                         source: private_msg.source.map(|user| user.into_relative(&self.id)),
-                        text: private_msg.text,
+                        text: private_msg.text.clone(),
+                        blocks: vec![Block::new_plain(private_msg.text)],
                     })),
                     tags: event.tags,
                 });
@@ -108,7 +112,8 @@ impl IngestEvents {
                         source: mention_msg
                             .source
                             .map(|source| source.into_relative(&self.id)),
-                        text: mention_msg.text,
+                        text: mention_msg.text.clone(),
+                        blocks: vec![Block::new_plain(mention_msg.text)],
                     })),
                     tags: event.tags,
                 });

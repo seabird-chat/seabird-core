@@ -7,7 +7,7 @@ use tonic::{Request, Response};
 
 use crate::prelude::*;
 
-use proto::{seabird::seabird_server::Seabird, ChatEventInner, EventInner};
+use proto::{seabird::seabird_server::Seabird, Block, ChatEventInner, EventInner};
 
 use super::auth::extract_auth_username;
 
@@ -96,6 +96,7 @@ impl Seabird for Arc<super::Server> {
                 sender: username.to_string(),
                 channel_id: req.channel_id,
                 text: req.text.clone(),
+                blocks: vec![Block::new_plain(req.text.clone())],
             }),
             req.tags.clone(),
         );
@@ -135,6 +136,7 @@ impl Seabird for Arc<super::Server> {
                 sender: username.to_string(),
                 user_id: req.user_id,
                 text: req.text.clone(),
+                blocks: vec![Block::new_plain(req.text.clone())],
             }),
             req.tags.clone(),
         );
@@ -174,6 +176,7 @@ impl Seabird for Arc<super::Server> {
                 sender: username.to_string(),
                 channel_id: req.channel_id,
                 text: req.text.clone(),
+                blocks: vec![Block::new_plain(req.text.clone())],
             }),
             req.tags.clone(),
         );
@@ -213,6 +216,7 @@ impl Seabird for Arc<super::Server> {
                 sender: username.to_string(),
                 user_id: req.user_id,
                 text: req.text.clone(),
+                blocks: vec![Block::new_plain(req.text.clone())],
             }),
             req.tags.clone(),
         );

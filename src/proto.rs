@@ -18,6 +18,16 @@ pub mod common {
             }
         }
     }
+
+    impl Block {
+        pub fn new_plain(text: String) -> Self {
+            Block {
+                raw: text.clone(),
+                plain: text.clone(),
+                inner: Some(block::Inner::Text(TextBlock { text })),
+            }
+        }
+    }
 }
 
 pub mod seabird {
@@ -32,4 +42,5 @@ pub use self::seabird::*;
 
 pub use self::chat_event::Inner as ChatEventInner;
 pub use self::chat_request::Inner as ChatRequestInner;
+pub use self::common::block::Inner as BlockInner;
 pub use self::event::Inner as EventInner;

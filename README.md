@@ -53,23 +53,3 @@ service.
 - `RUST_LOG` (optional, defaults to `info,seabird::server=trace`) - this is a
   common rust environment variable documented here because we set a default. All
   seabird functionality is exposed under `seabird`.
-
-### Token File
-
-The tokens file contains a mapping of `tag` to `auth_token`. Each tag will be
-associated with a given auth token. It is meant as a convenience to make it
-easier to identify where incoming requests are coming from.
-
-Sending a `SIGHUP` to the server process can be used to reload the configuration
-file.
-
-As an example, the following tokens file defines the `belak` tag with an
-auth_token of `hunter2`.
-
-```json
-{
-  "tokens": {
-    "belak": "hunter2"
-  }
-}
-```

@@ -1,5 +1,8 @@
 # seabird-core
 
+[![Static Badge](https://img.shields.io/badge/repository-blue?logo=git&label=%20&labelColor=grey&color=blue)](https://github.com/seabird-chat/seabird-core)
+[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/seabird-chat/seabird-core/docker-publish.yml)](https://github.com/seabird-chat/seabird-core/actions/workflows/docker-publish.yml)
+
 Seabird has been an IRC bot for the last 10 years in many different
 incarnations. This version is a gRPC service which exports a number of functions
 to easily interact with chat services.

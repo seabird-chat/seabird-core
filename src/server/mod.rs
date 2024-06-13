@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use futures::StreamExt;
 use tokio::sync::{broadcast, mpsc, oneshot, Mutex, RwLock};
@@ -100,7 +100,6 @@ pub enum CleanupRequest {
 pub struct Server {
     bind_host: String,
     database_url: String,
-    startup_timestamp: u64,
     sender: broadcast::Sender<proto::Event>,
     requests: Mutex<BTreeMap<String, Option<ChatRequest>>>,
     backends: RwLock<BTreeMap<BackendId, Arc<ChatBackend>>>,
@@ -120,7 +119,6 @@ impl Server {
         Ok(Arc::new(Server {
             bind_host,
             database_url,
-            startup_timestamp: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
             sender,
             requests: Mutex::new(BTreeMap::new()),
             backends: RwLock::new(BTreeMap::new()),

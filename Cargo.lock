@@ -1236,6 +1236,7 @@ dependencies = [
  "hyper",
  "percent-encoding",
  "prost",
+ "prost-types",
  "serde",
  "serde_json",
  "sqlx",

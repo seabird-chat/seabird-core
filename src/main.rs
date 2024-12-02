@@ -5,6 +5,7 @@ mod id;
 mod prelude;
 pub mod proto;
 mod server;
+mod utils;
 mod wrapped;
 
 use crate::prelude::*;

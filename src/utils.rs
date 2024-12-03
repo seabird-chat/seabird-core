@@ -58,7 +58,13 @@ pub fn normalize_block(block: Block) -> RpcResult<Block> {
             Some(BlockInner::Mention(mention_block)),
         ),
         Some(BlockInner::Timestamp(timestamp_block)) => (
-            format!("{}", timestamp_block.inner.as_ref().map_or_else(|| 0, |t| t.seconds)),
+            format!(
+                "{}",
+                timestamp_block
+                    .inner
+                    .as_ref()
+                    .map_or_else(|| 0, |t| t.seconds)
+            ),
             Some(BlockInner::Timestamp(timestamp_block)),
         ),
 
@@ -241,6 +247,26 @@ pub fn normalize_block(block: Block) -> RpcResult<Block> {
                 text.push_str(">");
                 text.push_str(&block.plain);
                 text.push('\n');
+            }
+
+            (
+                text,
+                Some(BlockInner::Blockquote(crate::proto::BlockquoteBlock {
+                    inner: blocks,
+                })),
+            )
+        }
+        Some(BlockInner::Container(container_block)) => {
+            let blocks = container_block
+                .inner
+                .into_iter()
+                .map(normalize_block)
+                .collect::<RpcResult<Vec<_>>>()?;
+
+            let mut text = String::new();
+
+            for block in blocks.iter() {
+                text.push_str(&block.plain);
             }
 
             (

@@ -1,3 +1,5 @@
+use itertools::Itertools;
+
 use crate::error::RpcResult;
 use crate::proto::{Block, BlockInner, TextBlock};
 
@@ -48,6 +50,7 @@ pub fn normalize_block(block: Block) -> RpcResult<Block> {
             Some(BlockInner::FencedCode(fenced_code_block)),
         ),
         Some(BlockInner::Mention(mention_block)) => (
+            // TODO: this should error on missing user
             format!(
                 "@{}",
                 mention_block
@@ -58,6 +61,7 @@ pub fn normalize_block(block: Block) -> RpcResult<Block> {
             Some(BlockInner::Mention(mention_block)),
         ),
         Some(BlockInner::Timestamp(timestamp_block)) => (
+            // TODO: this should error on missing timestamp
             format!(
                 "{}",
                 timestamp_block
@@ -76,15 +80,7 @@ pub fn normalize_block(block: Block) -> RpcResult<Block> {
                 .map(normalize_block)
                 .collect::<RpcResult<Vec<_>>>()?;
 
-            let mut text = String::new();
-
-            text.push_str("*");
-
-            for block in blocks.iter() {
-                text.push_str(&block.plain);
-            }
-
-            text.push_str("*");
+            let text: String = blocks.iter().map(|block| block.plain.as_str()).collect();
 
             (
                 text,
@@ -100,15 +96,7 @@ pub fn normalize_block(block: Block) -> RpcResult<Block> {
                 .map(normalize_block)
                 .collect::<RpcResult<Vec<_>>>()?;
 
-            let mut text = String::new();
-
-            text.push_str("**");
-
-            for block in blocks.iter() {
-                text.push_str(&block.plain);
-            }
-
-            text.push_str("**");
+            let text: String = blocks.iter().map(|block| block.plain.as_str()).collect();
 
             (
                 text,
@@ -122,15 +110,7 @@ pub fn normalize_block(block: Block) -> RpcResult<Block> {
                 .map(normalize_block)
                 .collect::<RpcResult<Vec<_>>>()?;
 
-            let mut text = String::new();
-
-            text.push_str("__");
-
-            for block in blocks.iter() {
-                text.push_str(&block.plain);
-            }
-
-            text.push_str("__");
+            let text: String = blocks.iter().map(|block| block.plain.as_str()).collect();
 
             (
                 text,
@@ -146,15 +126,7 @@ pub fn normalize_block(block: Block) -> RpcResult<Block> {
                 .map(normalize_block)
                 .collect::<RpcResult<Vec<_>>>()?;
 
-            let mut text = String::new();
-
-            text.push_str("~~");
-
-            for block in blocks.iter() {
-                text.push_str(&block.plain);
-            }
-
-            text.push_str("~~");
+            let text: String = blocks.iter().map(|block| block.plain.as_str()).collect();
 
             (
                 text,
@@ -170,15 +142,7 @@ pub fn normalize_block(block: Block) -> RpcResult<Block> {
                 .map(normalize_block)
                 .collect::<RpcResult<Vec<_>>>()?;
 
-            let mut text = String::new();
-
-            text.push_str("||");
-
-            for block in blocks.iter() {
-                text.push_str(&block.plain);
-            }
-
-            text.push_str("||");
+            let text: String = blocks.iter().map(|block| block.plain.as_str()).collect();
 
             (
                 text,
@@ -194,13 +158,11 @@ pub fn normalize_block(block: Block) -> RpcResult<Block> {
                 .map(normalize_block)
                 .collect::<RpcResult<Vec<_>>>()?;
 
-            let mut text = String::new();
-
-            for block in blocks.iter() {
-                text.push_str("- ");
-                text.push_str(&block.plain);
-                text.push('\n');
-            }
+            let text: String = blocks
+                .iter()
+                .map(|block| block.plain.as_str())
+                .intersperse(", ")
+                .collect();
 
             (
                 text,
@@ -214,17 +176,13 @@ pub fn normalize_block(block: Block) -> RpcResult<Block> {
                 .map(normalize_block)
                 .collect::<RpcResult<Vec<_>>>()?;
 
-            let mut text = String::new();
+            let mut text: String = blocks.iter().map(|block| block.plain.as_str()).collect();
 
-            text.push('[');
-
-            for block in blocks.iter() {
-                text.push_str(&block.plain);
+            if text != link_block.url {
+                text.push_str(" (");
+                text.push_str(&link_block.url);
+                text.push_str(")");
             }
-
-            text.push_str("](");
-            text.push_str(&link_block.url);
-            text.push(')');
 
             (
                 text,
@@ -263,11 +221,7 @@ pub fn normalize_block(block: Block) -> RpcResult<Block> {
                 .map(normalize_block)
                 .collect::<RpcResult<Vec<_>>>()?;
 
-            let mut text = String::new();
-
-            for block in blocks.iter() {
-                text.push_str(&block.plain);
-            }
+            let text: String = blocks.iter().map(|block| block.plain.as_str()).collect();
 
             (
                 text,

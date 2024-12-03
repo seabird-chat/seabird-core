@@ -11,6 +11,7 @@ dotenvy = "0.15"
 futures = "0.3"
 futures-util = "0.3"
 hyper = "0.14"
+itertools = "0.13"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 percent-encoding = "2.3"

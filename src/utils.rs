@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use tonic::Status;
 
 use crate::error::RpcResult;
 use crate::proto::{Block, BlockInner, TextBlock};
@@ -23,215 +24,200 @@ pub fn normalize_blocks(text: String, mut blocks: Vec<Block>) -> RpcResult<(Stri
         .map(normalize_block)
         .collect::<RpcResult<_>>()?;
 
-    let mut text = String::new();
-
-    for block in blocks.iter() {
-        text.push_str(&block.plain);
-    }
+    let text: String = blocks.iter().map(|block| block.plain.as_str()).collect();
 
     Ok((text, blocks))
 }
 
-pub fn normalize_block(block: Block) -> RpcResult<Block> {
-    let (plain, inner) = match block.inner {
+fn normalize_block(block: Block) -> RpcResult<Block> {
+    let inner = block
+        .inner
+        .ok_or_else(|| Status::invalid_argument("unknown block type"))?;
+
+    let inner = match inner {
         // Simple blocks
-        Some(BlockInner::Text(text_block)) => {
-            (text_block.text.clone(), Some(BlockInner::Text(text_block)))
-        }
-        Some(BlockInner::InlineCode(inline_code_block)) => (
-            format!("`{}`", inline_code_block.text),
-            Some(BlockInner::InlineCode(inline_code_block)),
-        ),
-        Some(BlockInner::FencedCode(fenced_code_block)) => (
-            format!(
-                "```{}\n{}\n```\n",
-                fenced_code_block.info, fenced_code_block.text
-            ),
-            Some(BlockInner::FencedCode(fenced_code_block)),
-        ),
-        Some(BlockInner::Mention(mention_block)) => (
-            // TODO: this should error on missing user
-            format!(
-                "@{}",
-                mention_block
-                    .user
-                    .as_ref()
-                    .map_or_else(|| "unknown", |u| &u.id)
-            ),
-            Some(BlockInner::Mention(mention_block)),
-        ),
-        Some(BlockInner::Timestamp(timestamp_block)) => (
-            // TODO: this should error on missing timestamp
-            format!(
-                "{}",
-                timestamp_block
-                    .inner
-                    .as_ref()
-                    .map_or_else(|| 0, |t| t.seconds)
-            ),
-            Some(BlockInner::Timestamp(timestamp_block)),
-        ),
+        BlockInner::Text(text_block) => BlockInner::Text(text_block),
+        BlockInner::InlineCode(inline_code_block) => BlockInner::InlineCode(inline_code_block),
+        BlockInner::FencedCode(fenced_code_block) => BlockInner::FencedCode(fenced_code_block),
+        BlockInner::Mention(mention_block) => BlockInner::Mention(mention_block),
+        BlockInner::Timestamp(timestamp_block) => BlockInner::Timestamp(timestamp_block),
 
         // Formatting blocks
-        Some(BlockInner::Italics(italics_block)) => {
+        BlockInner::Italics(italics_block) => {
             let blocks = italics_block
                 .inner
                 .into_iter()
                 .map(normalize_block)
                 .collect::<RpcResult<Vec<_>>>()?;
 
-            let text: String = blocks.iter().map(|block| block.plain.as_str()).collect();
-
-            (
-                text,
-                Some(BlockInner::Italics(crate::proto::ItalicsBlock {
-                    inner: blocks,
-                })),
-            )
+            BlockInner::Italics(crate::proto::ItalicsBlock { inner: blocks })
         }
-        Some(BlockInner::Bold(bold_block)) => {
+        BlockInner::Bold(bold_block) => {
             let blocks = bold_block
                 .inner
                 .into_iter()
                 .map(normalize_block)
                 .collect::<RpcResult<Vec<_>>>()?;
 
-            let text: String = blocks.iter().map(|block| block.plain.as_str()).collect();
-
-            (
-                text,
-                Some(BlockInner::Bold(crate::proto::BoldBlock { inner: blocks })),
-            )
+            BlockInner::Bold(crate::proto::BoldBlock { inner: blocks })
         }
-        Some(BlockInner::Underline(underline_block)) => {
+        BlockInner::Underline(underline_block) => {
             let blocks = underline_block
                 .inner
                 .into_iter()
                 .map(normalize_block)
                 .collect::<RpcResult<Vec<_>>>()?;
 
-            let text: String = blocks.iter().map(|block| block.plain.as_str()).collect();
-
-            (
-                text,
-                Some(BlockInner::Underline(crate::proto::UnderlineBlock {
-                    inner: blocks,
-                })),
-            )
+            BlockInner::Underline(crate::proto::UnderlineBlock { inner: blocks })
         }
-        Some(BlockInner::Strikethrough(strikethrough_block)) => {
+        BlockInner::Strikethrough(strikethrough_block) => {
             let blocks = strikethrough_block
                 .inner
                 .into_iter()
                 .map(normalize_block)
                 .collect::<RpcResult<Vec<_>>>()?;
 
-            let text: String = blocks.iter().map(|block| block.plain.as_str()).collect();
-
-            (
-                text,
-                Some(BlockInner::Strikethrough(
-                    crate::proto::StrikethroughBlock { inner: blocks },
-                )),
-            )
+            BlockInner::Strikethrough(crate::proto::StrikethroughBlock { inner: blocks })
         }
-        Some(BlockInner::Spoiler(spoiler_block)) => {
+        BlockInner::Spoiler(spoiler_block) => {
             let blocks = spoiler_block
                 .inner
                 .into_iter()
                 .map(normalize_block)
                 .collect::<RpcResult<Vec<_>>>()?;
 
-            let text: String = blocks.iter().map(|block| block.plain.as_str()).collect();
-
-            (
-                text,
-                Some(BlockInner::Spoiler(crate::proto::SpoilerBlock {
-                    inner: blocks,
-                })),
-            )
+            BlockInner::Spoiler(crate::proto::SpoilerBlock { inner: blocks })
         }
-        Some(BlockInner::List(list_block)) => {
+        BlockInner::List(list_block) => {
             let blocks = list_block
                 .inner
                 .into_iter()
                 .map(normalize_block)
                 .collect::<RpcResult<Vec<_>>>()?;
 
-            let text: String = blocks
-                .iter()
-                .map(|block| block.plain.as_str())
-                .intersperse(", ")
-                .collect();
-
-            (
-                text,
-                Some(BlockInner::List(crate::proto::ListBlock { inner: blocks })),
-            )
+            BlockInner::List(crate::proto::ListBlock { inner: blocks })
         }
-        Some(BlockInner::Link(link_block)) => {
+        BlockInner::Link(link_block) => {
             let blocks = link_block
                 .inner
                 .into_iter()
                 .map(normalize_block)
                 .collect::<RpcResult<Vec<_>>>()?;
 
-            let mut text: String = blocks.iter().map(|block| block.plain.as_str()).collect();
-
-            if text != link_block.url {
-                text.push_str(" (");
-                text.push_str(&link_block.url);
-                text.push_str(")");
-            }
-
-            (
-                text,
-                Some(BlockInner::Link(crate::proto::LinkBlock {
-                    url: link_block.url,
-                    inner: blocks,
-                })),
-            )
+            BlockInner::Link(crate::proto::LinkBlock {
+                url: link_block.url,
+                inner: blocks,
+            })
         }
-        Some(BlockInner::Blockquote(blockquote_block)) => {
+        BlockInner::Blockquote(blockquote_block) => {
             let blocks = blockquote_block
                 .inner
                 .into_iter()
                 .map(normalize_block)
                 .collect::<RpcResult<Vec<_>>>()?;
 
-            let mut text = String::new();
-
-            for block in blocks.iter() {
-                text.push_str(">");
-                text.push_str(&block.plain);
-                text.push('\n');
-            }
-
-            (
-                text,
-                Some(BlockInner::Blockquote(crate::proto::BlockquoteBlock {
-                    inner: blocks,
-                })),
-            )
+            BlockInner::Blockquote(crate::proto::BlockquoteBlock { inner: blocks })
         }
-        Some(BlockInner::Container(container_block)) => {
+        BlockInner::Container(container_block) => {
             let blocks = container_block
                 .inner
                 .into_iter()
                 .map(normalize_block)
                 .collect::<RpcResult<Vec<_>>>()?;
 
-            let text: String = blocks.iter().map(|block| block.plain.as_str()).collect();
-
-            (
-                text,
-                Some(BlockInner::Blockquote(crate::proto::BlockquoteBlock {
-                    inner: blocks,
-                })),
-            )
+            BlockInner::Container(crate::proto::ContainerBlock { inner: blocks })
         }
-        None => (block.plain, None),
     };
 
-    Ok(Block { plain, inner })
+    Ok(Block {
+        plain: render_inner_block(&inner)?,
+        inner: Some(inner),
+    })
+}
+
+fn render_inner_block(block_inner: &BlockInner) -> RpcResult<String> {
+    match block_inner {
+        // Simple blocks
+        BlockInner::Text(text_block) => Ok(text_block.text.clone()),
+        BlockInner::InlineCode(inline_code_block) => Ok(inline_code_block.text.clone()),
+        BlockInner::FencedCode(fenced_code_block) => Ok(fenced_code_block.text.clone()),
+        BlockInner::Mention(mention_block) =>
+        // TODO: this should error on missing user
+        {
+            Ok(format!(
+                "@{}",
+                mention_block
+                    .user
+                    .as_ref()
+                    .map_or_else(|| "unknown", |u| &u.id)
+            ))
+        }
+        BlockInner::Timestamp(timestamp_block) =>
+        // TODO: this should error on missing timestamp
+        {
+            Ok(format!(
+                "{}",
+                timestamp_block
+                    .inner
+                    .as_ref()
+                    .map_or_else(|| 0, |t| t.seconds)
+            ))
+        }
+
+        // Formatting blocks
+        BlockInner::Italics(italics_block) => Ok(italics_block
+            .inner
+            .iter()
+            .map(|block| block.plain.as_str())
+            .collect()),
+        BlockInner::Bold(bold_block) => Ok(bold_block
+            .inner
+            .iter()
+            .map(|block| block.plain.as_str())
+            .collect()),
+        BlockInner::Underline(underline_block) => Ok(underline_block
+            .inner
+            .iter()
+            .map(|block| block.plain.as_str())
+            .collect()),
+        BlockInner::Strikethrough(strikethrough_block) => Ok(strikethrough_block
+            .inner
+            .iter()
+            .map(|block| block.plain.as_str())
+            .collect()),
+        BlockInner::Spoiler(spoiler_block) => Ok(spoiler_block
+            .inner
+            .iter()
+            .map(|block| block.plain.as_str())
+            .collect()),
+        BlockInner::List(list_block) => Ok(list_block
+            .inner
+            .iter()
+            .map(|block| block.plain.as_str())
+            .intersperse(", ")
+            .collect()),
+        BlockInner::Link(link_block) => {
+            let mut text: String = link_block
+                .inner
+                .iter()
+                .map(|block| block.plain.as_str())
+                .collect();
+
+            text.push_str(" (");
+            text.push_str(&link_block.url);
+            text.push_str(")");
+
+            Ok(text)
+        }
+        BlockInner::Blockquote(blockquote_block) => Ok(blockquote_block
+            .inner
+            .iter()
+            .map(|block| block.plain.as_str())
+            .collect()),
+        BlockInner::Container(container_block) => Ok(container_block
+            .inner
+            .iter()
+            .map(|block| block.plain.as_str())
+            .collect()),
+    }
 }

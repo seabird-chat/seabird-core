@@ -91,11 +91,14 @@ impl Seabird for Arc<super::Server> {
             .map_err(|_| Status::invalid_argument("failed to parse channel_id"))?
             .into_inner();
 
+        let (text, blocks) = normalize_message(&req.text, req.blocks)?;
+
         self.broadcast(
             EventInner::SendMessage(proto::SendMessageEvent {
                 sender: username.to_string(),
                 channel_id: req.channel_id,
-                text: req.text.clone(),
+                text: text.clone(),
+                blocks: blocks.clone(),
             }),
             req.tags.clone(),
         );
@@ -105,7 +108,8 @@ impl Seabird for Arc<super::Server> {
                 backend_id,
                 proto::ChatRequestInner::SendMessage(proto::SendMessageChatRequest {
                     channel_id,
-                    text: req.text,
+                    text,
+                    blocks,
                     tags: req.tags,
                 }),
             )
@@ -130,11 +134,14 @@ impl Seabird for Arc<super::Server> {
             .map_err(|_| Status::invalid_argument("failed to parse user_id"))?
             .into_inner();
 
+        let (text, blocks) = normalize_message(&req.text, req.blocks)?;
+
         self.broadcast(
             EventInner::SendPrivateMessage(proto::SendPrivateMessageEvent {
                 sender: username.to_string(),
                 user_id: req.user_id,
-                text: req.text.clone(),
+                text: text.clone(),
+                blocks: blocks.clone(),
             }),
             req.tags.clone(),
         );
@@ -144,7 +151,8 @@ impl Seabird for Arc<super::Server> {
                 backend_id,
                 proto::ChatRequestInner::SendPrivateMessage(proto::SendPrivateMessageChatRequest {
                     user_id,
-                    text: req.text,
+                    text,
+                    blocks,
                     tags: req.tags,
                 }),
             )
@@ -169,11 +177,14 @@ impl Seabird for Arc<super::Server> {
             .map_err(|_| Status::invalid_argument("failed to parse channel_id"))?
             .into_inner();
 
+        let (text, blocks) = normalize_message(&req.text, req.blocks)?;
+
         self.broadcast(
             EventInner::PerformAction(proto::PerformActionEvent {
                 sender: username.to_string(),
                 channel_id: req.channel_id,
-                text: req.text.clone(),
+                text: text.clone(),
+                blocks: blocks.clone(),
             }),
             req.tags.clone(),
         );
@@ -183,7 +194,8 @@ impl Seabird for Arc<super::Server> {
                 backend_id,
                 proto::ChatRequestInner::PerformAction(proto::PerformActionChatRequest {
                     channel_id,
-                    text: req.text,
+                    text,
+                    blocks,
                     tags: req.tags,
                 }),
             )
@@ -208,11 +220,14 @@ impl Seabird for Arc<super::Server> {
             .map_err(|_| Status::invalid_argument("failed to parse user_id"))?
             .into_inner();
 
+        let (text, blocks) = normalize_message(&req.text, req.blocks)?;
+
         self.broadcast(
             EventInner::PerformPrivateAction(proto::PerformPrivateActionEvent {
                 sender: username.to_string(),
                 user_id: req.user_id,
-                text: req.text.clone(),
+                text: text.clone(),
+                blocks: blocks.clone(),
             }),
             req.tags.clone(),
         );
@@ -223,7 +238,8 @@ impl Seabird for Arc<super::Server> {
                 proto::ChatRequestInner::PerformPrivateAction(
                     proto::PerformPrivateActionChatRequest {
                         user_id,
-                        text: req.text,
+                        text,
+                        blocks,
                         tags: req.tags,
                     },
                 ),

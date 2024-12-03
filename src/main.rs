@@ -1,5 +1,6 @@
 use std::io::{stdout, IsTerminal};
 
+mod blocks;
 mod db;
 mod id;
 mod prelude;

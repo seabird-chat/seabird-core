@@ -11,10 +11,12 @@ dotenvy = "0.15"
 futures = "0.3"
 futures-util = "0.3"
 hyper = "0.14"
+itertools = "0.13"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 percent-encoding = "2.3"
 prost = "0.11"
+prost-types = "0.11"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sqlx = { version = "0.7", features = ["runtime-tokio", "sqlite", "macros", "migrate"] }

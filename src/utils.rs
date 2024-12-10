@@ -127,6 +127,18 @@ fn normalize_block(block: Block) -> RpcResult<Block> {
 
             BlockInner::Container(crate::proto::ContainerBlock { inner: blocks })
         }
+        BlockInner::Heading(heading_block) => {
+            let blocks = heading_block
+                .inner
+                .into_iter()
+                .map(normalize_block)
+                .collect::<RpcResult<Vec<_>>>()?;
+
+            BlockInner::Heading(crate::proto::HeadingBlock {
+                level: heading_block.level,
+                inner: blocks,
+            })
+        }
     };
 
     Ok(Block {
@@ -215,6 +227,11 @@ fn render_inner_block(block_inner: &BlockInner) -> RpcResult<String> {
             .map(|block| block.plain.as_str())
             .collect()),
         BlockInner::Container(container_block) => Ok(container_block
+            .inner
+            .iter()
+            .map(|block| block.plain.as_str())
+            .collect()),
+        BlockInner::Heading(heading_block) => Ok(heading_block
             .inner
             .iter()
             .map(|block| block.plain.as_str())

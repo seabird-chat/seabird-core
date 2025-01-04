@@ -10,7 +10,7 @@ fn main() {
         .build_client(false)
         .build_server(true)
         .compile(
-            &["seabird.proto", "seabird_chat_ingest.proto"],
+            &["common.proto", "seabird.proto", "seabird_chat_ingest.proto"],
             &[&protos_path],
         )
         .unwrap();

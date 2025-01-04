@@ -4,146 +4,115 @@ use tonic::Status;
 use crate::error::RpcResult;
 use crate::proto::{Block, BlockInner, TextBlock};
 
-pub fn normalize_blocks(text: String, mut blocks: Vec<Block>) -> RpcResult<(String, Vec<Block>)> {
-    // There should never be a case where there are no blocks, so if that's the
-    // case, this is probably from a client using the non-block-based APIs and
-    // we need to add a Text block to normalize it.
-    if blocks.is_empty() {
-        blocks.push(Block {
-            plain: text.clone(),
-            inner: Some(BlockInner::Text(TextBlock { text: text.clone() })),
-        });
+pub fn normalize_block(text: String, block: Option<Block>) -> RpcResult<(String, Block)> {
+    // There should never be a case where a new client submits no blocks, so if
+    // that's the case, this is probably from a client using the non-block-based
+    // APIs and we need to add a Text block to normalize it.
+    let mut block = block.unwrap_or_else(|| Block {
+        plain: text.clone(),
+        inner: Some(BlockInner::Text(TextBlock { text: text.clone() })),
+    });
 
-        return Ok((text, blocks));
-    }
+    normalize_block_inner(&mut block)?;
 
-    // If the user passed blocks, we need to normalize them so clients can use
-    // the text portion if they need to.
-    blocks = blocks
-        .into_iter()
-        .map(normalize_block)
-        .collect::<RpcResult<_>>()?;
-
-    let text: String = blocks.iter().map(|block| block.plain.as_str()).collect();
-
-    Ok((text, blocks))
+    let text: String = block.plain.clone();
+    Ok((text, block))
 }
 
-fn normalize_block(block: Block) -> RpcResult<Block> {
+fn normalize_block_inner(block: &mut Block) -> RpcResult<()> {
     let inner = block
         .inner
+        .as_mut()
         .ok_or_else(|| Status::invalid_argument("unknown block type"))?;
 
-    let inner = match inner {
+    match inner {
         // Simple blocks
-        BlockInner::Text(text_block) => BlockInner::Text(text_block),
-        BlockInner::InlineCode(inline_code_block) => BlockInner::InlineCode(inline_code_block),
-        BlockInner::FencedCode(fenced_code_block) => BlockInner::FencedCode(fenced_code_block),
-        BlockInner::Timestamp(timestamp_block) => BlockInner::Timestamp(timestamp_block),
+        BlockInner::Text(_text_block) => {}
+        BlockInner::InlineCode(_inline_code_block) => {}
+        BlockInner::FencedCode(_fenced_code_block) => {}
+        BlockInner::Timestamp(_timestamp_block) => {}
 
         // Formatting blocks
         BlockInner::Italics(italics_block) => {
-            let blocks = italics_block
+            let mut inner_block = italics_block
                 .inner
-                .into_iter()
-                .map(normalize_block)
-                .collect::<RpcResult<Vec<_>>>()?;
+                .as_mut()
+                .ok_or_else(|| Status::invalid_argument("italics block missing inner block"))?;
 
-            BlockInner::Italics(crate::proto::ItalicsBlock { inner: blocks })
+            normalize_block_inner(&mut inner_block)?;
         }
         BlockInner::Bold(bold_block) => {
-            let blocks = bold_block
+            let mut inner_block = bold_block
                 .inner
-                .into_iter()
-                .map(normalize_block)
-                .collect::<RpcResult<Vec<_>>>()?;
+                .as_mut()
+                .ok_or_else(|| Status::invalid_argument("bold block missing inner block"))?;
 
-            BlockInner::Bold(crate::proto::BoldBlock { inner: blocks })
+            normalize_block_inner(&mut inner_block)?;
         }
         BlockInner::Underline(underline_block) => {
-            let blocks = underline_block
+            let mut inner_block = underline_block
                 .inner
-                .into_iter()
-                .map(normalize_block)
-                .collect::<RpcResult<Vec<_>>>()?;
+                .as_mut()
+                .ok_or_else(|| Status::invalid_argument("underline block missing inner block"))?;
 
-            BlockInner::Underline(crate::proto::UnderlineBlock { inner: blocks })
+            normalize_block_inner(&mut inner_block)?;
         }
         BlockInner::Strikethrough(strikethrough_block) => {
-            let blocks = strikethrough_block
-                .inner
-                .into_iter()
-                .map(normalize_block)
-                .collect::<RpcResult<Vec<_>>>()?;
+            let mut inner_block = strikethrough_block.inner.as_mut().ok_or_else(|| {
+                Status::invalid_argument("strikethrough block missing inner block")
+            })?;
 
-            BlockInner::Strikethrough(crate::proto::StrikethroughBlock { inner: blocks })
+            normalize_block_inner(&mut inner_block)?;
         }
         BlockInner::Spoiler(spoiler_block) => {
-            let blocks = spoiler_block
+            let mut inner_block = spoiler_block
                 .inner
-                .into_iter()
-                .map(normalize_block)
-                .collect::<RpcResult<Vec<_>>>()?;
+                .as_mut()
+                .ok_or_else(|| Status::invalid_argument("spoiler block missing inner block"))?;
 
-            BlockInner::Spoiler(crate::proto::SpoilerBlock { inner: blocks })
+            normalize_block_inner(&mut inner_block)?;
         }
         BlockInner::List(list_block) => {
-            let blocks = list_block
+            list_block
                 .inner
-                .into_iter()
-                .map(normalize_block)
-                .collect::<RpcResult<Vec<_>>>()?;
-
-            BlockInner::List(crate::proto::ListBlock { inner: blocks })
+                .iter_mut()
+                .try_for_each(normalize_block_inner)?;
         }
         BlockInner::Link(link_block) => {
-            let blocks = link_block
+            let mut inner_block = link_block
                 .inner
-                .into_iter()
-                .map(normalize_block)
-                .collect::<RpcResult<Vec<_>>>()?;
+                .as_mut()
+                .ok_or_else(|| Status::invalid_argument("link block missing inner block"))?;
 
-            BlockInner::Link(crate::proto::LinkBlock {
-                url: link_block.url,
-                inner: blocks,
-            })
+            normalize_block_inner(&mut inner_block)?;
         }
         BlockInner::Blockquote(blockquote_block) => {
-            let blocks = blockquote_block
+            let mut inner_block = blockquote_block
                 .inner
-                .into_iter()
-                .map(normalize_block)
-                .collect::<RpcResult<Vec<_>>>()?;
+                .as_mut()
+                .ok_or_else(|| Status::invalid_argument("blockquote block missing inner block"))?;
 
-            BlockInner::Blockquote(crate::proto::BlockquoteBlock { inner: blocks })
+            normalize_block_inner(&mut inner_block)?;
         }
         BlockInner::Container(container_block) => {
-            let blocks = container_block
+            container_block
                 .inner
-                .into_iter()
-                .map(normalize_block)
-                .collect::<RpcResult<Vec<_>>>()?;
-
-            BlockInner::Container(crate::proto::ContainerBlock { inner: blocks })
+                .iter_mut()
+                .try_for_each(normalize_block_inner)?;
         }
         BlockInner::Heading(heading_block) => {
-            let blocks = heading_block
+            let mut inner_block = heading_block
                 .inner
-                .into_iter()
-                .map(normalize_block)
-                .collect::<RpcResult<Vec<_>>>()?;
+                .as_mut()
+                .ok_or_else(|| Status::invalid_argument("heading block missing inner block"))?;
 
-            BlockInner::Heading(crate::proto::HeadingBlock {
-                level: heading_block.level,
-                inner: blocks,
-            })
+            normalize_block_inner(&mut inner_block)?;
         }
     };
 
-    Ok(Block {
-        plain: render_inner_block(&inner)?,
-        inner: Some(inner),
-    })
+    block.plain = render_inner_block(&inner)?;
+
+    Ok(())
 }
 
 fn render_inner_block(block_inner: &BlockInner) -> RpcResult<String> {

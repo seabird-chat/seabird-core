@@ -11,10 +11,7 @@
 
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
-      inputs = {
-        nixpkgs.follows = "nixpkgs";
-        flake-utils.follows = "flake-utils";
-      };
+      inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 
@@ -35,7 +32,7 @@
           devshell.motd = "";
 
           devshell.packages = [
-            (pkgs.rust-bin.stable."1.71.1".default.override {
+            (pkgs.rust-bin.stable."1.83.0".default.override {
               extensions = ["rust-src"];
             })
             pkgs.protobuf

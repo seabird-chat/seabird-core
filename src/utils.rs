@@ -39,7 +39,6 @@ fn normalize_block(block: Block) -> RpcResult<Block> {
         BlockInner::Text(text_block) => BlockInner::Text(text_block),
         BlockInner::InlineCode(inline_code_block) => BlockInner::InlineCode(inline_code_block),
         BlockInner::FencedCode(fenced_code_block) => BlockInner::FencedCode(fenced_code_block),
-        BlockInner::Mention(mention_block) => BlockInner::Mention(mention_block),
         BlockInner::Timestamp(timestamp_block) => BlockInner::Timestamp(timestamp_block),
 
         // Formatting blocks
@@ -153,17 +152,6 @@ fn render_inner_block(block_inner: &BlockInner) -> RpcResult<String> {
         BlockInner::Text(text_block) => Ok(text_block.text.clone()),
         BlockInner::InlineCode(inline_code_block) => Ok(inline_code_block.text.clone()),
         BlockInner::FencedCode(fenced_code_block) => Ok(fenced_code_block.text.clone()),
-        BlockInner::Mention(mention_block) =>
-        // TODO: this should error on missing user
-        {
-            Ok(format!(
-                "@{}",
-                mention_block
-                    .user
-                    .as_ref()
-                    .map_or_else(|| "unknown", |u| &u.id)
-            ))
-        }
         BlockInner::Timestamp(timestamp_block) =>
         // TODO: this should error on missing timestamp
         {

@@ -27,7 +27,7 @@ pub struct AuthedService<S> {
     inner: S,
 }
 
-impl<'a, S> AuthedService<S> {
+impl<S> AuthedService<S> {
     pub fn new(db: Arc<crate::db::DB>, inner: S) -> Self {
         AuthedService { db, inner }
     }

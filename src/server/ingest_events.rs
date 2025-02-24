@@ -4,6 +4,7 @@ use tokio::sync::mpsc;
 use tonic::{Request, Response};
 
 use crate::prelude::*;
+use crate::utils::normalize_block;
 
 use proto::{seabird::chat_ingest_server::ChatIngest, ChatEventInner, EventInner};
 
@@ -55,39 +56,52 @@ impl IngestEvents {
             ChatEventInner::Metadata(_) => {}
 
             ChatEventInner::Action(action) => {
+                let (text, root_block) = normalize_block(action.text, action.root_block)?;
+
                 let _ = self.backend_handle.sender.send(proto::Event {
                     inner: Some(EventInner::Action(proto::ActionEvent {
                         source: action.source.map(|source| source.into_relative(&self.id)),
-                        text: action.text,
+                        text,
+                        root_block: Some(root_block),
                     })),
                     tags: event.tags,
                 });
             }
             ChatEventInner::PrivateAction(private_action) => {
+                let (text, root_block) =
+                    normalize_block(private_action.text, private_action.root_block)?;
+
                 let _ = self.backend_handle.sender.send(proto::Event {
                     inner: Some(EventInner::PrivateAction(proto::PrivateActionEvent {
                         source: private_action
                             .source
                             .map(|source| source.into_relative(&self.id)),
-                        text: private_action.text,
+                        text,
+                        root_block: Some(root_block),
                     })),
                     tags: event.tags,
                 });
             }
             ChatEventInner::Message(msg) => {
+                let (text, root_block) = normalize_block(msg.text, msg.root_block)?;
+
                 let _ = self.backend_handle.sender.send(proto::Event {
                     inner: Some(EventInner::Message(proto::MessageEvent {
                         source: msg.source.map(|source| source.into_relative(&self.id)),
-                        text: msg.text,
+                        text,
+                        root_block: Some(root_block),
                     })),
                     tags: event.tags,
                 });
             }
             ChatEventInner::PrivateMessage(private_msg) => {
+                let (text, root_block) = normalize_block(private_msg.text, private_msg.root_block)?;
+
                 let _ = self.backend_handle.sender.send(proto::Event {
                     inner: Some(EventInner::PrivateMessage(proto::PrivateMessageEvent {
                         source: private_msg.source.map(|user| user.into_relative(&self.id)),
-                        text: private_msg.text,
+                        text,
+                        root_block: Some(root_block),
                     })),
                     tags: event.tags,
                 });
@@ -103,12 +117,15 @@ impl IngestEvents {
                 });
             }
             ChatEventInner::Mention(mention_msg) => {
+                let (text, root_block) = normalize_block(mention_msg.text, mention_msg.root_block)?;
+
                 let _ = self.backend_handle.sender.send(proto::Event {
                     inner: Some(EventInner::Mention(proto::MentionEvent {
                         source: mention_msg
                             .source
                             .map(|source| source.into_relative(&self.id)),
-                        text: mention_msg.text,
+                        text,
+                        root_block: Some(root_block),
                     })),
                     tags: event.tags,
                 });
@@ -147,7 +164,7 @@ impl IngestEvents {
             }
         }
 
-        return Ok(());
+        Ok(())
     }
 
     async fn run(mut self) -> RpcResult<()> {

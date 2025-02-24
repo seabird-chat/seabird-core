@@ -1,3 +1,7 @@
+// Some Itertools functions collide with proposed stdlib functions, but the lint
+// isn't very helpful, so we disable it for now.
+#![allow(unstable_name_collisions)]
+
 use std::io::{stdout, IsTerminal};
 
 mod db;
@@ -5,6 +9,7 @@ mod id;
 mod prelude;
 pub mod proto;
 mod server;
+mod utils;
 mod wrapped;
 
 use crate::prelude::*;

@@ -30,6 +30,7 @@ pub mod seabird {
 pub use self::common::*;
 pub use self::seabird::*;
 
+pub use self::block::Inner as BlockInner;
 pub use self::chat_event::Inner as ChatEventInner;
 pub use self::chat_request::Inner as ChatRequestInner;
 pub use self::event::Inner as EventInner;

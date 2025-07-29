@@ -20,7 +20,7 @@ implementation.
 ## Building
 
 The easiest way to build and deploy `seabird-core` is to use the [official
-docker image](https://hub.docker.com/r/seabirdchat/seabird-core).
+docker image].
 
 In order to build this, you can use the following:
 
@@ -56,3 +56,5 @@ service.
 - `RUST_LOG` (optional, defaults to `info,seabird::server=trace`) - this is a
   common rust environment variable documented here because we set a default. All
   seabird functionality is exposed under `seabird`.
+
+[official docker image]: https://github.com/seabird-chat/seabird-core/pkgs/container/seabird-core

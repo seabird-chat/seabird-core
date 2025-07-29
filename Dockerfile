@@ -1,4 +1,4 @@
-FROM rust:1.83-bullseye as builder
+FROM rust:1.83-bullseye AS builder
 WORKDIR /usr/src/app
 
 # Workaround to allow arm64 builds to work properly

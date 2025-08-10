@@ -11,6 +11,7 @@
 
   outputs =
     inputs@{
+      self,
       flake-parts,
       nixpkgs,
       seabird-protos,
@@ -54,21 +55,25 @@
           packages = {
             default = config.packages.seabird-core;
 
-            seabird-core = pkgs.rustPlatform.buildRustPackage {
-              pname = "seabird-core";
-              version = "0.3.3-dev";
+            seabird-core =
+              let
+                rev = self.dirtyShortRev or self.shortRev or "unknown";
+              in
+              pkgs.rustPlatform.buildRustPackage {
+                pname = "seabird-core";
+                version = "0.3.3-dev-${rev}";
 
-              src = ./.;
-              cargoLock.lockFile = ./Cargo.lock;
+                src = ./.;
+                cargoLock.lockFile = ./Cargo.lock;
 
-              env = {
-                SEABIRD_PROTO_PATH = "${seabird-protos}";
+                env = {
+                  SEABIRD_PROTO_PATH = "${seabird-protos}";
+                };
+
+                nativeBuildInputs = [
+                  pkgs.protobuf
+                ];
               };
-
-              nativeBuildInputs = [
-                pkgs.protobuf
-              ];
-            };
           };
 
           devShells.default = pkgs.mkShell {

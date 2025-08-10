@@ -59,8 +59,7 @@
               version = "0.3.3-dev";
 
               src = ./.;
-
-              cargoHash = "sha256-M/jncfud4U4n4UBnXGcW1uMBgxBMG9WZefSFEsDSKso=";
+              cargoLock.lockFile = ./Cargo.lock;
 
               env = {
                 SEABIRD_PROTO_PATH = "${seabird-protos}";

@@ -1,58 +1,93 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    devshell.url = "github:numtide/devshell";
-    flake-utils.url = "github:numtide/flake-utils";
+    flake-parts.url = "github:hercules-ci/flake-parts";
 
-    flake-compat = {
-      url = "github:edolstra/flake-compat";
+    seabird-protos = {
+      url = "git+file:proto";
       flake = false;
-    };
-
-    rust-overlay = {
-      url = "github:oxalica/rust-overlay";
-      inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 
-  outputs = { self, flake-utils, rust-overlay, devshell, nixpkgs, ... }:
-    flake-utils.lib.eachDefaultSystem (system: {
-      devShell =
-        let
-          pkgs = import nixpkgs {
+  outputs =
+    inputs@{
+      flake-parts,
+      nixpkgs,
+      seabird-protos,
+      ...
+    }:
+    flake-parts.lib.mkFlake { inherit inputs; } {
+      systems = nixpkgs.lib.systems.flakeExposed;
+      perSystem =
+        {
+          pkgs,
+          system,
+          config,
+          lib,
+          ...
+        }:
+        {
+          _module.args.pkgs = import nixpkgs {
             inherit system;
-
             overlays = [
-              devshell.overlays.default
-              (import rust-overlay)
+              (final: prev: {
+                local = config.packages;
+              })
             ];
           };
-        in
-        pkgs.devshell.mkShell {
-          devshell.motd = "";
 
-          devshell.packages = [
-            (pkgs.rust-bin.stable."1.83.0".default.override {
-              extensions = ["rust-src"];
-            })
-            pkgs.protobuf
-            pkgs.rust-analyzer
-            pkgs.sqlx-cli
-            pkgs.sqlite
-          ];
+          formatter = pkgs.treefmt.withConfig {
+            runtimeInputs = [ pkgs.nixfmt-rfc-style ];
 
-          env = [
-            {
-              name = "RUST_BACKTRACE";
-              value = "1";
-            }
-            {
-              # We set the DATABASE_URL in a shell hook so we can reference the
-              # project directory, not a directory in the nix store.
-              name = "DATABASE_URL";
-              eval = "sqlite://$(git rev-parse --show-toplevel)/seabird.db";
-            }
-          ];
+            settings = {
+              # Log level for files treefmt won't format
+              on-unmatched = "info";
+
+              # Configure nixfmt for .nix files
+              formatter.nixfmt = {
+                command = "nixfmt";
+                includes = [ "*.nix" ];
+              };
+            };
+          };
+
+          packages = {
+            default = config.packages.seabird-core;
+
+            seabird-core = pkgs.rustPlatform.buildRustPackage {
+              pname = "seabird-core";
+              version = "0.3.3-dev";
+
+              src = ./.;
+
+              cargoHash = "sha256-M/jncfud4U4n4UBnXGcW1uMBgxBMG9WZefSFEsDSKso=";
+
+              env = {
+                SEABIRD_PROTO_PATH = "${seabird-protos}";
+              };
+
+              nativeBuildInputs = [
+                pkgs.protobuf
+              ];
+            };
+          };
+
+          devShells.default = pkgs.mkShell {
+            packages = [
+              pkgs.cargo
+              pkgs.rustc
+              pkgs.protobuf
+              pkgs.rust-analyzer
+              pkgs.sqlx-cli
+              pkgs.sqlite
+            ];
+
+            shellHook = ''
+              export RUST_BACKTRACE=1
+              export DATABASE_URL="sqlite://$(git rev-parse --show-toplevel)/seabird.db";
+            '';
+          };
+
         };
-    });
+    };
 }

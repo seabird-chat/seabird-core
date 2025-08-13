@@ -2,19 +2,12 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
-
-    seabird-protos = {
-      url = "git+file:proto";
-      flake = false;
-    };
   };
 
   outputs =
     inputs@{
-      self,
-      flake-parts,
       nixpkgs,
-      seabird-protos,
+      flake-parts,
       ...
     }:
     flake-parts.lib.mkFlake { inherit inputs; } {
@@ -38,42 +31,18 @@
           };
 
           formatter = pkgs.treefmt.withConfig {
-            runtimeInputs = [ pkgs.nixfmt-rfc-style ];
+            runtimeInputs = [
+              pkgs.nixfmt-rfc-style
+            ];
 
             settings = {
-              # Log level for files treefmt won't format
               on-unmatched = "info";
 
-              # Configure nixfmt for .nix files
               formatter.nixfmt = {
                 command = "nixfmt";
                 includes = [ "*.nix" ];
               };
             };
-          };
-
-          packages = {
-            default = config.packages.seabird-core;
-
-            seabird-core =
-              let
-                rev = self.dirtyShortRev or self.shortRev or "unknown";
-              in
-              pkgs.rustPlatform.buildRustPackage {
-                pname = "seabird-core";
-                version = "0.3.3-dev-${rev}";
-
-                src = ./.;
-                cargoLock.lockFile = ./Cargo.lock;
-
-                env = {
-                  SEABIRD_PROTO_PATH = "${seabird-protos}";
-                };
-
-                nativeBuildInputs = [
-                  pkgs.protobuf
-                ];
-              };
           };
 
           devShells.default = pkgs.mkShell {

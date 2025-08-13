@@ -52,23 +52,7 @@
     "root": {
       "inputs": {
         "flake-parts": "flake-parts",
-        "nixpkgs": "nixpkgs",
-        "seabird-protos": "seabird-protos"
-      }
-    },
-    "seabird-protos": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1735977965,
-        "narHash": "sha256-pS5/5qa9/6KOuvGjSAB6Gw8h9Fis8IDsFE7b0pc09DI=",
-        "rev": "3189c9fd2c817bc2d60b42c9469d5879228cced5",
-        "revCount": 55,
-        "type": "git",
-        "url": "file:proto"
-      },
-      "original": {
-        "type": "git",
-        "url": "file:proto"
+        "nixpkgs": "nixpkgs"
       }
     }
   },

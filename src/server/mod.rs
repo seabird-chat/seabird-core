@@ -3,15 +3,15 @@ use std::collections::HashMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use futures::StreamExt;
-use tokio::sync::{broadcast, mpsc, oneshot, Mutex, RwLock};
+use tokio::sync::{Mutex, RwLock, broadcast, mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::prelude::*;
 
 use proto::{
-    seabird::chat_ingest_server::ChatIngestServer, seabird::seabird_server::SeabirdServer,
-    ChatEventInner, EventInner,
+    ChatEventInner, EventInner, seabird::chat_ingest_server::ChatIngestServer,
+    seabird::seabird_server::SeabirdServer,
 };
 
 mod auth;

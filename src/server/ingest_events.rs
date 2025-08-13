@@ -1,12 +1,12 @@
-use futures::future::{select, Either};
 use futures::StreamExt;
+use futures::future::{Either, select};
 use tokio::sync::mpsc;
 use tonic::{Request, Response};
 
 use crate::prelude::*;
 use crate::utils::normalize_block;
 
-use proto::{seabird::chat_ingest_server::ChatIngest, ChatEventInner, EventInner};
+use proto::{ChatEventInner, EventInner, seabird::chat_ingest_server::ChatIngest};
 
 pub struct IngestEvents {
     id: BackendId,
@@ -160,7 +160,7 @@ impl IngestEvents {
             // If a hello comes through, this client has broken
             // the protocol contract, so we kill the connection.
             ChatEventInner::Hello(_) => {
-                return Err(Status::invalid_argument("unexpected chat event type"))
+                return Err(Status::invalid_argument("unexpected chat event type"));
             }
         }
 
@@ -187,10 +187,10 @@ impl IngestEvents {
                     self.handle_event(event).await?;
                 }
                 Either::Left((None, _)) => {
-                    return Err(Status::internal("internal request stream ended"))
+                    return Err(Status::internal("internal request stream ended"));
                 }
                 Either::Right((None, _)) => {
-                    return Err(Status::internal("chat event stream ended"))
+                    return Err(Status::internal("chat event stream ended"));
                 }
             };
         }
@@ -221,7 +221,7 @@ impl IngestEventsHandle {
                     Some(_) => {
                         return Err(Status::invalid_argument(
                             "hello message inner is wrong type",
-                        ))
+                        ));
                     }
                     None => return Err(Status::invalid_argument("missing hello message inner")),
                 }

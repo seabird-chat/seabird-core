@@ -1,4 +1,4 @@
-use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
+use sqlx::{SqlitePool, sqlite::SqlitePoolOptions};
 
 use crate::prelude::*;
 

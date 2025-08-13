@@ -2,7 +2,7 @@
 // isn't very helpful, so we disable it for now.
 #![allow(unstable_name_collisions)]
 
-use std::io::{stdout, IsTerminal};
+use std::io::{IsTerminal, stdout};
 
 mod db;
 mod id;

@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use percent_encoding::{percent_decode, percent_encode, NON_ALPHANUMERIC};
+use percent_encoding::{NON_ALPHANUMERIC, percent_decode, percent_encode};
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub struct FullId {

@@ -33,6 +33,7 @@
           formatter = pkgs.treefmt.withConfig {
             runtimeInputs = [
               pkgs.nixfmt-rfc-style
+              pkgs.rustfmt
             ];
 
             settings = {
@@ -41,6 +42,11 @@
               formatter.nixfmt = {
                 command = "nixfmt";
                 includes = [ "*.nix" ];
+              };
+
+              formatter.rustfmt = {
+                command = "rustfmt";
+                includes = [ "*.rs" ];
               };
             };
           };

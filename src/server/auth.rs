@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
 use hyper::{Body, Request as HyperRequest, Response as HyperResponse};
-use tonic::{body::BoxBody, transport::NamedService, Request};
+use tonic::{Request, body::BoxBody, transport::NamedService};
 use tower::Service;
 
 const X_AUTH_USERNAME: &str = "x-auth-username";
@@ -64,7 +64,7 @@ where
                         let token = match token.to_str() {
                             Ok(token) => token,
                             Err(_) => {
-                                return Ok(Status::unauthenticated("invalid token data").to_http())
+                                return Ok(Status::unauthenticated("invalid token data").to_http());
                             }
                         };
 
@@ -77,28 +77,30 @@ where
                                         return Ok(Status::unauthenticated(
                                             "invalid auth token username",
                                         )
-                                        .to_http())
+                                        .to_http());
                                     }
                                 },
                                 _ => {
                                     return Ok(
                                         Status::unauthenticated("invalid auth token").to_http()
-                                    )
+                                    );
                                 }
                             },
                             (Some("Bearer"), None) => {
-                                return Ok(Status::unauthenticated("missing auth token").to_http())
+                                return Ok(Status::unauthenticated("missing auth token").to_http());
                             }
                             (Some(_), _) => {
-                                return Ok(Status::unauthenticated("unknown auth method").to_http())
+                                return Ok(Status::unauthenticated("unknown auth method").to_http());
                             }
                             (None, _) => {
-                                return Ok(Status::unauthenticated("missing auth method").to_http())
+                                return Ok(Status::unauthenticated("missing auth method").to_http());
                             }
                         }
                     }
                     None => {
-                        return Ok(Status::unauthenticated("missing authorization header").to_http())
+                        return Ok(
+                            Status::unauthenticated("missing authorization header").to_http()
+                        );
                     }
                 };
 

@@ -1,14 +1,14 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use futures::future::{select, Either};
 use futures::StreamExt;
+use futures::future::{Either, select};
 use tokio_stream::wrappers::BroadcastStream;
 use tonic::{Request, Response};
 
 use crate::prelude::*;
 use crate::utils::normalize_block;
 
-use proto::{seabird::seabird_server::Seabird, ChatEventInner, EventInner};
+use proto::{ChatEventInner, EventInner, seabird::seabird_server::Seabird};
 
 use super::auth::extract_auth_username;
 

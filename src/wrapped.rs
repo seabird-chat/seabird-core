@@ -1,5 +1,5 @@
-use tokio_stream::Stream;
 use tokio::sync::{mpsc, oneshot};
+use tokio_stream::Stream;
 
 use crate::prelude::*;
 

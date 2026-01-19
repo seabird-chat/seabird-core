@@ -92,7 +92,10 @@ impl Seabird for Arc<super::Server> {
             .map_err(|_| Status::invalid_argument("failed to parse channel_id"))?
             .into_inner();
 
-        let (text, root_block) = normalize_block(req.text, req.root_block)?;
+        let (text, root_block, additional_tags) = normalize_block(req.text, req.root_block)?;
+
+        let mut tags = req.tags;
+        tags.extend(additional_tags);
 
         self.broadcast(
             EventInner::SendMessage(proto::SendMessageEvent {
@@ -101,7 +104,7 @@ impl Seabird for Arc<super::Server> {
                 text: text.clone(),
                 root_block: Some(root_block.clone()),
             }),
-            req.tags.clone(),
+            tags.clone(),
         );
 
         let resp = self
@@ -111,7 +114,7 @@ impl Seabird for Arc<super::Server> {
                     channel_id,
                     text,
                     root_block: Some(root_block),
-                    tags: req.tags,
+                    tags,
                 }),
             )
             .await?;
@@ -135,7 +138,10 @@ impl Seabird for Arc<super::Server> {
             .map_err(|_| Status::invalid_argument("failed to parse user_id"))?
             .into_inner();
 
-        let (text, root_block) = normalize_block(req.text, req.root_block)?;
+        let (text, root_block, additional_tags) = normalize_block(req.text, req.root_block)?;
+
+        let mut tags = req.tags;
+        tags.extend(additional_tags);
 
         self.broadcast(
             EventInner::SendPrivateMessage(proto::SendPrivateMessageEvent {
@@ -144,7 +150,7 @@ impl Seabird for Arc<super::Server> {
                 text: text.clone(),
                 root_block: Some(root_block.clone()),
             }),
-            req.tags.clone(),
+            tags.clone(),
         );
 
         let resp = self
@@ -154,7 +160,7 @@ impl Seabird for Arc<super::Server> {
                     user_id,
                     text,
                     root_block: Some(root_block),
-                    tags: req.tags,
+                    tags,
                 }),
             )
             .await?;
@@ -178,7 +184,10 @@ impl Seabird for Arc<super::Server> {
             .map_err(|_| Status::invalid_argument("failed to parse channel_id"))?
             .into_inner();
 
-        let (text, root_block) = normalize_block(req.text, req.root_block)?;
+        let (text, root_block, additional_tags) = normalize_block(req.text, req.root_block)?;
+
+        let mut tags = req.tags;
+        tags.extend(additional_tags);
 
         self.broadcast(
             EventInner::PerformAction(proto::PerformActionEvent {
@@ -187,7 +196,7 @@ impl Seabird for Arc<super::Server> {
                 text: text.clone(),
                 root_block: Some(root_block.clone()),
             }),
-            req.tags.clone(),
+            tags.clone(),
         );
 
         let resp = self
@@ -197,7 +206,7 @@ impl Seabird for Arc<super::Server> {
                     channel_id,
                     text,
                     root_block: Some(root_block),
-                    tags: req.tags,
+                    tags,
                 }),
             )
             .await?;
@@ -221,7 +230,10 @@ impl Seabird for Arc<super::Server> {
             .map_err(|_| Status::invalid_argument("failed to parse user_id"))?
             .into_inner();
 
-        let (text, root_block) = normalize_block(req.text, req.root_block)?;
+        let (text, root_block, additional_tags) = normalize_block(req.text, req.root_block)?;
+
+        let mut tags = req.tags;
+        tags.extend(additional_tags);
 
         self.broadcast(
             EventInner::PerformPrivateAction(proto::PerformPrivateActionEvent {
@@ -230,7 +242,7 @@ impl Seabird for Arc<super::Server> {
                 text: text.clone(),
                 root_block: Some(root_block.clone()),
             }),
-            req.tags.clone(),
+            tags.clone(),
         );
 
         let resp = self
@@ -241,7 +253,7 @@ impl Seabird for Arc<super::Server> {
                         user_id,
                         text,
                         root_block: Some(root_block),
-                        tags: req.tags,
+                        tags,
                     },
                 ),
             )

@@ -1,13 +1,20 @@
 use itertools::Itertools;
+use std::collections::HashMap;
 use tonic::Status;
 
 use crate::error::RpcResult;
 use crate::proto::{Block, BlockInner, TextBlock};
 
-pub fn normalize_block(text: String, block: Option<Block>) -> RpcResult<(String, Block)> {
+pub const ORIGINAL_FORMAT_TAG: &str = "core/original-format";
+
+pub fn normalize_block(text: String, block: Option<Block>) -> RpcResult<(String, Block, HashMap<String, String>)> {
     // There should never be a case where a new client submits no blocks, so if
     // that's the case, this is probably from a client using the non-block-based
     // APIs and we need to add a Text block to normalize it.
+
+    // Detect original format before consuming the Option
+    let original_format = if block.is_none() { "text" } else { "blocks" };
+
     let mut block = block.unwrap_or_else(|| Block {
         plain: text.clone(),
         inner: Some(BlockInner::Text(TextBlock { text: text.clone() })),
@@ -16,7 +23,11 @@ pub fn normalize_block(text: String, block: Option<Block>) -> RpcResult<(String,
     normalize_block_inner(&mut block)?;
 
     let text: String = block.plain.clone();
-    Ok((text, block))
+
+    let mut additional_tags = HashMap::new();
+    additional_tags.insert(ORIGINAL_FORMAT_TAG.to_string(), original_format.to_string());
+
+    Ok((text, block, additional_tags))
 }
 
 fn normalize_block_inner(block: &mut Block) -> RpcResult<()> {

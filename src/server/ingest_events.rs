@@ -56,7 +56,10 @@ impl IngestEvents {
             ChatEventInner::Metadata(_) => {}
 
             ChatEventInner::Action(action) => {
-                let (text, root_block) = normalize_block(action.text, action.root_block)?;
+                let (text, root_block, additional_tags) = normalize_block(action.text, action.root_block)?;
+
+                let mut tags = event.tags;
+                tags.extend(additional_tags);
 
                 let _ = self.backend_handle.sender.send(proto::Event {
                     inner: Some(EventInner::Action(proto::ActionEvent {
@@ -64,12 +67,15 @@ impl IngestEvents {
                         text,
                         root_block: Some(root_block),
                     })),
-                    tags: event.tags,
+                    tags,
                 });
             }
             ChatEventInner::PrivateAction(private_action) => {
-                let (text, root_block) =
+                let (text, root_block, additional_tags) =
                     normalize_block(private_action.text, private_action.root_block)?;
+
+                let mut tags = event.tags;
+                tags.extend(additional_tags);
 
                 let _ = self.backend_handle.sender.send(proto::Event {
                     inner: Some(EventInner::PrivateAction(proto::PrivateActionEvent {
@@ -79,11 +85,14 @@ impl IngestEvents {
                         text,
                         root_block: Some(root_block),
                     })),
-                    tags: event.tags,
+                    tags,
                 });
             }
             ChatEventInner::Message(msg) => {
-                let (text, root_block) = normalize_block(msg.text, msg.root_block)?;
+                let (text, root_block, additional_tags) = normalize_block(msg.text, msg.root_block)?;
+
+                let mut tags = event.tags;
+                tags.extend(additional_tags);
 
                 let _ = self.backend_handle.sender.send(proto::Event {
                     inner: Some(EventInner::Message(proto::MessageEvent {
@@ -91,11 +100,14 @@ impl IngestEvents {
                         text,
                         root_block: Some(root_block),
                     })),
-                    tags: event.tags,
+                    tags,
                 });
             }
             ChatEventInner::PrivateMessage(private_msg) => {
-                let (text, root_block) = normalize_block(private_msg.text, private_msg.root_block)?;
+                let (text, root_block, additional_tags) = normalize_block(private_msg.text, private_msg.root_block)?;
+
+                let mut tags = event.tags;
+                tags.extend(additional_tags);
 
                 let _ = self.backend_handle.sender.send(proto::Event {
                     inner: Some(EventInner::PrivateMessage(proto::PrivateMessageEvent {
@@ -103,7 +115,7 @@ impl IngestEvents {
                         text,
                         root_block: Some(root_block),
                     })),
-                    tags: event.tags,
+                    tags,
                 });
             }
             ChatEventInner::Command(cmd_msg) => {
@@ -117,7 +129,10 @@ impl IngestEvents {
                 });
             }
             ChatEventInner::Mention(mention_msg) => {
-                let (text, root_block) = normalize_block(mention_msg.text, mention_msg.root_block)?;
+                let (text, root_block, additional_tags) = normalize_block(mention_msg.text, mention_msg.root_block)?;
+
+                let mut tags = event.tags;
+                tags.extend(additional_tags);
 
                 let _ = self.backend_handle.sender.send(proto::Event {
                     inner: Some(EventInner::Mention(proto::MentionEvent {
@@ -127,7 +142,7 @@ impl IngestEvents {
                         text,
                         root_block: Some(root_block),
                     })),
-                    tags: event.tags,
+                    tags,
                 });
             }
 

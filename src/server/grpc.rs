@@ -22,17 +22,25 @@ impl Seabird for Arc<super::Server> {
     ) -> RpcResult<Response<Self::StreamEventsStream>> {
         let req = req.into_inner();
 
-        // Track registered commands
+        // Register all of this plugin's commands atomically. If any command
+        // collides with one already in the registry, none of this plugin's
+        // commands are inserted. Without this, a partial insert followed by an
+        // early return would leak the inserted commands into the registry
+        // permanently, because the CommandsHandle (whose Drop sends the
+        // cleanup request) is only constructed below, after registration
+        // succeeds.
         let mut commands = self.commands.write().await;
-        let mut to_cleanup = Vec::new();
-        for (name, metadata) in req.commands.into_iter() {
-            if commands.contains_key(&name) {
+        for name in req.commands.keys() {
+            if commands.contains_key(name) {
                 return Err(Status::already_exists(format!(
                     "command \"{}\" already registered by another plugin",
                     name
                 )));
             }
+        }
 
+        let mut to_cleanup = Vec::with_capacity(req.commands.len());
+        for (name, metadata) in req.commands.into_iter() {
             to_cleanup.push(name.clone());
             commands.insert(name, metadata);
         }

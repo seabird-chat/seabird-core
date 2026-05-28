@@ -51,6 +51,15 @@
             };
           };
 
+          packages.default = pkgs.rustPlatform.buildRustPackage {
+            pname = "seabird-core";
+            version = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).package.version;
+            src = ./.;
+            cargoLock.lockFile = ./Cargo.lock;
+            nativeBuildInputs = [ pkgs.protobuf ];
+            SQLX_OFFLINE = true;
+          };
+
           devShells.default = pkgs.mkShell {
             packages = [
               pkgs.cargo

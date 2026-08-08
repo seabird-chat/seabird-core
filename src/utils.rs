@@ -7,7 +7,10 @@ use crate::proto::{Block, BlockInner, TextBlock};
 
 pub const ORIGINAL_FORMAT_TAG: &str = "core/original-format";
 
-pub fn normalize_block(text: String, block: Option<Block>) -> RpcResult<(String, Block, HashMap<String, String>)> {
+pub fn normalize_block(
+    text: String,
+    block: Option<Block>,
+) -> RpcResult<(String, Block, HashMap<String, String>)> {
     // There should never be a case where a new client submits no blocks, so if
     // that's the case, this is probably from a client using the non-block-based
     // APIs and we need to add a Text block to normalize it.

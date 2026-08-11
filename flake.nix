@@ -57,6 +57,9 @@
             src = ./.;
             cargoLock.lockFile = ./Cargo.lock;
             nativeBuildInputs = [ pkgs.protobuf ];
+
+            # Ensure we use sqlx in offline mode so it doesn't try to talk to
+            # a live database.
             SQLX_OFFLINE = true;
           };
 

@@ -1,0 +1,12 @@
+steps:
+  - name: advance-release
+    image: alpine/git
+    commands:
+      - git push https://seabird-bot:$${FORGEJO_TOKEN}@forgejo.elwert.cloud/seabird-chat/${CI_REPO_NAME}.git ${CI_COMMIT_SHA}:refs/heads/release
+    environment:
+      FORGEJO_TOKEN:
+        from_secret: seabird_bot_forgejo_token
+    when:
+      - event: tag
+        ref: refs/tags/v*
+

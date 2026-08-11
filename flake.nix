@@ -21,15 +21,6 @@
           ...
         }:
         {
-          _module.args.pkgs = import nixpkgs {
-            inherit system;
-            overlays = [
-              (final: prev: {
-                local = config.packages;
-              })
-            ];
-          };
-
           formatter = pkgs.treefmt.withConfig {
             runtimeInputs = [
               pkgs.nixfmt-rfc-style

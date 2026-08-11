@@ -1,7 +1,6 @@
 # seabird-core
 
 [![Static Badge](https://img.shields.io/badge/repository-blue?logo=git&label=%20&labelColor=grey&color=blue)](https://github.com/seabird-chat/seabird-core)
-[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/seabird-chat/seabird-core/docker-publish.yml)](https://github.com/seabird-chat/seabird-core/actions/workflows/docker-publish.yml)
 
 Seabird has been an IRC bot for the last 10 years in many different
 incarnations. This version is a gRPC service which exports a number of functions
@@ -19,24 +18,15 @@ implementation.
 
 ## Building
 
-The easiest way to build and deploy `seabird-core` is to use the [official
-docker image].
-
-In order to build this, you can use the following:
-
-```sh
-docker build -t seabird-core:latest .
-```
-
-If you want to develop locally, simply use the normal cargo workflow in order to
-build/run seabird-core:
+`seabird-core` uses Nix to fetch the protobuf definitions from
+[seabird-chat/proto], so building and developing locally both go through the
+flake:
 
 ```sh
+nix build
+nix develop
 cargo run
 ```
-
-Note that because this generates code based on the protobufs, you may need to run
-`git submodule update --init` to make sure they are up to date.
 
 ## Configuring
 
@@ -57,4 +47,4 @@ service.
   common rust environment variable documented here because we set a default. All
   seabird functionality is exposed under `seabird`.
 
-[official docker image]: https://github.com/seabird-chat/seabird-core/pkgs/container/seabird-core
+[seabird-chat/proto]: https://github.com/seabird-chat/proto

@@ -1,7 +1,8 @@
 fn main() {
     println!("cargo:rerun-if-changed=migrations");
 
-    let protos_path = std::env::var("SEABIRD_PROTO_PATH").unwrap_or_else(|_| "./proto".to_string());
+    let protos_path = std::env::var("SEABIRD_PROTO_PATH")
+        .expect("SEABIRD_PROTO_PATH must be set; run inside `nix develop` or `nix build`");
 
     // NOTE: we need to use configure rather than the simple case because both
     // seabird and seabird_chat_ingest use the same package name. This also gives

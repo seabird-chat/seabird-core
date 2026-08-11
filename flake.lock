@@ -49,10 +49,27 @@
         "type": "github"
       }
     },
+    "proto": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1768811799,
+        "narHash": "sha256-aMSPMDerLgMUnrwOCYWOgTg7r4unHnpFoHPklU7wJag=",
+        "owner": "seabird-chat",
+        "repo": "proto",
+        "rev": "3df738ff76a1d0b673974733e1a560bc7b567998",
+        "type": "github"
+      },
+      "original": {
+        "owner": "seabird-chat",
+        "repo": "proto",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "flake-parts": "flake-parts",
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "proto": "proto"
       }
     }
   },

@@ -2,12 +2,18 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
+
+    proto = {
+      url = "github:seabird-chat/proto";
+      flake = false;
+    };
   };
 
   outputs =
     inputs@{
       nixpkgs,
       flake-parts,
+      proto,
       ...
     }:
     flake-parts.lib.mkFlake { inherit inputs; } {
@@ -49,6 +55,8 @@
             cargoLock.lockFile = ./Cargo.lock;
             nativeBuildInputs = [ pkgs.protobuf ];
 
+            SEABIRD_PROTO_PATH = "${proto}";
+
             # Ensure we use sqlx in offline mode so it doesn't try to talk to
             # a live database.
             SQLX_OFFLINE = true;
@@ -67,6 +75,7 @@
             shellHook = ''
               export RUST_BACKTRACE=1
               export DATABASE_URL="sqlite://$(git rev-parse --show-toplevel)/seabird.db";
+              export SEABIRD_PROTO_PATH="${proto}";
             '';
           };
 

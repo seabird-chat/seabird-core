@@ -7,13 +7,6 @@ when:
 labels:
   platform: linux/arm64
 
-clone:
-  git:
-    image: woodpeckerci/plugin-git
-    settings:
-      # The protos are in a git submodule which are needed by builders
-      recursive: true
-
 steps:
   check-fmt:
     image: nixos/nix:2.35.1
@@ -31,7 +24,4 @@ steps:
         experimental-features = nix-command flakes
         accept-flake-config = true
     commands:
-      # ?submodules=1 includes the proto submodule in the flake source; a plain
-      # `nix build` on a clean git tree omits submodule files (only the gitlink
-      # is tracked) and build.rs can't find common.proto.
-      - nix build '.?submodules=1' --print-build-logs
+      - nix build --print-build-logs

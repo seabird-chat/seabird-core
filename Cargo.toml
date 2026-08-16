@@ -1,6 +1,6 @@
 [package]
 name = "seabird-core"
-version = "0.3.6-dev"
+version = "0.3.6"
 authors = ["Kaleb Elwert <belak@coded.io>"]
 edition = "2021"
 

@@ -1,0 +1,42 @@
+# Tell seabird-nix that this repo moved, so it can bump the matching flake
+# input. seabird-nix names its inputs <repo>-dev and <repo>-release, so
+# CI_REPO_NAME is the only repo-specific piece and this file is identical in
+# every service repo — copy it as-is.
+#
+# This calls the CLI directly rather than using woodpeckerci/plugin-trigger:
+# that plugin can only restart the target repo's last pipeline (inheriting
+# its original event) or fire a deployment, and neither is what's wanted
+# here. `pipeline create` makes a genuinely new manual pipeline, which keeps
+# deployment events meaning only "an actual deploy-rs run".
+steps:
+  - name: trigger-dev-bump
+    image: woodpeckerci/woodpecker-cli:v3.17-alpine
+    environment:
+      WOODPECKER_SERVER: ${CI_SYSTEM_URL}
+      WOODPECKER_TOKEN:
+        from_secret: seabird_bot_woodpecker_token
+    commands:
+      - |
+        woodpecker-cli pipeline create seabird-chat/seabird-nix \
+          --branch main \
+          --var SEABIRD_CI_TASK=nix-input-bump \
+          --var INPUT_NAME=${CI_REPO_NAME}-dev
+    when:
+      - event: push
+        branch: main
+
+  - name: trigger-release-bump
+    image: woodpeckerci/woodpecker-cli:v3.17-alpine
+    environment:
+      WOODPECKER_SERVER: ${CI_SYSTEM_URL}
+      WOODPECKER_TOKEN:
+        from_secret: seabird_bot_woodpecker_token
+    commands:
+      - |
+        woodpecker-cli pipeline create seabird-chat/seabird-nix \
+          --branch main \
+          --var SEABIRD_CI_TASK=nix-input-bump \
+          --var INPUT_NAME=${CI_REPO_NAME}-release
+    when:
+      - event: push
+        branch: release

@@ -1,4 +1,9 @@
-use sqlx::{SqlitePool, sqlite::SqlitePoolOptions};
+use std::str::FromStr;
+
+use sqlx::{
+    SqlitePool,
+    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
+};
 
 use crate::prelude::*;
 
@@ -15,9 +20,12 @@ pub struct DB {
 
 impl DB {
     pub async fn new(database_url: &str) -> Result<DB> {
-        Ok(DB {
-            inner: SqlitePoolOptions::new().connect(database_url).await?,
-        })
+        let opts = SqliteConnectOptions::from_str(database_url)?.create_if_missing(true);
+        let inner = SqlitePoolOptions::new().connect_with(opts).await?;
+
+        sqlx::migrate!().run(&inner).await?;
+
+        Ok(DB { inner })
     }
 
     pub async fn get_auth_token(&self, key: &str) -> Result<Option<AuthToken>> {

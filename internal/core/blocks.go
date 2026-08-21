@@ -9,6 +9,13 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// This file is the only implementation of the block flattening rules. The proto
+// promises that "Seabird will always re-hydrate the plain property from the
+// blocks", so clients leave Block.Plain empty and everything below recomputes
+// it. Don't reintroduce a second copy in a client library: the two drifted for a
+// long time before this became the single source of truth, and because core
+// overwrites whatever a client sends, nobody noticed.
+
 // originalFormatTag records whether the sender used the block API or the older
 // text-only API, so backends can tell a synthesized block tree from a real one.
 const originalFormatTag = "core/original-format"
@@ -132,7 +139,7 @@ func renderBlockPlain(block *pb.Block) string {
 	case *pb.Block_Heading:
 		return inner.Heading.GetInner().GetPlain()
 	case *pb.Block_Link:
-		return inner.Link.GetInner().GetPlain() + " (" + inner.Link.GetUrl() + ")"
+		return renderLink(inner.Link)
 
 	case *pb.Block_List:
 		return joinBlocks(inner.List.GetInner(), ", ")
@@ -142,6 +149,38 @@ func renderBlockPlain(block *pb.Block) string {
 	default:
 		return ""
 	}
+}
+
+// renderLink flattens a link to "text (url)", or to just the URL when the two
+// would duplicate each other. Linkifiers wrap bare URLs in a link whose text is
+// the URL itself, and "https://x (https://x)" is noise on backends which only
+// read the flattened text.
+func renderLink(link *pb.LinkBlock) string {
+	text := link.GetInner().GetPlain()
+	url := link.GetUrl()
+
+	if text == "" || sameTarget(text, url) {
+		return url
+	}
+
+	return text + " (" + url + ")"
+}
+
+// sameTarget reports whether the link text is just the URL written differently.
+// Linkifiers add a scheme to bare hosts and addresses, so "www.x.com" against
+// "http://www.x.com" counts as a duplicate too.
+func sameTarget(text, url string) bool {
+	if text == url {
+		return true
+	}
+
+	for _, scheme := range []string{"https://", "http://", "mailto:"} {
+		if strings.TrimPrefix(url, scheme) == text {
+			return true
+		}
+	}
+
+	return false
 }
 
 func joinBlocks(blocks []*pb.Block, sep string) string {

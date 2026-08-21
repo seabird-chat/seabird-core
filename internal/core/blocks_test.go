@@ -94,6 +94,72 @@ func TestNormalizeBlockPlain(t *testing.T) {
 	}
 }
 
+// Linkifiers wrap bare URLs in a link whose text is the URL, so flattening the
+// naive way duplicates it. Anything a user actually wrote link text for still
+// gets both halves.
+func TestNormalizeBlockCollapsesRedundantLinks(t *testing.T) {
+	tests := []struct {
+		name string
+		url  string
+		text string
+		want string
+	}{
+		{"autolinked url", "https://seabird.chat", "https://seabird.chat", "https://seabird.chat"},
+		{"http autolink", "http://seabird.chat", "http://seabird.chat", "http://seabird.chat"},
+		{"scheme added to bare host", "http://www.example.com", "www.example.com", "http://www.example.com"},
+		{"scheme added to address", "mailto:a@b.com", "a@b.com", "mailto:a@b.com"},
+		{"empty link text", "https://example.com", "", "https://example.com"},
+
+		{
+			"real link text is kept",
+			"https://example.com", "example",
+			"example (https://example.com)",
+		},
+		{
+			"different host is kept",
+			"https://example.com", "evil.com",
+			"evil.com (https://example.com)",
+		},
+		{
+			// Trailing slashes aren't normalized, so this still duplicates.
+			// Documented rather than fixed: URL normalization doesn't belong here.
+			"trailing slash still duplicates",
+			"https://example.com/", "https://example.com",
+			"https://example.com (https://example.com/)",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			text, _, _, err := normalizeBlock("", &pb.Block{
+				Inner: &pb.Block_Link{Link: &pb.LinkBlock{
+					Url:   test.url,
+					Inner: textBlock(test.text),
+				}},
+			})
+			assert.NoError(t, err)
+			assert.Equal(t, test.want, text)
+		})
+	}
+}
+
+// The case which started this: a bare URL pasted in Discord arrives as text
+// plus an autolinked LinkBlock, and backends which only read the flattened text
+// used to see the URL twice.
+func TestNormalizeBlockLinkifiedMessage(t *testing.T) {
+	text, _, _, err := normalizeBlock("", &pb.Block{
+		Inner: &pb.Block_Container{Container: &pb.ContainerBlock{Inner: []*pb.Block{
+			textBlock("hello "),
+			{Inner: &pb.Block_Link{Link: &pb.LinkBlock{
+				Url:   "https://seabird.chat",
+				Inner: textBlock("https://seabird.chat"),
+			}}},
+		}}},
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "hello https://seabird.chat", text)
+}
+
 func TestNormalizeBlockErrors(t *testing.T) {
 	tests := []struct {
 		name  string

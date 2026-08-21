@@ -26,11 +26,15 @@
           lib,
           ...
         }:
+        let
+          version = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).package.version;
+        in
         {
           formatter = pkgs.treefmt.withConfig {
             runtimeInputs = [
               pkgs.nixfmt-rfc-style
               pkgs.rustfmt
+              pkgs.gotools
             ];
 
             settings = {
@@ -45,12 +49,18 @@
                 command = "rustfmt";
                 includes = [ "*.rs" ];
               };
+
+              formatter.goimports = {
+                command = "goimports";
+                options = [ "-w" ];
+                includes = [ "*.go" ];
+              };
             };
           };
 
           packages.default = pkgs.rustPlatform.buildRustPackage {
             pname = "seabird-core";
-            version = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).package.version;
+            inherit version;
             src = ./.;
             cargoLock.lockFile = ./Cargo.lock;
             nativeBuildInputs = [ pkgs.protobuf ];
@@ -62,6 +72,26 @@
             SQLX_OFFLINE = true;
           };
 
+          # The Go port, which will take over as the default package once it's
+          # been through staging. It gets the protos from seabird-go rather than
+          # from the proto input.
+          #
+          # subPackages is deliberately unset: the only main package is
+          # cmd/seabird-core, and leaving it out means the check phase runs the
+          # tests under internal/ too.
+          packages.seabird-core-go = pkgs.buildGoModule {
+            pname = "seabird-core";
+            inherit version;
+            src = ./.;
+
+            vendorHash = "sha256-KLh1AC53c8qwQHMUKrftYe93P8azV4/OLW1DRZ/90lI=";
+
+            ldflags = [
+              "-s"
+              "-w"
+            ];
+          };
+
           devShells.default = pkgs.mkShell {
             packages = [
               pkgs.cargo
@@ -70,6 +100,9 @@
               pkgs.rust-analyzer
               pkgs.sqlx-cli
               pkgs.sqlite
+              pkgs.go
+              pkgs.gopls
+              pkgs.gotools
             ];
 
             shellHook = ''

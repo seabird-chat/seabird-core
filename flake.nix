@@ -24,6 +24,7 @@
           system,
           config,
           lib,
+          self',
           ...
         }:
         {
@@ -48,37 +49,40 @@
             };
           };
 
-          packages.default = pkgs.rustPlatform.buildRustPackage {
-            pname = "seabird-core";
-            version = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).package.version;
-            src = ./.;
-            cargoLock.lockFile = ./Cargo.lock;
-            nativeBuildInputs = [ pkgs.protobuf ];
+          packages = {
+            default = self'.packages.seabird-core-rust;
 
-            SEABIRD_PROTO_PATH = "${proto}";
+            seabird-core-rust = pkgs.rustPlatform.buildRustPackage {
+              pname = "seabird-core";
+              version = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).package.version;
+              src = ./.;
+              cargoLock.lockFile = ./Cargo.lock;
+              nativeBuildInputs = [ pkgs.protobuf ];
 
-            # Ensure we use sqlx in offline mode so it doesn't try to talk to
-            # a live database.
-            SQLX_OFFLINE = true;
+              SEABIRD_PROTO_PATH = "${proto}";
+
+              # Ensure we use sqlx in offline mode so it doesn't try to talk to
+              # a live database.
+              SQLX_OFFLINE = true;
+            };
+
+            devShells.default = pkgs.mkShell {
+              packages = [
+                pkgs.cargo
+                pkgs.rustc
+                pkgs.protobuf
+                pkgs.rust-analyzer
+                pkgs.sqlx-cli
+                pkgs.sqlite
+              ];
+
+              shellHook = ''
+                export RUST_BACKTRACE=1
+                export DATABASE_URL="sqlite://$(git rev-parse --show-toplevel)/seabird.db";
+                export SEABIRD_PROTO_PATH="${proto}";
+              '';
+            };
           };
-
-          devShells.default = pkgs.mkShell {
-            packages = [
-              pkgs.cargo
-              pkgs.rustc
-              pkgs.protobuf
-              pkgs.rust-analyzer
-              pkgs.sqlx-cli
-              pkgs.sqlite
-            ];
-
-            shellHook = ''
-              export RUST_BACKTRACE=1
-              export DATABASE_URL="sqlite://$(git rev-parse --show-toplevel)/seabird.db";
-              export SEABIRD_PROTO_PATH="${proto}";
-            '';
-          };
-
         };
     };
 }

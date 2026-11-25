@@ -45,7 +45,7 @@
 
             seabird-core = pkgs.buildGoModule rec {
               pname = "seabird-core";
-              version = "0.4.0-dev";
+              version = "0.4.0";
               src = ./.;
               vendorHash = "sha256-TYgEPcGyqfep1hv5hAAiBtRcGeuszjRqVcd5z1uGyBc=";
               subPackages = [ "cmd/seabird-core" ];

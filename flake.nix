@@ -65,23 +65,23 @@
               # a live database.
               SQLX_OFFLINE = true;
             };
+          };
 
-            devShells.default = pkgs.mkShell {
-              packages = [
-                pkgs.cargo
-                pkgs.rustc
-                pkgs.protobuf
-                pkgs.rust-analyzer
-                pkgs.sqlx-cli
-                pkgs.sqlite
-              ];
+          devShells.default = pkgs.mkShell {
+            packages = [
+              pkgs.cargo
+              pkgs.rustc
+              pkgs.protobuf
+              pkgs.rust-analyzer
+              pkgs.sqlx-cli
+              pkgs.sqlite
+            ];
 
-              shellHook = ''
-                export RUST_BACKTRACE=1
-                export DATABASE_URL="sqlite://$(git rev-parse --show-toplevel)/seabird.db";
-                export SEABIRD_PROTO_PATH="${proto}";
-              '';
-            };
+            shellHook = ''
+              export RUST_BACKTRACE=1
+              export DATABASE_URL="sqlite://$(git rev-parse --show-toplevel)/seabird.db";
+              export SEABIRD_PROTO_PATH="${proto}";
+            '';
           };
         };
     };

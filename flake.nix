@@ -17,7 +17,7 @@
         let
           formatters = [
             pkgs.gotools
-            pkgs.nixfmt-rfc-style
+            pkgs.nixfmt
           ];
         in
         {

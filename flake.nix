@@ -41,23 +41,9 @@
           };
 
           packages = {
-            default = self'.packages.seabird-core-rust;
+            default = self'.packages.seabird-core;
 
-            seabird-core-rust = pkgs.rustPlatform.buildRustPackage {
-              pname = "seabird-core";
-              version = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).package.version;
-              src = ./.;
-              cargoLock.lockFile = ./Cargo.lock;
-              nativeBuildInputs = [ pkgs.protobuf ];
-
-              SEABIRD_PROTO_PATH = "${proto}";
-
-              # Ensure we use sqlx in offline mode so it doesn't try to talk to
-              # a live database.
-              SQLX_OFFLINE = true;
-            };
-
-            seabird-core-go = pkgs.buildGoModule rec {
+            seabird-core = pkgs.buildGoModule rec {
               pname = "seabird-core";
               version = "0.4.0-dev";
               src = ./.;

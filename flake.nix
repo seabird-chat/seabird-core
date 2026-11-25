@@ -27,26 +27,17 @@
           self',
           ...
         }:
+        let
+          formatters = [
+            pkgs.gotools
+            pkgs.nixfmt-rfc-style
+            pkgs.rustfmt
+          ];
+        in
         {
           formatter = pkgs.treefmt.withConfig {
-            runtimeInputs = [
-              pkgs.nixfmt-rfc-style
-              pkgs.rustfmt
-            ];
-
-            settings = {
-              on-unmatched = "info";
-
-              formatter.nixfmt = {
-                command = "nixfmt";
-                includes = [ "*.nix" ];
-              };
-
-              formatter.rustfmt = {
-                command = "rustfmt";
-                includes = [ "*.rs" ];
-              };
-            };
+            runtimeInputs = formatters;
+            configFile = ./treefmt.toml;
           };
 
           packages = {
@@ -65,6 +56,22 @@
               # a live database.
               SQLX_OFFLINE = true;
             };
+
+            seabird-core-go = pkgs.buildGoModule rec {
+              pname = "seabird-core";
+              version = "0.4.0-dev";
+              src = ./.;
+              vendorHash = "sha256-TYgEPcGyqfep1hv5hAAiBtRcGeuszjRqVcd5z1uGyBc=";
+              subPackages = [ "cmd/seabird-core" ];
+
+              ldflags = [
+                "-s"
+                "-w"
+                "-X main.Version=v${version}"
+              ];
+
+              env.CGO_ENABLED = 0;
+            };
           };
 
           devShells.default = pkgs.mkShell {
@@ -74,8 +81,16 @@
               pkgs.protobuf
               pkgs.rust-analyzer
               pkgs.sqlx-cli
+
+              pkgs.go
+              pkgs.gopls
+              pkgs.golangci-lint
+
+              pkgs.just
               pkgs.sqlite
-            ];
+              pkgs.treefmt
+            ]
+            ++ formatters;
 
             shellHook = ''
               export RUST_BACKTRACE=1

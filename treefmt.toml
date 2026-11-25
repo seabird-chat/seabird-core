@@ -1,0 +1,14 @@
+on-unmatched = "info"
+
+[formatter.nixfmt]
+command = "nixfmt"
+includes = ["*.nix"]
+
+[formatter.rustfmt]
+command = "rustfmt"
+includes = ["*.rs"]
+
+[formatter.goimports]
+command = "goimports"
+options = ["-w"]
+includes = ["*.go"]

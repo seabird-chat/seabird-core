@@ -26,8 +26,8 @@ func (e *testEnv) sendBlock(t *testing.T, text string, block *pb.Block) *pb.Send
 	return request.GetSendMessage()
 }
 
-// The plain text has to match what the Rust version renders, since backends
-// and plugins read it.
+// Backends and plugins without block support read the plain text, so its
+// format is part of the protocol.
 func TestBlocksPlainText(t *testing.T) {
 	text := seabird.NewTextBlock
 

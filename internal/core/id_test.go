@@ -6,8 +6,8 @@ import (
 	"github.com/alecthomas/assert/v2"
 )
 
-// The expected values below match what the Rust server produces for the same
-// inputs, since IDs are visible to plugins.
+// The expected values below are the IDs the Rust server produced. Plugin and
+// backend configs refer to channels by ID, so they must not change.
 
 var backendIDStrings = []struct {
 	typ, id, want string
@@ -172,8 +172,7 @@ func TestIDsRoundTrip(t *testing.T) {
 func TestIDsRejectInvalidUTF8(t *testing.T) {
 	t.Parallel()
 
-	// Raw invalid bytes can't be built in Rust strings, so the shared cases
-	// only cover them in escaped form.
+	// The cases above only cover invalid bytes in escaped form.
 	_, err := ParseBackendID("irc://\xff")
 	assert.Error(t, err)
 	_, err = ParseFullID("irc://libera/\xff")

@@ -4,10 +4,6 @@ on-unmatched = "info"
 command = "nixfmt"
 includes = ["*.nix"]
 
-[formatter.rustfmt]
-command = "rustfmt"
-includes = ["*.rs"]
-
 [formatter.goimports]
 command = "goimports"
 options = ["-w"]

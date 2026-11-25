@@ -67,7 +67,6 @@ func TestRequestsFailWhenTheBackendDisconnects(t *testing.T) {
 }
 
 // A backend that stops reading its stream doesn't hold up anything else.
-// Rust could hang here.
 func TestStuckBackend(t *testing.T) {
 	t.Parallel()
 

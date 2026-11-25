@@ -2,36 +2,22 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
-
-    proto = {
-      url = "github:seabird-chat/proto";
-      flake = false;
-    };
   };
 
   outputs =
     inputs@{
       nixpkgs,
       flake-parts,
-      proto,
       ...
     }:
     flake-parts.lib.mkFlake { inherit inputs; } {
       systems = nixpkgs.lib.systems.flakeExposed;
       perSystem =
-        {
-          pkgs,
-          system,
-          config,
-          lib,
-          self',
-          ...
-        }:
+        { pkgs, self', ... }:
         let
           formatters = [
             pkgs.gotools
             pkgs.nixfmt-rfc-style
-            pkgs.rustfmt
           ];
         in
         {
@@ -62,12 +48,6 @@
 
           devShells.default = pkgs.mkShell {
             packages = [
-              pkgs.cargo
-              pkgs.rustc
-              pkgs.protobuf
-              pkgs.rust-analyzer
-              pkgs.sqlx-cli
-
               pkgs.go
               pkgs.gopls
               pkgs.golangci-lint
@@ -77,12 +57,6 @@
               pkgs.treefmt
             ]
             ++ formatters;
-
-            shellHook = ''
-              export RUST_BACKTRACE=1
-              export DATABASE_URL="sqlite://$(git rev-parse --show-toplevel)/seabird.db";
-              export SEABIRD_PROTO_PATH="${proto}";
-            '';
           };
         };
     };

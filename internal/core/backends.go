@@ -17,7 +17,7 @@ import (
 // backendQueueSize is how many requests can wait to be sent to a backend. A
 // request that finds the queue full waits for room until it times out; nothing
 // is dropped. Requests go out as fast as the backend reads them, so the queue
-// only absorbs bursts. Rust uses the same size.
+// only absorbs bursts.
 const backendQueueSize = 10
 
 // backend is a connected chat backend: the requests waiting to be sent to it

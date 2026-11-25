@@ -34,7 +34,7 @@ type DB struct {
 // OpenDB opens SQLite and applies the core migrations. dsn is a filename or a
 // file: URI, which is where driver options go.
 func OpenDB(ctx context.Context, dsn string, logger *slogx.Logger) (*DB, error) {
-	// The driver would take a Rust-style URL as a literal filename.
+	// The driver would take a sqlite: URL as a literal filename.
 	if strings.HasPrefix(dsn, "sqlite:") {
 		return nil, errors.New("sqlite: URLs aren't supported; use a filename or a file: URI")
 	}

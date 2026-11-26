@@ -25,7 +25,9 @@ Every flag can also be set with a `SEABIRD_` environment variable:
 
 - `SEABIRD_DATABASE_URL` (required) - the SQLite database holding auth tokens,
   as a filename or a `file:` URI. Tokens are rows in its `seabird_auth_tokens`
-  table, added with the sqlite CLI.
+  table, added with the sqlite CLI. Core also records every backend, channel and
+  user it sees in `seabird_backends`, `seabird_channels` and `seabird_users`,
+  giving each a stable seabird ID such as `sbc_5k2q8mzx7v1rc`.
 - `SEABIRD_BIND_HOST` (optional, defaults to `:11235`) - which host/port to bind
   the gRPC service to. It isn't TLS encrypted, so you may want to put it behind a
   reverse proxy.

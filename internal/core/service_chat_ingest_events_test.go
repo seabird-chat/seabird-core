@@ -162,3 +162,44 @@ func TestIngestEventsChatDoesNotAnswerRequests(t *testing.T) {
 	env.backend.reply(request, successEvent(""))
 	assert.NoError(t, waitFor(t, result, "result"))
 }
+
+func TestIngestEventsRecordIDs(t *testing.T) {
+	t.Parallel()
+
+	env := startTestEnv(t)
+
+	env.backend.send(joinEvent("#quiet", "Quiet", ""))
+	env.backend.send(&pb.ChatEvent{Inner: &pb.ChatEvent_Message{Message: &pb.MessageEvent{
+		Source: chatSource("#chan", "alice", "Alice"), Text: "hello",
+	}}})
+	env.backend.send(&pb.ChatEvent{Inner: &pb.ChatEvent_PrivateMessage{PrivateMessage: &pb.PrivateMessageEvent{
+		Source: &pb.User{Id: "bob", DisplayName: "Bob"}, Text: "psst",
+	}}})
+	// Events are handled in order, so once the last one is published the
+	// others have been recorded.
+	assert.Equal(t, "hello", env.events.next(t).GetMessage().GetText())
+	assert.Equal(t, "psst", env.events.next(t).GetPrivateMessage().GetText())
+
+	backends, err := env.server.DB.ListBackends(env.ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(backends))
+	assert.Equal(t, "libera", backends[0].NativeID)
+
+	channels, err := env.server.DB.ListChannels(env.ctx)
+	assert.NoError(t, err)
+	channelNames := map[string]string{}
+	for _, channel := range channels {
+		assert.Equal(t, backends[0].ID, channel.BackendID)
+		channelNames[channel.NativeID] = channel.DisplayName
+	}
+	assert.Equal(t, map[string]string{"#quiet": "Quiet", "#chan": ""}, channelNames)
+
+	users, err := env.server.DB.ListUsers(env.ctx)
+	assert.NoError(t, err)
+	userNames := map[string]string{}
+	for _, user := range users {
+		assert.Equal(t, backends[0].ID, user.BackendID)
+		userNames[user.NativeID] = user.DisplayName
+	}
+	assert.Equal(t, map[string]string{"alice": "Alice", "bob": "Bob"}, userNames)
+}

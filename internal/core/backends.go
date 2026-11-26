@@ -23,7 +23,14 @@ const backendQueueSize = 10
 // backend is a connected chat backend: the requests waiting to be sent to it
 // and the callers waiting for its replies.
 type backend struct {
+	// id is the type and ID the backend gave in its hello. It keys the registry
+	// and is the base of the IDs plugins see.
 	id BackendID
+
+	// rowID is the ID of the backend's row in seabird_backends, which its
+	// channels and users refer to. It is empty if the backend couldn't be
+	// recorded, and set before any events are handled.
+	rowID string
 
 	// requests are sent to the backend by its IngestEvents handler.
 	requests chan *pb.ChatRequest

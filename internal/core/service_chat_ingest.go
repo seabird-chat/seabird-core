@@ -353,20 +353,35 @@ func (s *Server) disconnectBackend(ctx context.Context, b *backend) {
 	if err := s.publish(ctx, backendUpdatedEvent(row)); err != nil {
 		logger.WarnContext(ctx, "failed to announce backend disconnecting", slogx.Err(err))
 	}
+	// Several of the channels can be in the same group, which is announced once.
+	announced := make(map[string]bool)
 	for _, channel := range left {
-		if err := s.publish(ctx, channelUpdatedEvent(channel, false)); err != nil {
+		updated, err := s.pluginChannelOf(ctx, channel)
+		if err != nil {
+			logger.WarnContext(ctx, "failed to look up channel leaving", slogx.Err(err))
+			continue
+		}
+		if announced[updated.id] {
+			continue
+		}
+		announced[updated.id] = true
+		if err := s.publish(ctx, s.channelUpdatedEvent(updated)); err != nil {
 			logger.WarnContext(ctx, "failed to announce channel leaving", slogx.Err(err))
 		}
 	}
 }
 
-// publishChannel tells plugins about a channel on a connected backend, if it
-// changed.
+// publishChannel tells plugins about the channel a backend channel is part of,
+// if the backend channel changed.
 func (s *Server) publishChannel(ctx context.Context, channel *Channel, changed bool) error {
 	if !changed {
 		return nil
 	}
-	return s.publish(ctx, channelUpdatedEvent(*channel, true))
+	updated, err := s.pluginChannelOf(ctx, *channel)
+	if err != nil {
+		return err
+	}
+	return s.publish(ctx, s.channelUpdatedEvent(updated))
 }
 
 // resolveSource returns a source from a backend with the IDs plugins use,
@@ -392,7 +407,11 @@ func (s *Server) resolveSource(ctx context.Context, b *backend, source *pb.Chann
 	if err := s.publishChannel(ctx, channel, changed); err != nil {
 		return nil, err
 	}
+	// Plugins know a channel in a group by the group.
 	resolved.ChannelId = channel.ID
+	if channel.GroupID != nil {
+		resolved.ChannelId = *channel.GroupID
+	}
 	return resolved, nil
 }
 

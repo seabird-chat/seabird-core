@@ -361,14 +361,14 @@ func (s *Server) ListChannels(
 		}
 	}
 
-	rows, err := s.DB.ListChannels(ctx, backendID, req.GetIncludeInactive())
+	rows, err := s.listChannels(ctx, backendID, req.GetIncludeInactive())
 	if err != nil {
 		return nil, err
 	}
 
 	channels := make([]*pb.Channel, 0, len(rows))
 	for _, row := range rows {
-		channels = append(channels, channelProto(row, s.backends.get(row.BackendID) != nil))
+		channels = append(channels, s.channelProto(row))
 	}
 	return &pb.ListChannelsResponse{Channels: channels}, nil
 }
@@ -376,20 +376,11 @@ func (s *Server) ListChannels(
 func (s *Server) GetChannelInfo(
 	ctx context.Context, req *pb.ChannelInfoRequest,
 ) (*pb.ChannelInfoResponse, error) {
-	if err := checkID("channel_id", req.GetChannelId(), channelIDPrefix); err != nil {
-		return nil, err
-	}
-	channel, err := s.DB.GetChannel(ctx, req.GetChannelId())
-	if errors.Is(err, ErrNotFound) {
-		return nil, errChannelNotFound
-	}
+	channel, err := s.resolveChannel(ctx, "channel_id", req.GetChannelId())
 	if err != nil {
 		return nil, err
 	}
-
-	return &pb.ChannelInfoResponse{
-		Channel: channelProto(*channel, s.backends.get(channel.BackendID) != nil),
-	}, nil
+	return &pb.ChannelInfoResponse{Channel: s.channelProto(channel)}, nil
 }
 
 func (s *Server) GetCoreInfo(

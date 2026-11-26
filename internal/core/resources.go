@@ -13,42 +13,9 @@ func backendProto(b Backend) *pb.Backend {
 	return &pb.Backend{Id: b.ID, Type: b.Type, Connected: b.Connected}
 }
 
-// channelProto describes a channel for plugins. backendConnected says whether
-// the channel's backend is connected.
-func channelProto(c Channel, backendConnected bool) *pb.Channel {
-	state := pb.ChannelState_CHANNEL_STATE_BACKEND_DISCONNECTED
-	switch {
-	case !backendConnected:
-	case c.Joined:
-		state = pb.ChannelState_CHANNEL_STATE_JOINED
-	default:
-		state = pb.ChannelState_CHANNEL_STATE_NOT_JOINED
-	}
-
-	// A channel that isn't in a group is its own only member.
-	return &pb.Channel{
-		Id:          c.ID,
-		DisplayName: c.DisplayName,
-		Topic:       c.Topic,
-		State:       state,
-		Members: []*pb.ChannelMember{{
-			Id:          c.ID,
-			BackendId:   c.BackendID,
-			DisplayName: c.DisplayName,
-			State:       state,
-		}},
-	}
-}
-
 func backendUpdatedEvent(b Backend) *pb.Event {
 	return &pb.Event{Inner: &pb.Event_BackendUpdated{BackendUpdated: &pb.BackendUpdatedEvent{
 		Backend: backendProto(b),
-	}}}
-}
-
-func channelUpdatedEvent(c Channel, backendConnected bool) *pb.Event {
-	return &pb.Event{Inner: &pb.Event_ChannelUpdated{ChannelUpdated: &pb.ChannelUpdatedEvent{
-		Channel: channelProto(c, backendConnected),
 	}}}
 }
 
@@ -56,7 +23,6 @@ func channelUpdatedEvent(c Channel, backendConnected bool) *pb.Event {
 var idKinds = map[string]string{
 	backendIDPrefix: "backend",
 	channelIDPrefix: "channel",
-	groupIDPrefix:   "channel group",
 	userIDPrefix:    "user",
 }
 

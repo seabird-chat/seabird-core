@@ -16,6 +16,7 @@ type pluginChannel struct {
 	id          string
 	displayName string
 	topic       string
+	group       bool
 	members     []Channel
 }
 
@@ -33,25 +34,34 @@ func (c *pluginChannel) joined() bool {
 	return false
 }
 
+// checkChannelID checks that a plugin's request names a channel or a group in
+// field.
+func checkChannelID(field, id string) error {
+	prefix, _, ok := strings.Cut(id, "_")
+	if ok && (prefix == channelIDPrefix || prefix == groupIDPrefix) {
+		return nil
+	}
+	return status.Errorf(codes.InvalidArgument, "invalid %s: %q isn't a channel ID", field, id)
+}
+
 // resolveChannel looks up the channel a plugin's request names in field. A
 // channel in a group resolves to the group.
 func (s *Server) resolveChannel(ctx context.Context, field, id string) (*pluginChannel, error) {
-	prefix, _, ok := strings.Cut(id, "_")
-	switch {
-	case !ok:
-	case prefix == channelIDPrefix:
-		channel, err := s.DB.GetChannel(ctx, id)
-		if errors.Is(err, ErrNotFound) {
-			return nil, errChannelNotFound
-		}
-		if err != nil {
-			return nil, err
-		}
-		return s.pluginChannelOf(ctx, *channel)
-	case prefix == groupIDPrefix:
+	if err := checkChannelID(field, id); err != nil {
+		return nil, err
+	}
+	if strings.HasPrefix(id, groupIDPrefix+"_") {
 		return s.groupChannel(ctx, id)
 	}
-	return nil, status.Errorf(codes.InvalidArgument, "invalid %s: %q isn't a channel ID", field, id)
+
+	channel, err := s.DB.GetChannel(ctx, id)
+	if errors.Is(err, ErrNotFound) {
+		return nil, errChannelNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return s.pluginChannelOf(ctx, *channel)
 }
 
 // pluginChannelOf returns how plugins see a backend channel.
@@ -75,7 +85,7 @@ func (s *Server) groupChannel(ctx context.Context, id string) (*pluginChannel, e
 	if err != nil {
 		return nil, err
 	}
-	return &pluginChannel{id: group.ID, displayName: group.Name, members: members}, nil
+	return &pluginChannel{id: group.ID, displayName: group.Name, group: true, members: members}, nil
 }
 
 // channelProto describes a channel for plugins.
@@ -171,7 +181,7 @@ func (s *Server) listChannels(ctx context.Context, backendID string, includeInac
 	}
 	for _, group := range groups {
 		if !seenGroups[group.ID] {
-			channels = append(channels, &pluginChannel{id: group.ID, displayName: group.Name})
+			channels = append(channels, &pluginChannel{id: group.ID, displayName: group.Name, group: true})
 		}
 	}
 	return channels, nil

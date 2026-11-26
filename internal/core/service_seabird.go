@@ -65,7 +65,7 @@ func (s *Server) PerformAction(
 	if err != nil {
 		return nil, err
 	}
-	if err := checkID("channel_id", req.GetChannelId(), channelIDPrefix); err != nil {
+	if err := checkChannelID("channel_id", req.GetChannelId()); err != nil {
 		return nil, err
 	}
 	block, err := normalizeBlock(req.GetText(), req.GetRootBlock())
@@ -73,24 +73,22 @@ func (s *Server) PerformAction(
 		return nil, err
 	}
 
-	err = s.forward(ctx,
-		&pb.Event{Tags: req.GetTags(), Inner: &pb.Event_PerformAction{PerformAction: &pb.PerformActionEvent{
-			Sender:    username,
-			ChannelId: req.GetChannelId(),
-			Text:      block.GetPlain(),
-			RootBlock: block,
-		}}},
-		func() (*backend, *pb.ChatRequest, error) {
-			target, b, err := s.channelTarget(ctx, "channel_id", req.GetChannelId())
-			if err != nil {
-				return nil, nil, err
-			}
-			return b, &pb.ChatRequest{Inner: &pb.ChatRequest_PerformAction{PerformAction: &pb.PerformActionChatRequest{
-				ChannelId: target.ExternalID,
+	err = s.forwardToChannel(ctx, req.GetChannelId(),
+		func(channelID string) *pb.Event {
+			return &pb.Event{Tags: req.GetTags(), Inner: &pb.Event_PerformAction{PerformAction: &pb.PerformActionEvent{
+				Sender:    username,
+				ChannelId: channelID,
+				Text:      block.GetPlain(),
+				RootBlock: block,
+			}}}
+		},
+		func(member Channel) *pb.ChatRequest {
+			return &pb.ChatRequest{Inner: &pb.ChatRequest_PerformAction{PerformAction: &pb.PerformActionChatRequest{
+				ChannelId: member.ExternalID,
 				Text:      block.GetPlain(),
 				RootBlock: block,
 				Tags:      req.GetTags(),
-			}}}, nil
+			}}}
 		},
 	)
 	if err != nil {
@@ -147,7 +145,7 @@ func (s *Server) SendMessage(
 	if err != nil {
 		return nil, err
 	}
-	if err := checkID("channel_id", req.GetChannelId(), channelIDPrefix); err != nil {
+	if err := checkChannelID("channel_id", req.GetChannelId()); err != nil {
 		return nil, err
 	}
 	block, err := normalizeBlock(req.GetText(), req.GetRootBlock())
@@ -155,24 +153,22 @@ func (s *Server) SendMessage(
 		return nil, err
 	}
 
-	err = s.forward(ctx,
-		&pb.Event{Tags: req.GetTags(), Inner: &pb.Event_SendMessage{SendMessage: &pb.SendMessageEvent{
-			Sender:    username,
-			ChannelId: req.GetChannelId(),
-			Text:      block.GetPlain(),
-			RootBlock: block,
-		}}},
-		func() (*backend, *pb.ChatRequest, error) {
-			target, b, err := s.channelTarget(ctx, "channel_id", req.GetChannelId())
-			if err != nil {
-				return nil, nil, err
-			}
-			return b, &pb.ChatRequest{Inner: &pb.ChatRequest_SendMessage{SendMessage: &pb.SendMessageChatRequest{
-				ChannelId: target.ExternalID,
+	err = s.forwardToChannel(ctx, req.GetChannelId(),
+		func(channelID string) *pb.Event {
+			return &pb.Event{Tags: req.GetTags(), Inner: &pb.Event_SendMessage{SendMessage: &pb.SendMessageEvent{
+				Sender:    username,
+				ChannelId: channelID,
+				Text:      block.GetPlain(),
+				RootBlock: block,
+			}}}
+		},
+		func(member Channel) *pb.ChatRequest {
+			return &pb.ChatRequest{Inner: &pb.ChatRequest_SendMessage{SendMessage: &pb.SendMessageChatRequest{
+				ChannelId: member.ExternalID,
 				Text:      block.GetPlain(),
 				RootBlock: block,
 				Tags:      req.GetTags(),
-			}}}, nil
+			}}}
 		},
 	)
 	if err != nil {
@@ -426,6 +422,69 @@ func (s *Server) forward(
 	}
 }
 
+// forwardToChannel publishes the event for a request a plugin made to a
+// channel, then sends a request to every member at once. It succeeds if any
+// member carries it out, and otherwise returns the first failure. A group's
+// failures are logged. The event names the channel as plugins know it, or as the request
+// did if it can't be found, and is published whatever happens.
+func (s *Server) forwardToChannel(
+	ctx context.Context, id string, event func(channelID string) *pb.Event, request func(member Channel) *pb.ChatRequest,
+) error {
+	channel, resolveErr := s.resolveChannel(ctx, "channel_id", id)
+	if resolveErr == nil {
+		id = channel.id
+	}
+	if err := s.publish(ctx, event(id)); err != nil {
+		return err
+	}
+	if resolveErr != nil {
+		return resolveErr
+	}
+	if len(channel.members) == 0 {
+		return errGroupEmpty
+	}
+
+	errs := make([]error, len(channel.members))
+	var wg sync.WaitGroup
+	for i, member := range channel.members {
+		wg.Go(func() {
+			errs[i] = s.sendToMember(ctx, member, request(member))
+		})
+	}
+	wg.Wait()
+
+	// A channel's only failure is returned below, so only groups log.
+	for i, err := range errs {
+		if err != nil && channel.group {
+			slogx.FromContext(ctx).WarnContext(ctx, "failed to send to channel group member",
+				slogx.String("channel_id", channel.members[i].ID), slogx.Err(err))
+		}
+	}
+	if !slices.Contains(errs, nil) {
+		return errs[0]
+	}
+	return nil
+}
+
+var errGroupEmpty = status.Error(codes.FailedPrecondition, "channel group has no members")
+
+// sendToMember sends request to a backend channel's backend, and waits for it
+// to be carried out.
+func (s *Server) sendToMember(ctx context.Context, member Channel, request *pb.ChatRequest) error {
+	b := s.backends.get(member.BackendID)
+	if b == nil {
+		return errBackendNotConnected
+	}
+	reply, err := s.issueRequest(ctx, b, request)
+	if err != nil {
+		return err
+	}
+	if _, ok := reply.GetInner().(*pb.ChatEvent_Success); !ok {
+		return replyError(reply)
+	}
+	return nil
+}
+
 // replyError describes a backend's reply that wasn't what a request needed: its
 // failure if it reported one, otherwise a protocol error.
 func replyError(reply *pb.ChatEvent) error {
@@ -457,25 +516,25 @@ func (s *Server) backendTarget(ctx context.Context, field, id string) (*Backend,
 	return row, s.backends.get(row.ID), nil
 }
 
+var errGroupUnsupported = status.Error(codes.FailedPrecondition, "not supported on channel groups")
+
 // channelTarget looks up the channel a plugin's request names in field, and the
-// connected backend it is on.
+// connected backend it is on. Groups are refused, since they span backends.
 func (s *Server) channelTarget(ctx context.Context, field, id string) (*Channel, *backend, error) {
-	if err := checkID(field, id, channelIDPrefix); err != nil {
-		return nil, nil, err
-	}
-	channel, err := s.DB.GetChannel(ctx, id)
-	if errors.Is(err, ErrNotFound) {
-		return nil, nil, errChannelNotFound
-	}
+	resolved, err := s.resolveChannel(ctx, field, id)
 	if err != nil {
 		return nil, nil, err
 	}
+	if resolved.group {
+		return nil, nil, errGroupUnsupported
+	}
+	channel := resolved.members[0]
 
 	b := s.backends.get(channel.BackendID)
 	if b == nil {
 		return nil, nil, errBackendNotConnected
 	}
-	return channel, b, nil
+	return &channel, b, nil
 }
 
 // userTarget looks up the user a plugin's request names in field, and the

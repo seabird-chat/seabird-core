@@ -161,3 +161,107 @@ func TestEmptyGroups(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(list.GetChannels()))
 }
+
+// sendToGroup sends a message to id in the background, as the test plugin.
+func (e *groupEnv) sendToGroup(id string) <-chan error {
+	return callAsync(func() error {
+		_, err := e.plugin.SendMessage(e.ctx, &pb.SendMessageRequest{ChannelId: id, Text: "hi"})
+		return err
+	})
+}
+
+func TestSendsReachEveryGroupMember(t *testing.T) {
+	t.Parallel()
+
+	for _, rpc := range sendRPCs {
+		if rpc.kind != "channel" {
+			continue
+		}
+		t.Run(rpc.name, func(t *testing.T) {
+			t.Parallel()
+
+			env := startGroupEnv(t)
+
+			// A member's ID reaches the whole group, the same as the group's.
+			for _, id := range []string{env.groupID, env.channelID} {
+				result := callAsync(func() error { return rpc.call(env.ctx, env.plugin, id, "hi", nil, nil) })
+
+				for backend, path := range map[*fakeBackend]string{env.backend: testChannelPath, env.discord: "123"} {
+					request, err := backend.recv()
+					assert.NoError(t, err)
+					gotPath, text, _, _, ok := rpc.request(request)
+					assert.True(t, ok, "wrong kind of request")
+					assert.Equal(t, path, gotPath)
+					assert.Equal(t, "hi", text)
+					backend.reply(request, successEvent(""))
+				}
+				assert.NoError(t, waitFor(t, result, "result"))
+
+				// Plugins hear about it once, under the group's ID.
+				_, target, _, _, ok := rpc.event(env.events.next(t))
+				assert.True(t, ok)
+				assert.Equal(t, env.groupID, target)
+			}
+		})
+	}
+}
+
+func TestGroupSendsSucceedIfAnyMemberDoes(t *testing.T) {
+	t.Parallel()
+
+	env := startGroupEnv(t)
+	failed := &pb.ChatEvent{Inner: &pb.ChatEvent_Failed{Failed: &pb.FailedChatEvent{Reason: "read-only"}}}
+
+	result := env.sendToGroup(env.groupID)
+	request, err := env.backend.recv()
+	assert.NoError(t, err)
+	env.backend.reply(request, failed)
+	request, err = env.discord.recv()
+	assert.NoError(t, err)
+	env.discord.reply(request, successEvent(""))
+	assert.NoError(t, waitFor(t, result, "result"))
+
+	result = env.sendToGroup(env.groupID)
+	for _, backend := range []*fakeBackend{env.backend, env.discord} {
+		request, err := backend.recv()
+		assert.NoError(t, err)
+		backend.reply(request, failed)
+	}
+	assertStatus(t, waitFor(t, result, "result"), codes.Unknown, "read-only")
+
+	// A disconnected member is one that failed.
+	env.discord.cancel()
+	env.waitForBackend(t, discordBackendKey, false)
+	result = env.sendToGroup(env.groupID)
+	request, err = env.backend.recv()
+	assert.NoError(t, err)
+	env.backend.reply(request, successEvent(""))
+	assert.NoError(t, waitFor(t, result, "result"))
+}
+
+func TestSendsToEmptyGroupsFail(t *testing.T) {
+	t.Parallel()
+
+	env := startTestEnv(t)
+	group, err := env.server.DB.CreateChannelGroup(context.Background(), "empty")
+	assert.NoError(t, err)
+
+	_, err = env.plugin.SendMessage(env.ctx, &pb.SendMessageRequest{ChannelId: group.ID, Text: "hi"})
+	assertStatus(t, err, codes.FailedPrecondition, "channel group has no members")
+	assert.Equal(t, group.ID, env.events.next(t).GetSendMessage().GetChannelId())
+}
+
+func TestGroupsRefuseChannelRPCs(t *testing.T) {
+	t.Parallel()
+
+	env := startGroupEnv(t)
+	for _, rpc := range channelRPCs {
+		if rpc.kind != "channel" {
+			continue
+		}
+		for _, id := range []string{env.groupID, env.channelID} {
+			err := rpc.call(env.ctx, env.plugin, id, nil)
+			assertStatus(t, err, codes.FailedPrecondition, "not supported on channel groups")
+		}
+	}
+}

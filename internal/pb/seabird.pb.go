@@ -21,6 +21,201 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// ChannelState says whether messages can currently be sent to a channel.
+type ChannelState int32
+
+const (
+	ChannelState_CHANNEL_STATE_UNSPECIFIED ChannelState = 0
+	// The backend is connected and in the channel.
+	ChannelState_CHANNEL_STATE_JOINED ChannelState = 1
+	// The backend is connected but not in the channel. It left, or core has only
+	// seen messages from the channel without the backend saying it joined.
+	ChannelState_CHANNEL_STATE_NOT_JOINED ChannelState = 2
+	// The channel's backend isn't connected.
+	ChannelState_CHANNEL_STATE_BACKEND_DISCONNECTED ChannelState = 3
+)
+
+// Enum value maps for ChannelState.
+var (
+	ChannelState_name = map[int32]string{
+		0: "CHANNEL_STATE_UNSPECIFIED",
+		1: "CHANNEL_STATE_JOINED",
+		2: "CHANNEL_STATE_NOT_JOINED",
+		3: "CHANNEL_STATE_BACKEND_DISCONNECTED",
+	}
+	ChannelState_value = map[string]int32{
+		"CHANNEL_STATE_UNSPECIFIED":          0,
+		"CHANNEL_STATE_JOINED":               1,
+		"CHANNEL_STATE_NOT_JOINED":           2,
+		"CHANNEL_STATE_BACKEND_DISCONNECTED": 3,
+	}
+)
+
+func (x ChannelState) Enum() *ChannelState {
+	p := new(ChannelState)
+	*p = x
+	return p
+}
+
+func (x ChannelState) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ChannelState) Descriptor() protoreflect.EnumDescriptor {
+	return file_seabird_proto_enumTypes[0].Descriptor()
+}
+
+func (ChannelState) Type() protoreflect.EnumType {
+	return &file_seabird_proto_enumTypes[0]
+}
+
+func (x ChannelState) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ChannelState.Descriptor instead.
+func (ChannelState) EnumDescriptor() ([]byte, []int) {
+	return file_seabird_proto_rawDescGZIP(), []int{0}
+}
+
+// Backend is a chat backend connected to core, or one that has been.
+type Backend struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Type          string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
+	Connected     bool                   `protobuf:"varint,3,opt,name=connected,proto3" json:"connected,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Backend) Reset() {
+	*x = Backend{}
+	mi := &file_seabird_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Backend) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Backend) ProtoMessage() {}
+
+func (x *Backend) ProtoReflect() protoreflect.Message {
+	mi := &file_seabird_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Backend.ProtoReflect.Descriptor instead.
+func (*Backend) Descriptor() ([]byte, []int) {
+	return file_seabird_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *Backend) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *Backend) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *Backend) GetConnected() bool {
+	if x != nil {
+		return x.Connected
+	}
+	return false
+}
+
+// Channel is a channel on a backend.
+type Channel struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	DisplayName   string                 `protobuf:"bytes,2,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	Topic         string                 `protobuf:"bytes,3,opt,name=topic,proto3" json:"topic,omitempty"`
+	BackendId     string                 `protobuf:"bytes,4,opt,name=backend_id,json=backendId,proto3" json:"backend_id,omitempty"`
+	State         ChannelState           `protobuf:"varint,5,opt,name=state,proto3,enum=seabird.ChannelState" json:"state,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Channel) Reset() {
+	*x = Channel{}
+	mi := &file_seabird_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Channel) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Channel) ProtoMessage() {}
+
+func (x *Channel) ProtoReflect() protoreflect.Message {
+	mi := &file_seabird_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Channel.ProtoReflect.Descriptor instead.
+func (*Channel) Descriptor() ([]byte, []int) {
+	return file_seabird_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *Channel) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *Channel) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
+}
+
+func (x *Channel) GetTopic() string {
+	if x != nil {
+		return x.Topic
+	}
+	return ""
+}
+
+func (x *Channel) GetBackendId() string {
+	if x != nil {
+		return x.BackendId
+	}
+	return ""
+}
+
+func (x *Channel) GetState() ChannelState {
+	if x != nil {
+		return x.State
+	}
+	return ChannelState_CHANNEL_STATE_UNSPECIFIED
+}
+
 type Event struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Inner:
@@ -35,6 +230,8 @@ type Event struct {
 	//	*Event_SendPrivateMessage
 	//	*Event_PerformAction
 	//	*Event_PerformPrivateAction
+	//	*Event_BackendUpdated
+	//	*Event_ChannelUpdated
 	Inner         isEvent_Inner     `protobuf_oneof:"inner"`
 	Tags          map[string]string `protobuf:"bytes,11,rep,name=tags,proto3" json:"tags,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
@@ -43,7 +240,7 @@ type Event struct {
 
 func (x *Event) Reset() {
 	*x = Event{}
-	mi := &file_seabird_proto_msgTypes[0]
+	mi := &file_seabird_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -55,7 +252,7 @@ func (x *Event) String() string {
 func (*Event) ProtoMessage() {}
 
 func (x *Event) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[0]
+	mi := &file_seabird_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -68,7 +265,7 @@ func (x *Event) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Event.ProtoReflect.Descriptor instead.
 func (*Event) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{0}
+	return file_seabird_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *Event) GetInner() isEvent_Inner {
@@ -168,6 +365,24 @@ func (x *Event) GetPerformPrivateAction() *PerformPrivateActionEvent {
 	return nil
 }
 
+func (x *Event) GetBackendUpdated() *BackendUpdatedEvent {
+	if x != nil {
+		if x, ok := x.Inner.(*Event_BackendUpdated); ok {
+			return x.BackendUpdated
+		}
+	}
+	return nil
+}
+
+func (x *Event) GetChannelUpdated() *ChannelUpdatedEvent {
+	if x != nil {
+		if x, ok := x.Inner.(*Event_ChannelUpdated); ok {
+			return x.ChannelUpdated
+		}
+	}
+	return nil
+}
+
 func (x *Event) GetTags() map[string]string {
 	if x != nil {
 		return x.Tags
@@ -222,6 +437,15 @@ type Event_PerformPrivateAction struct {
 	PerformPrivateAction *PerformPrivateActionEvent `protobuf:"bytes,10,opt,name=perform_private_action,json=performPrivateAction,proto3,oneof"`
 }
 
+type Event_BackendUpdated struct {
+	// Events sent by core when backends and channels change.
+	BackendUpdated *BackendUpdatedEvent `protobuf:"bytes,12,opt,name=backend_updated,json=backendUpdated,proto3,oneof"`
+}
+
+type Event_ChannelUpdated struct {
+	ChannelUpdated *ChannelUpdatedEvent `protobuf:"bytes,13,opt,name=channel_updated,json=channelUpdated,proto3,oneof"`
+}
+
 func (*Event_Message) isEvent_Inner() {}
 
 func (*Event_PrivateMessage) isEvent_Inner() {}
@@ -242,6 +466,106 @@ func (*Event_PerformAction) isEvent_Inner() {}
 
 func (*Event_PerformPrivateAction) isEvent_Inner() {}
 
+func (*Event_BackendUpdated) isEvent_Inner() {}
+
+func (*Event_ChannelUpdated) isEvent_Inner() {}
+
+// BackendUpdatedEvent is sent when a backend connects to core or disconnects
+// from it.
+type BackendUpdatedEvent struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Backend       *Backend               `protobuf:"bytes,1,opt,name=backend,proto3" json:"backend,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BackendUpdatedEvent) Reset() {
+	*x = BackendUpdatedEvent{}
+	mi := &file_seabird_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BackendUpdatedEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BackendUpdatedEvent) ProtoMessage() {}
+
+func (x *BackendUpdatedEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_seabird_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BackendUpdatedEvent.ProtoReflect.Descriptor instead.
+func (*BackendUpdatedEvent) Descriptor() ([]byte, []int) {
+	return file_seabird_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *BackendUpdatedEvent) GetBackend() *Backend {
+	if x != nil {
+		return x.Backend
+	}
+	return nil
+}
+
+// ChannelUpdatedEvent is sent when anything about a channel changes: its
+// backend joins or leaves it, its backend disconnects, or its display name or
+// topic changes. It carries the whole channel as it now is.
+//
+// When a backend disconnects, its BackendUpdatedEvent comes first, followed by
+// one of these for each channel it was in.
+type ChannelUpdatedEvent struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Channel       *Channel               `protobuf:"bytes,1,opt,name=channel,proto3" json:"channel,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ChannelUpdatedEvent) Reset() {
+	*x = ChannelUpdatedEvent{}
+	mi := &file_seabird_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ChannelUpdatedEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ChannelUpdatedEvent) ProtoMessage() {}
+
+func (x *ChannelUpdatedEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_seabird_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ChannelUpdatedEvent.ProtoReflect.Descriptor instead.
+func (*ChannelUpdatedEvent) Descriptor() ([]byte, []int) {
+	return file_seabird_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *ChannelUpdatedEvent) GetChannel() *Channel {
+	if x != nil {
+		return x.Channel
+	}
+	return nil
+}
+
 type StreamEventsRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// A registry of commands this plugin responds to. A plugin MUST register all
@@ -257,7 +581,7 @@ type StreamEventsRequest struct {
 
 func (x *StreamEventsRequest) Reset() {
 	*x = StreamEventsRequest{}
-	mi := &file_seabird_proto_msgTypes[1]
+	mi := &file_seabird_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -269,7 +593,7 @@ func (x *StreamEventsRequest) String() string {
 func (*StreamEventsRequest) ProtoMessage() {}
 
 func (x *StreamEventsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[1]
+	mi := &file_seabird_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -282,7 +606,7 @@ func (x *StreamEventsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamEventsRequest.ProtoReflect.Descriptor instead.
 func (*StreamEventsRequest) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{1}
+	return file_seabird_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *StreamEventsRequest) GetCommands() map[string]*CommandMetadata {
@@ -309,7 +633,7 @@ type CommandMetadata struct {
 
 func (x *CommandMetadata) Reset() {
 	*x = CommandMetadata{}
-	mi := &file_seabird_proto_msgTypes[2]
+	mi := &file_seabird_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -321,7 +645,7 @@ func (x *CommandMetadata) String() string {
 func (*CommandMetadata) ProtoMessage() {}
 
 func (x *CommandMetadata) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[2]
+	mi := &file_seabird_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -334,7 +658,7 @@ func (x *CommandMetadata) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandMetadata.ProtoReflect.Descriptor instead.
 func (*CommandMetadata) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{2}
+	return file_seabird_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *CommandMetadata) GetName() string {
@@ -371,7 +695,7 @@ type PerformActionRequest struct {
 
 func (x *PerformActionRequest) Reset() {
 	*x = PerformActionRequest{}
-	mi := &file_seabird_proto_msgTypes[3]
+	mi := &file_seabird_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -383,7 +707,7 @@ func (x *PerformActionRequest) String() string {
 func (*PerformActionRequest) ProtoMessage() {}
 
 func (x *PerformActionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[3]
+	mi := &file_seabird_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -396,7 +720,7 @@ func (x *PerformActionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PerformActionRequest.ProtoReflect.Descriptor instead.
 func (*PerformActionRequest) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{3}
+	return file_seabird_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *PerformActionRequest) GetChannelId() string {
@@ -435,7 +759,7 @@ type PerformActionResponse struct {
 
 func (x *PerformActionResponse) Reset() {
 	*x = PerformActionResponse{}
-	mi := &file_seabird_proto_msgTypes[4]
+	mi := &file_seabird_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -447,7 +771,7 @@ func (x *PerformActionResponse) String() string {
 func (*PerformActionResponse) ProtoMessage() {}
 
 func (x *PerformActionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[4]
+	mi := &file_seabird_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -460,7 +784,7 @@ func (x *PerformActionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PerformActionResponse.ProtoReflect.Descriptor instead.
 func (*PerformActionResponse) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{4}
+	return file_seabird_proto_rawDescGZIP(), []int{8}
 }
 
 // PerformActionEvent will be emitted whenever a plugin or other client calls
@@ -479,7 +803,7 @@ type PerformActionEvent struct {
 
 func (x *PerformActionEvent) Reset() {
 	*x = PerformActionEvent{}
-	mi := &file_seabird_proto_msgTypes[5]
+	mi := &file_seabird_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -491,7 +815,7 @@ func (x *PerformActionEvent) String() string {
 func (*PerformActionEvent) ProtoMessage() {}
 
 func (x *PerformActionEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[5]
+	mi := &file_seabird_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -504,7 +828,7 @@ func (x *PerformActionEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PerformActionEvent.ProtoReflect.Descriptor instead.
 func (*PerformActionEvent) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{5}
+	return file_seabird_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *PerformActionEvent) GetSender() string {
@@ -548,7 +872,7 @@ type PerformPrivateActionRequest struct {
 
 func (x *PerformPrivateActionRequest) Reset() {
 	*x = PerformPrivateActionRequest{}
-	mi := &file_seabird_proto_msgTypes[6]
+	mi := &file_seabird_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -560,7 +884,7 @@ func (x *PerformPrivateActionRequest) String() string {
 func (*PerformPrivateActionRequest) ProtoMessage() {}
 
 func (x *PerformPrivateActionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[6]
+	mi := &file_seabird_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -573,7 +897,7 @@ func (x *PerformPrivateActionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PerformPrivateActionRequest.ProtoReflect.Descriptor instead.
 func (*PerformPrivateActionRequest) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{6}
+	return file_seabird_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *PerformPrivateActionRequest) GetUserId() string {
@@ -612,7 +936,7 @@ type PerformPrivateActionResponse struct {
 
 func (x *PerformPrivateActionResponse) Reset() {
 	*x = PerformPrivateActionResponse{}
-	mi := &file_seabird_proto_msgTypes[7]
+	mi := &file_seabird_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -624,7 +948,7 @@ func (x *PerformPrivateActionResponse) String() string {
 func (*PerformPrivateActionResponse) ProtoMessage() {}
 
 func (x *PerformPrivateActionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[7]
+	mi := &file_seabird_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -637,7 +961,7 @@ func (x *PerformPrivateActionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PerformPrivateActionResponse.ProtoReflect.Descriptor instead.
 func (*PerformPrivateActionResponse) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{7}
+	return file_seabird_proto_rawDescGZIP(), []int{11}
 }
 
 // PerformPrivateActionEvent will be emitted whenever a plugin or other client
@@ -656,7 +980,7 @@ type PerformPrivateActionEvent struct {
 
 func (x *PerformPrivateActionEvent) Reset() {
 	*x = PerformPrivateActionEvent{}
-	mi := &file_seabird_proto_msgTypes[8]
+	mi := &file_seabird_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -668,7 +992,7 @@ func (x *PerformPrivateActionEvent) String() string {
 func (*PerformPrivateActionEvent) ProtoMessage() {}
 
 func (x *PerformPrivateActionEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[8]
+	mi := &file_seabird_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -681,7 +1005,7 @@ func (x *PerformPrivateActionEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PerformPrivateActionEvent.ProtoReflect.Descriptor instead.
 func (*PerformPrivateActionEvent) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{8}
+	return file_seabird_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *PerformPrivateActionEvent) GetSender() string {
@@ -725,7 +1049,7 @@ type SendMessageRequest struct {
 
 func (x *SendMessageRequest) Reset() {
 	*x = SendMessageRequest{}
-	mi := &file_seabird_proto_msgTypes[9]
+	mi := &file_seabird_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -737,7 +1061,7 @@ func (x *SendMessageRequest) String() string {
 func (*SendMessageRequest) ProtoMessage() {}
 
 func (x *SendMessageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[9]
+	mi := &file_seabird_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -750,7 +1074,7 @@ func (x *SendMessageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SendMessageRequest.ProtoReflect.Descriptor instead.
 func (*SendMessageRequest) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{9}
+	return file_seabird_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *SendMessageRequest) GetChannelId() string {
@@ -789,7 +1113,7 @@ type SendMessageResponse struct {
 
 func (x *SendMessageResponse) Reset() {
 	*x = SendMessageResponse{}
-	mi := &file_seabird_proto_msgTypes[10]
+	mi := &file_seabird_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -801,7 +1125,7 @@ func (x *SendMessageResponse) String() string {
 func (*SendMessageResponse) ProtoMessage() {}
 
 func (x *SendMessageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[10]
+	mi := &file_seabird_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -814,7 +1138,7 @@ func (x *SendMessageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SendMessageResponse.ProtoReflect.Descriptor instead.
 func (*SendMessageResponse) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{10}
+	return file_seabird_proto_rawDescGZIP(), []int{14}
 }
 
 // SendMessageEvent will be emitted whenever a plugin or other client calls
@@ -833,7 +1157,7 @@ type SendMessageEvent struct {
 
 func (x *SendMessageEvent) Reset() {
 	*x = SendMessageEvent{}
-	mi := &file_seabird_proto_msgTypes[11]
+	mi := &file_seabird_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -845,7 +1169,7 @@ func (x *SendMessageEvent) String() string {
 func (*SendMessageEvent) ProtoMessage() {}
 
 func (x *SendMessageEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[11]
+	mi := &file_seabird_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -858,7 +1182,7 @@ func (x *SendMessageEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SendMessageEvent.ProtoReflect.Descriptor instead.
 func (*SendMessageEvent) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{11}
+	return file_seabird_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *SendMessageEvent) GetSender() string {
@@ -902,7 +1226,7 @@ type SendPrivateMessageRequest struct {
 
 func (x *SendPrivateMessageRequest) Reset() {
 	*x = SendPrivateMessageRequest{}
-	mi := &file_seabird_proto_msgTypes[12]
+	mi := &file_seabird_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -914,7 +1238,7 @@ func (x *SendPrivateMessageRequest) String() string {
 func (*SendPrivateMessageRequest) ProtoMessage() {}
 
 func (x *SendPrivateMessageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[12]
+	mi := &file_seabird_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -927,7 +1251,7 @@ func (x *SendPrivateMessageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SendPrivateMessageRequest.ProtoReflect.Descriptor instead.
 func (*SendPrivateMessageRequest) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{12}
+	return file_seabird_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *SendPrivateMessageRequest) GetUserId() string {
@@ -966,7 +1290,7 @@ type SendPrivateMessageResponse struct {
 
 func (x *SendPrivateMessageResponse) Reset() {
 	*x = SendPrivateMessageResponse{}
-	mi := &file_seabird_proto_msgTypes[13]
+	mi := &file_seabird_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -978,7 +1302,7 @@ func (x *SendPrivateMessageResponse) String() string {
 func (*SendPrivateMessageResponse) ProtoMessage() {}
 
 func (x *SendPrivateMessageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[13]
+	mi := &file_seabird_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -991,7 +1315,7 @@ func (x *SendPrivateMessageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SendPrivateMessageResponse.ProtoReflect.Descriptor instead.
 func (*SendPrivateMessageResponse) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{13}
+	return file_seabird_proto_rawDescGZIP(), []int{17}
 }
 
 // SendPrivateMessageEvent will be emitted whenever a plugin or other client
@@ -1010,7 +1334,7 @@ type SendPrivateMessageEvent struct {
 
 func (x *SendPrivateMessageEvent) Reset() {
 	*x = SendPrivateMessageEvent{}
-	mi := &file_seabird_proto_msgTypes[14]
+	mi := &file_seabird_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1022,7 +1346,7 @@ func (x *SendPrivateMessageEvent) String() string {
 func (*SendPrivateMessageEvent) ProtoMessage() {}
 
 func (x *SendPrivateMessageEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[14]
+	mi := &file_seabird_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1035,7 +1359,7 @@ func (x *SendPrivateMessageEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SendPrivateMessageEvent.ProtoReflect.Descriptor instead.
 func (*SendPrivateMessageEvent) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{14}
+	return file_seabird_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *SendPrivateMessageEvent) GetSender() string {
@@ -1080,7 +1404,7 @@ type JoinChannelRequest struct {
 
 func (x *JoinChannelRequest) Reset() {
 	*x = JoinChannelRequest{}
-	mi := &file_seabird_proto_msgTypes[15]
+	mi := &file_seabird_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1092,7 +1416,7 @@ func (x *JoinChannelRequest) String() string {
 func (*JoinChannelRequest) ProtoMessage() {}
 
 func (x *JoinChannelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[15]
+	mi := &file_seabird_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1105,7 +1429,7 @@ func (x *JoinChannelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JoinChannelRequest.ProtoReflect.Descriptor instead.
 func (*JoinChannelRequest) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{15}
+	return file_seabird_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *JoinChannelRequest) GetBackendId() string {
@@ -1137,7 +1461,7 @@ type JoinChannelResponse struct {
 
 func (x *JoinChannelResponse) Reset() {
 	*x = JoinChannelResponse{}
-	mi := &file_seabird_proto_msgTypes[16]
+	mi := &file_seabird_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1149,7 +1473,7 @@ func (x *JoinChannelResponse) String() string {
 func (*JoinChannelResponse) ProtoMessage() {}
 
 func (x *JoinChannelResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[16]
+	mi := &file_seabird_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1162,7 +1486,7 @@ func (x *JoinChannelResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JoinChannelResponse.ProtoReflect.Descriptor instead.
 func (*JoinChannelResponse) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{16}
+	return file_seabird_proto_rawDescGZIP(), []int{20}
 }
 
 // Request to leave a channel.
@@ -1177,7 +1501,7 @@ type LeaveChannelRequest struct {
 
 func (x *LeaveChannelRequest) Reset() {
 	*x = LeaveChannelRequest{}
-	mi := &file_seabird_proto_msgTypes[17]
+	mi := &file_seabird_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1189,7 +1513,7 @@ func (x *LeaveChannelRequest) String() string {
 func (*LeaveChannelRequest) ProtoMessage() {}
 
 func (x *LeaveChannelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[17]
+	mi := &file_seabird_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1202,7 +1526,7 @@ func (x *LeaveChannelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LeaveChannelRequest.ProtoReflect.Descriptor instead.
 func (*LeaveChannelRequest) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{17}
+	return file_seabird_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *LeaveChannelRequest) GetChannelId() string {
@@ -1234,7 +1558,7 @@ type LeaveChannelResponse struct {
 
 func (x *LeaveChannelResponse) Reset() {
 	*x = LeaveChannelResponse{}
-	mi := &file_seabird_proto_msgTypes[18]
+	mi := &file_seabird_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1246,7 +1570,7 @@ func (x *LeaveChannelResponse) String() string {
 func (*LeaveChannelResponse) ProtoMessage() {}
 
 func (x *LeaveChannelResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[18]
+	mi := &file_seabird_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1259,19 +1583,21 @@ func (x *LeaveChannelResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LeaveChannelResponse.ProtoReflect.Descriptor instead.
 func (*LeaveChannelResponse) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{18}
+	return file_seabird_proto_rawDescGZIP(), []int{22}
 }
 
-// Request to list all connected backends.
+// Request to list backends. Only connected backends are listed unless
+// include_disconnected is set.
 type ListBackendsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	IncludeDisconnected bool                   `protobuf:"varint,1,opt,name=include_disconnected,json=includeDisconnected,proto3" json:"include_disconnected,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *ListBackendsRequest) Reset() {
 	*x = ListBackendsRequest{}
-	mi := &file_seabird_proto_msgTypes[19]
+	mi := &file_seabird_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1283,7 +1609,7 @@ func (x *ListBackendsRequest) String() string {
 func (*ListBackendsRequest) ProtoMessage() {}
 
 func (x *ListBackendsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[19]
+	mi := &file_seabird_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1296,7 +1622,14 @@ func (x *ListBackendsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBackendsRequest.ProtoReflect.Descriptor instead.
 func (*ListBackendsRequest) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{19}
+	return file_seabird_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *ListBackendsRequest) GetIncludeDisconnected() bool {
+	if x != nil {
+		return x.IncludeDisconnected
+	}
+	return false
 }
 
 type ListBackendsResponse struct {
@@ -1308,7 +1641,7 @@ type ListBackendsResponse struct {
 
 func (x *ListBackendsResponse) Reset() {
 	*x = ListBackendsResponse{}
-	mi := &file_seabird_proto_msgTypes[20]
+	mi := &file_seabird_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1320,7 +1653,7 @@ func (x *ListBackendsResponse) String() string {
 func (*ListBackendsResponse) ProtoMessage() {}
 
 func (x *ListBackendsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[20]
+	mi := &file_seabird_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1333,7 +1666,7 @@ func (x *ListBackendsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBackendsResponse.ProtoReflect.Descriptor instead.
 func (*ListBackendsResponse) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{20}
+	return file_seabird_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *ListBackendsResponse) GetBackends() []*Backend {
@@ -1343,7 +1676,8 @@ func (x *ListBackendsResponse) GetBackends() []*Backend {
 	return nil
 }
 
-// Get info about a specific connected backend.
+// Get info about a specific backend. The metadata in the response is only
+// available while the backend is connected.
 type BackendInfoRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	BackendId     string                 `protobuf:"bytes,1,opt,name=backend_id,json=backendId,proto3" json:"backend_id,omitempty"`
@@ -1353,7 +1687,7 @@ type BackendInfoRequest struct {
 
 func (x *BackendInfoRequest) Reset() {
 	*x = BackendInfoRequest{}
-	mi := &file_seabird_proto_msgTypes[21]
+	mi := &file_seabird_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1365,7 +1699,7 @@ func (x *BackendInfoRequest) String() string {
 func (*BackendInfoRequest) ProtoMessage() {}
 
 func (x *BackendInfoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[21]
+	mi := &file_seabird_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1378,7 +1712,7 @@ func (x *BackendInfoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackendInfoRequest.ProtoReflect.Descriptor instead.
 func (*BackendInfoRequest) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{21}
+	return file_seabird_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *BackendInfoRequest) GetBackendId() string {
@@ -1398,7 +1732,7 @@ type BackendInfoResponse struct {
 
 func (x *BackendInfoResponse) Reset() {
 	*x = BackendInfoResponse{}
-	mi := &file_seabird_proto_msgTypes[22]
+	mi := &file_seabird_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1410,7 +1744,7 @@ func (x *BackendInfoResponse) String() string {
 func (*BackendInfoResponse) ProtoMessage() {}
 
 func (x *BackendInfoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[22]
+	mi := &file_seabird_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1423,7 +1757,7 @@ func (x *BackendInfoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackendInfoResponse.ProtoReflect.Descriptor instead.
 func (*BackendInfoResponse) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{22}
+	return file_seabird_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *BackendInfoResponse) GetBackend() *Backend {
@@ -1440,16 +1774,19 @@ func (x *BackendInfoResponse) GetMetadata() map[string]string {
 	return nil
 }
 
+// Request to list channels. An empty backend_id lists every backend's
+// channels. Only joined channels are listed unless include_inactive is set.
 type ListChannelsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	BackendId     string                 `protobuf:"bytes,1,opt,name=backend_id,json=backendId,proto3" json:"backend_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	BackendId       string                 `protobuf:"bytes,1,opt,name=backend_id,json=backendId,proto3" json:"backend_id,omitempty"`
+	IncludeInactive bool                   `protobuf:"varint,2,opt,name=include_inactive,json=includeInactive,proto3" json:"include_inactive,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *ListChannelsRequest) Reset() {
 	*x = ListChannelsRequest{}
-	mi := &file_seabird_proto_msgTypes[23]
+	mi := &file_seabird_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1461,7 +1798,7 @@ func (x *ListChannelsRequest) String() string {
 func (*ListChannelsRequest) ProtoMessage() {}
 
 func (x *ListChannelsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[23]
+	mi := &file_seabird_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1474,7 +1811,7 @@ func (x *ListChannelsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListChannelsRequest.ProtoReflect.Descriptor instead.
 func (*ListChannelsRequest) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{23}
+	return file_seabird_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *ListChannelsRequest) GetBackendId() string {
@@ -1482,6 +1819,13 @@ func (x *ListChannelsRequest) GetBackendId() string {
 		return x.BackendId
 	}
 	return ""
+}
+
+func (x *ListChannelsRequest) GetIncludeInactive() bool {
+	if x != nil {
+		return x.IncludeInactive
+	}
+	return false
 }
 
 type ListChannelsResponse struct {
@@ -1493,7 +1837,7 @@ type ListChannelsResponse struct {
 
 func (x *ListChannelsResponse) Reset() {
 	*x = ListChannelsResponse{}
-	mi := &file_seabird_proto_msgTypes[24]
+	mi := &file_seabird_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1505,7 +1849,7 @@ func (x *ListChannelsResponse) String() string {
 func (*ListChannelsResponse) ProtoMessage() {}
 
 func (x *ListChannelsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[24]
+	mi := &file_seabird_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1518,7 +1862,7 @@ func (x *ListChannelsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListChannelsResponse.ProtoReflect.Descriptor instead.
 func (*ListChannelsResponse) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{24}
+	return file_seabird_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *ListChannelsResponse) GetChannels() []*Channel {
@@ -1528,6 +1872,7 @@ func (x *ListChannelsResponse) GetChannels() []*Channel {
 	return nil
 }
 
+// Get info about any channel core knows about, whatever its state.
 type ChannelInfoRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ChannelId     string                 `protobuf:"bytes,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
@@ -1537,7 +1882,7 @@ type ChannelInfoRequest struct {
 
 func (x *ChannelInfoRequest) Reset() {
 	*x = ChannelInfoRequest{}
-	mi := &file_seabird_proto_msgTypes[25]
+	mi := &file_seabird_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1549,7 +1894,7 @@ func (x *ChannelInfoRequest) String() string {
 func (*ChannelInfoRequest) ProtoMessage() {}
 
 func (x *ChannelInfoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[25]
+	mi := &file_seabird_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1562,7 +1907,7 @@ func (x *ChannelInfoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChannelInfoRequest.ProtoReflect.Descriptor instead.
 func (*ChannelInfoRequest) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{25}
+	return file_seabird_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *ChannelInfoRequest) GetChannelId() string {
@@ -1581,7 +1926,7 @@ type ChannelInfoResponse struct {
 
 func (x *ChannelInfoResponse) Reset() {
 	*x = ChannelInfoResponse{}
-	mi := &file_seabird_proto_msgTypes[26]
+	mi := &file_seabird_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1593,7 +1938,7 @@ func (x *ChannelInfoResponse) String() string {
 func (*ChannelInfoResponse) ProtoMessage() {}
 
 func (x *ChannelInfoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[26]
+	mi := &file_seabird_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1606,7 +1951,7 @@ func (x *ChannelInfoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChannelInfoResponse.ProtoReflect.Descriptor instead.
 func (*ChannelInfoResponse) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{26}
+	return file_seabird_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *ChannelInfoResponse) GetChannel() *Channel {
@@ -1627,7 +1972,7 @@ type UpdateChannelInfoRequest struct {
 
 func (x *UpdateChannelInfoRequest) Reset() {
 	*x = UpdateChannelInfoRequest{}
-	mi := &file_seabird_proto_msgTypes[27]
+	mi := &file_seabird_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1639,7 +1984,7 @@ func (x *UpdateChannelInfoRequest) String() string {
 func (*UpdateChannelInfoRequest) ProtoMessage() {}
 
 func (x *UpdateChannelInfoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[27]
+	mi := &file_seabird_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1652,7 +1997,7 @@ func (x *UpdateChannelInfoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateChannelInfoRequest.ProtoReflect.Descriptor instead.
 func (*UpdateChannelInfoRequest) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{27}
+	return file_seabird_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *UpdateChannelInfoRequest) GetChannelId() string {
@@ -1684,7 +2029,7 @@ type UpdateChannelInfoResponse struct {
 
 func (x *UpdateChannelInfoResponse) Reset() {
 	*x = UpdateChannelInfoResponse{}
-	mi := &file_seabird_proto_msgTypes[28]
+	mi := &file_seabird_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1696,7 +2041,7 @@ func (x *UpdateChannelInfoResponse) String() string {
 func (*UpdateChannelInfoResponse) ProtoMessage() {}
 
 func (x *UpdateChannelInfoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[28]
+	mi := &file_seabird_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1709,7 +2054,7 @@ func (x *UpdateChannelInfoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateChannelInfoResponse.ProtoReflect.Descriptor instead.
 func (*UpdateChannelInfoResponse) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{28}
+	return file_seabird_proto_rawDescGZIP(), []int{32}
 }
 
 // A request for metadata about the running core instance.
@@ -1721,7 +2066,7 @@ type CoreInfoRequest struct {
 
 func (x *CoreInfoRequest) Reset() {
 	*x = CoreInfoRequest{}
-	mi := &file_seabird_proto_msgTypes[29]
+	mi := &file_seabird_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1733,7 +2078,7 @@ func (x *CoreInfoRequest) String() string {
 func (*CoreInfoRequest) ProtoMessage() {}
 
 func (x *CoreInfoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[29]
+	mi := &file_seabird_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1746,7 +2091,7 @@ func (x *CoreInfoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CoreInfoRequest.ProtoReflect.Descriptor instead.
 func (*CoreInfoRequest) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{29}
+	return file_seabird_proto_rawDescGZIP(), []int{33}
 }
 
 // Metadata about the running core instance.
@@ -1760,7 +2105,7 @@ type CoreInfoResponse struct {
 
 func (x *CoreInfoResponse) Reset() {
 	*x = CoreInfoResponse{}
-	mi := &file_seabird_proto_msgTypes[30]
+	mi := &file_seabird_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1772,7 +2117,7 @@ func (x *CoreInfoResponse) String() string {
 func (*CoreInfoResponse) ProtoMessage() {}
 
 func (x *CoreInfoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[30]
+	mi := &file_seabird_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1785,7 +2130,7 @@ func (x *CoreInfoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CoreInfoResponse.ProtoReflect.Descriptor instead.
 func (*CoreInfoResponse) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{30}
+	return file_seabird_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *CoreInfoResponse) GetStartupTimestamp() uint64 {
@@ -1810,7 +2155,7 @@ type CommandsRequest struct {
 
 func (x *CommandsRequest) Reset() {
 	*x = CommandsRequest{}
-	mi := &file_seabird_proto_msgTypes[31]
+	mi := &file_seabird_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1822,7 +2167,7 @@ func (x *CommandsRequest) String() string {
 func (*CommandsRequest) ProtoMessage() {}
 
 func (x *CommandsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[31]
+	mi := &file_seabird_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1835,7 +2180,7 @@ func (x *CommandsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandsRequest.ProtoReflect.Descriptor instead.
 func (*CommandsRequest) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{31}
+	return file_seabird_proto_rawDescGZIP(), []int{35}
 }
 
 type CommandsResponse struct {
@@ -1847,7 +2192,7 @@ type CommandsResponse struct {
 
 func (x *CommandsResponse) Reset() {
 	*x = CommandsResponse{}
-	mi := &file_seabird_proto_msgTypes[32]
+	mi := &file_seabird_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1859,7 +2204,7 @@ func (x *CommandsResponse) String() string {
 func (*CommandsResponse) ProtoMessage() {}
 
 func (x *CommandsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[32]
+	mi := &file_seabird_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1872,7 +2217,7 @@ func (x *CommandsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandsResponse.ProtoReflect.Descriptor instead.
 func (*CommandsResponse) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{32}
+	return file_seabird_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *CommandsResponse) GetCommands() map[string]*CommandMetadata {
@@ -1886,7 +2231,18 @@ var File_seabird_proto protoreflect.FileDescriptor
 
 const file_seabird_proto_rawDesc = "" +
 	"\n" +
-	"\rseabird.proto\x12\aseabird\x1a\fcommon.proto\"\x81\x06\n" +
+	"\rseabird.proto\x12\aseabird\x1a\fcommon.proto\"K\n" +
+	"\aBackend\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04type\x18\x02 \x01(\tR\x04type\x12\x1c\n" +
+	"\tconnected\x18\x03 \x01(\bR\tconnected\"\x9e\x01\n" +
+	"\aChannel\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12!\n" +
+	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x12\x14\n" +
+	"\x05topic\x18\x03 \x01(\tR\x05topic\x12\x1d\n" +
+	"\n" +
+	"backend_id\x18\x04 \x01(\tR\tbackendId\x12+\n" +
+	"\x05state\x18\x05 \x01(\x0e2\x15.seabird.ChannelStateR\x05state\"\x93\a\n" +
 	"\x05Event\x120\n" +
 	"\amessage\x18\x01 \x01(\v2\x14.common.MessageEventH\x00R\amessage\x12F\n" +
 	"\x0fprivate_message\x18\x02 \x01(\v2\x1b.common.PrivateMessageEventH\x00R\x0eprivateMessage\x120\n" +
@@ -1898,12 +2254,18 @@ const file_seabird_proto_rawDesc = "" +
 	"\x14send_private_message\x18\b \x01(\v2 .seabird.SendPrivateMessageEventH\x00R\x12sendPrivateMessage\x12D\n" +
 	"\x0eperform_action\x18\t \x01(\v2\x1b.seabird.PerformActionEventH\x00R\rperformAction\x12Z\n" +
 	"\x16perform_private_action\x18\n" +
-	" \x01(\v2\".seabird.PerformPrivateActionEventH\x00R\x14performPrivateAction\x12,\n" +
+	" \x01(\v2\".seabird.PerformPrivateActionEventH\x00R\x14performPrivateAction\x12G\n" +
+	"\x0fbackend_updated\x18\f \x01(\v2\x1c.seabird.BackendUpdatedEventH\x00R\x0ebackendUpdated\x12G\n" +
+	"\x0fchannel_updated\x18\r \x01(\v2\x1c.seabird.ChannelUpdatedEventH\x00R\x0echannelUpdated\x12,\n" +
 	"\x04tags\x18\v \x03(\v2\x18.seabird.Event.TagsEntryR\x04tags\x1a7\n" +
 	"\tTagsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\a\n" +
-	"\x05inner\"\xb4\x01\n" +
+	"\x05inner\"A\n" +
+	"\x13BackendUpdatedEvent\x12*\n" +
+	"\abackend\x18\x01 \x01(\v2\x10.seabird.BackendR\abackend\"A\n" +
+	"\x13ChannelUpdatedEvent\x12*\n" +
+	"\achannel\x18\x01 \x01(\v2\x10.seabird.ChannelR\achannel\"\xb4\x01\n" +
 	"\x13StreamEventsRequest\x12F\n" +
 	"\bcommands\x18\x01 \x03(\v2*.seabird.StreamEventsRequest.CommandsEntryR\bcommands\x1aU\n" +
 	"\rCommandsEntry\x12\x10\n" +
@@ -1999,29 +2361,31 @@ const file_seabird_proto_rawDesc = "" +
 	"\tTagsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x16\n" +
-	"\x14LeaveChannelResponse\"\x15\n" +
-	"\x13ListBackendsRequest\"C\n" +
-	"\x14ListBackendsResponse\x12+\n" +
-	"\bbackends\x18\x01 \x03(\v2\x0f.common.BackendR\bbackends\"3\n" +
+	"\x14LeaveChannelResponse\"H\n" +
+	"\x13ListBackendsRequest\x121\n" +
+	"\x14include_disconnected\x18\x01 \x01(\bR\x13includeDisconnected\"D\n" +
+	"\x14ListBackendsResponse\x12,\n" +
+	"\bbackends\x18\x01 \x03(\v2\x10.seabird.BackendR\bbackends\"3\n" +
 	"\x12BackendInfoRequest\x12\x1d\n" +
 	"\n" +
-	"backend_id\x18\x01 \x01(\tR\tbackendId\"\xc5\x01\n" +
-	"\x13BackendInfoResponse\x12)\n" +
-	"\abackend\x18\x01 \x01(\v2\x0f.common.BackendR\abackend\x12F\n" +
+	"backend_id\x18\x01 \x01(\tR\tbackendId\"\xc6\x01\n" +
+	"\x13BackendInfoResponse\x12*\n" +
+	"\abackend\x18\x01 \x01(\v2\x10.seabird.BackendR\abackend\x12F\n" +
 	"\bmetadata\x18\x02 \x03(\v2*.seabird.BackendInfoResponse.MetadataEntryR\bmetadata\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"4\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"_\n" +
 	"\x13ListChannelsRequest\x12\x1d\n" +
 	"\n" +
-	"backend_id\x18\x01 \x01(\tR\tbackendId\"C\n" +
-	"\x14ListChannelsResponse\x12+\n" +
-	"\bchannels\x18\x01 \x03(\v2\x0f.common.ChannelR\bchannels\"3\n" +
+	"backend_id\x18\x01 \x01(\tR\tbackendId\x12)\n" +
+	"\x10include_inactive\x18\x02 \x01(\bR\x0fincludeInactive\"D\n" +
+	"\x14ListChannelsResponse\x12,\n" +
+	"\bchannels\x18\x01 \x03(\v2\x10.seabird.ChannelR\bchannels\"3\n" +
 	"\x12ChannelInfoRequest\x12\x1d\n" +
 	"\n" +
-	"channel_id\x18\x01 \x01(\tR\tchannelId\"@\n" +
-	"\x13ChannelInfoResponse\x12)\n" +
-	"\achannel\x18\x01 \x01(\v2\x0f.common.ChannelR\achannel\"\xc9\x01\n" +
+	"channel_id\x18\x01 \x01(\tR\tchannelId\"A\n" +
+	"\x13ChannelInfoResponse\x12*\n" +
+	"\achannel\x18\x01 \x01(\v2\x10.seabird.ChannelR\achannel\"\xc9\x01\n" +
 	"\x18UpdateChannelInfoRequest\x12\x1d\n" +
 	"\n" +
 	"channel_id\x18\x01 \x01(\tR\tchannelId\x12\x14\n" +
@@ -2040,7 +2404,12 @@ const file_seabird_proto_rawDesc = "" +
 	"\bcommands\x18\x01 \x03(\v2'.seabird.CommandsResponse.CommandsEntryR\bcommands\x1aU\n" +
 	"\rCommandsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12.\n" +
-	"\x05value\x18\x02 \x01(\v2\x18.seabird.CommandMetadataR\x05value:\x028\x012\xdd\b\n" +
+	"\x05value\x18\x02 \x01(\v2\x18.seabird.CommandMetadataR\x05value:\x028\x01*\x8d\x01\n" +
+	"\fChannelState\x12\x1d\n" +
+	"\x19CHANNEL_STATE_UNSPECIFIED\x10\x00\x12\x18\n" +
+	"\x14CHANNEL_STATE_JOINED\x10\x01\x12\x1c\n" +
+	"\x18CHANNEL_STATE_NOT_JOINED\x10\x02\x12&\n" +
+	"\"CHANNEL_STATE_BACKEND_DISCONNECTED\x10\x032\xdd\b\n" +
 	"\aSeabird\x12>\n" +
 	"\fStreamEvents\x12\x1c.seabird.StreamEventsRequest\x1a\x0e.seabird.Event0\x01\x12N\n" +
 	"\rPerformAction\x12\x1d.seabird.PerformActionRequest\x1a\x1e.seabird.PerformActionResponse\x12c\n" +
@@ -2070,131 +2439,140 @@ func file_seabird_proto_rawDescGZIP() []byte {
 	return file_seabird_proto_rawDescData
 }
 
-var file_seabird_proto_msgTypes = make([]protoimpl.MessageInfo, 44)
+var file_seabird_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_seabird_proto_msgTypes = make([]protoimpl.MessageInfo, 48)
 var file_seabird_proto_goTypes = []any{
-	(*Event)(nil),                        // 0: seabird.Event
-	(*StreamEventsRequest)(nil),          // 1: seabird.StreamEventsRequest
-	(*CommandMetadata)(nil),              // 2: seabird.CommandMetadata
-	(*PerformActionRequest)(nil),         // 3: seabird.PerformActionRequest
-	(*PerformActionResponse)(nil),        // 4: seabird.PerformActionResponse
-	(*PerformActionEvent)(nil),           // 5: seabird.PerformActionEvent
-	(*PerformPrivateActionRequest)(nil),  // 6: seabird.PerformPrivateActionRequest
-	(*PerformPrivateActionResponse)(nil), // 7: seabird.PerformPrivateActionResponse
-	(*PerformPrivateActionEvent)(nil),    // 8: seabird.PerformPrivateActionEvent
-	(*SendMessageRequest)(nil),           // 9: seabird.SendMessageRequest
-	(*SendMessageResponse)(nil),          // 10: seabird.SendMessageResponse
-	(*SendMessageEvent)(nil),             // 11: seabird.SendMessageEvent
-	(*SendPrivateMessageRequest)(nil),    // 12: seabird.SendPrivateMessageRequest
-	(*SendPrivateMessageResponse)(nil),   // 13: seabird.SendPrivateMessageResponse
-	(*SendPrivateMessageEvent)(nil),      // 14: seabird.SendPrivateMessageEvent
-	(*JoinChannelRequest)(nil),           // 15: seabird.JoinChannelRequest
-	(*JoinChannelResponse)(nil),          // 16: seabird.JoinChannelResponse
-	(*LeaveChannelRequest)(nil),          // 17: seabird.LeaveChannelRequest
-	(*LeaveChannelResponse)(nil),         // 18: seabird.LeaveChannelResponse
-	(*ListBackendsRequest)(nil),          // 19: seabird.ListBackendsRequest
-	(*ListBackendsResponse)(nil),         // 20: seabird.ListBackendsResponse
-	(*BackendInfoRequest)(nil),           // 21: seabird.BackendInfoRequest
-	(*BackendInfoResponse)(nil),          // 22: seabird.BackendInfoResponse
-	(*ListChannelsRequest)(nil),          // 23: seabird.ListChannelsRequest
-	(*ListChannelsResponse)(nil),         // 24: seabird.ListChannelsResponse
-	(*ChannelInfoRequest)(nil),           // 25: seabird.ChannelInfoRequest
-	(*ChannelInfoResponse)(nil),          // 26: seabird.ChannelInfoResponse
-	(*UpdateChannelInfoRequest)(nil),     // 27: seabird.UpdateChannelInfoRequest
-	(*UpdateChannelInfoResponse)(nil),    // 28: seabird.UpdateChannelInfoResponse
-	(*CoreInfoRequest)(nil),              // 29: seabird.CoreInfoRequest
-	(*CoreInfoResponse)(nil),             // 30: seabird.CoreInfoResponse
-	(*CommandsRequest)(nil),              // 31: seabird.CommandsRequest
-	(*CommandsResponse)(nil),             // 32: seabird.CommandsResponse
-	nil,                                  // 33: seabird.Event.TagsEntry
-	nil,                                  // 34: seabird.StreamEventsRequest.CommandsEntry
-	nil,                                  // 35: seabird.PerformActionRequest.TagsEntry
-	nil,                                  // 36: seabird.PerformPrivateActionRequest.TagsEntry
-	nil,                                  // 37: seabird.SendMessageRequest.TagsEntry
-	nil,                                  // 38: seabird.SendPrivateMessageRequest.TagsEntry
-	nil,                                  // 39: seabird.JoinChannelRequest.TagsEntry
-	nil,                                  // 40: seabird.LeaveChannelRequest.TagsEntry
-	nil,                                  // 41: seabird.BackendInfoResponse.MetadataEntry
-	nil,                                  // 42: seabird.UpdateChannelInfoRequest.TagsEntry
-	nil,                                  // 43: seabird.CommandsResponse.CommandsEntry
-	(*MessageEvent)(nil),                 // 44: common.MessageEvent
-	(*PrivateMessageEvent)(nil),          // 45: common.PrivateMessageEvent
-	(*MentionEvent)(nil),                 // 46: common.MentionEvent
-	(*CommandEvent)(nil),                 // 47: common.CommandEvent
-	(*ActionEvent)(nil),                  // 48: common.ActionEvent
-	(*PrivateActionEvent)(nil),           // 49: common.PrivateActionEvent
-	(*Block)(nil),                        // 50: common.Block
-	(*Backend)(nil),                      // 51: common.Backend
-	(*Channel)(nil),                      // 52: common.Channel
+	(ChannelState)(0),                    // 0: seabird.ChannelState
+	(*Backend)(nil),                      // 1: seabird.Backend
+	(*Channel)(nil),                      // 2: seabird.Channel
+	(*Event)(nil),                        // 3: seabird.Event
+	(*BackendUpdatedEvent)(nil),          // 4: seabird.BackendUpdatedEvent
+	(*ChannelUpdatedEvent)(nil),          // 5: seabird.ChannelUpdatedEvent
+	(*StreamEventsRequest)(nil),          // 6: seabird.StreamEventsRequest
+	(*CommandMetadata)(nil),              // 7: seabird.CommandMetadata
+	(*PerformActionRequest)(nil),         // 8: seabird.PerformActionRequest
+	(*PerformActionResponse)(nil),        // 9: seabird.PerformActionResponse
+	(*PerformActionEvent)(nil),           // 10: seabird.PerformActionEvent
+	(*PerformPrivateActionRequest)(nil),  // 11: seabird.PerformPrivateActionRequest
+	(*PerformPrivateActionResponse)(nil), // 12: seabird.PerformPrivateActionResponse
+	(*PerformPrivateActionEvent)(nil),    // 13: seabird.PerformPrivateActionEvent
+	(*SendMessageRequest)(nil),           // 14: seabird.SendMessageRequest
+	(*SendMessageResponse)(nil),          // 15: seabird.SendMessageResponse
+	(*SendMessageEvent)(nil),             // 16: seabird.SendMessageEvent
+	(*SendPrivateMessageRequest)(nil),    // 17: seabird.SendPrivateMessageRequest
+	(*SendPrivateMessageResponse)(nil),   // 18: seabird.SendPrivateMessageResponse
+	(*SendPrivateMessageEvent)(nil),      // 19: seabird.SendPrivateMessageEvent
+	(*JoinChannelRequest)(nil),           // 20: seabird.JoinChannelRequest
+	(*JoinChannelResponse)(nil),          // 21: seabird.JoinChannelResponse
+	(*LeaveChannelRequest)(nil),          // 22: seabird.LeaveChannelRequest
+	(*LeaveChannelResponse)(nil),         // 23: seabird.LeaveChannelResponse
+	(*ListBackendsRequest)(nil),          // 24: seabird.ListBackendsRequest
+	(*ListBackendsResponse)(nil),         // 25: seabird.ListBackendsResponse
+	(*BackendInfoRequest)(nil),           // 26: seabird.BackendInfoRequest
+	(*BackendInfoResponse)(nil),          // 27: seabird.BackendInfoResponse
+	(*ListChannelsRequest)(nil),          // 28: seabird.ListChannelsRequest
+	(*ListChannelsResponse)(nil),         // 29: seabird.ListChannelsResponse
+	(*ChannelInfoRequest)(nil),           // 30: seabird.ChannelInfoRequest
+	(*ChannelInfoResponse)(nil),          // 31: seabird.ChannelInfoResponse
+	(*UpdateChannelInfoRequest)(nil),     // 32: seabird.UpdateChannelInfoRequest
+	(*UpdateChannelInfoResponse)(nil),    // 33: seabird.UpdateChannelInfoResponse
+	(*CoreInfoRequest)(nil),              // 34: seabird.CoreInfoRequest
+	(*CoreInfoResponse)(nil),             // 35: seabird.CoreInfoResponse
+	(*CommandsRequest)(nil),              // 36: seabird.CommandsRequest
+	(*CommandsResponse)(nil),             // 37: seabird.CommandsResponse
+	nil,                                  // 38: seabird.Event.TagsEntry
+	nil,                                  // 39: seabird.StreamEventsRequest.CommandsEntry
+	nil,                                  // 40: seabird.PerformActionRequest.TagsEntry
+	nil,                                  // 41: seabird.PerformPrivateActionRequest.TagsEntry
+	nil,                                  // 42: seabird.SendMessageRequest.TagsEntry
+	nil,                                  // 43: seabird.SendPrivateMessageRequest.TagsEntry
+	nil,                                  // 44: seabird.JoinChannelRequest.TagsEntry
+	nil,                                  // 45: seabird.LeaveChannelRequest.TagsEntry
+	nil,                                  // 46: seabird.BackendInfoResponse.MetadataEntry
+	nil,                                  // 47: seabird.UpdateChannelInfoRequest.TagsEntry
+	nil,                                  // 48: seabird.CommandsResponse.CommandsEntry
+	(*MessageEvent)(nil),                 // 49: common.MessageEvent
+	(*PrivateMessageEvent)(nil),          // 50: common.PrivateMessageEvent
+	(*MentionEvent)(nil),                 // 51: common.MentionEvent
+	(*CommandEvent)(nil),                 // 52: common.CommandEvent
+	(*ActionEvent)(nil),                  // 53: common.ActionEvent
+	(*PrivateActionEvent)(nil),           // 54: common.PrivateActionEvent
+	(*Block)(nil),                        // 55: common.Block
 }
 var file_seabird_proto_depIdxs = []int32{
-	44, // 0: seabird.Event.message:type_name -> common.MessageEvent
-	45, // 1: seabird.Event.private_message:type_name -> common.PrivateMessageEvent
-	46, // 2: seabird.Event.mention:type_name -> common.MentionEvent
-	47, // 3: seabird.Event.command:type_name -> common.CommandEvent
-	48, // 4: seabird.Event.action:type_name -> common.ActionEvent
-	49, // 5: seabird.Event.private_action:type_name -> common.PrivateActionEvent
-	11, // 6: seabird.Event.send_message:type_name -> seabird.SendMessageEvent
-	14, // 7: seabird.Event.send_private_message:type_name -> seabird.SendPrivateMessageEvent
-	5,  // 8: seabird.Event.perform_action:type_name -> seabird.PerformActionEvent
-	8,  // 9: seabird.Event.perform_private_action:type_name -> seabird.PerformPrivateActionEvent
-	33, // 10: seabird.Event.tags:type_name -> seabird.Event.TagsEntry
-	34, // 11: seabird.StreamEventsRequest.commands:type_name -> seabird.StreamEventsRequest.CommandsEntry
-	50, // 12: seabird.PerformActionRequest.root_block:type_name -> common.Block
-	35, // 13: seabird.PerformActionRequest.tags:type_name -> seabird.PerformActionRequest.TagsEntry
-	50, // 14: seabird.PerformActionEvent.root_block:type_name -> common.Block
-	50, // 15: seabird.PerformPrivateActionRequest.root_block:type_name -> common.Block
-	36, // 16: seabird.PerformPrivateActionRequest.tags:type_name -> seabird.PerformPrivateActionRequest.TagsEntry
-	50, // 17: seabird.PerformPrivateActionEvent.root_block:type_name -> common.Block
-	50, // 18: seabird.SendMessageRequest.root_block:type_name -> common.Block
-	37, // 19: seabird.SendMessageRequest.tags:type_name -> seabird.SendMessageRequest.TagsEntry
-	50, // 20: seabird.SendMessageEvent.root_block:type_name -> common.Block
-	50, // 21: seabird.SendPrivateMessageRequest.root_block:type_name -> common.Block
-	38, // 22: seabird.SendPrivateMessageRequest.tags:type_name -> seabird.SendPrivateMessageRequest.TagsEntry
-	50, // 23: seabird.SendPrivateMessageEvent.root_block:type_name -> common.Block
-	39, // 24: seabird.JoinChannelRequest.tags:type_name -> seabird.JoinChannelRequest.TagsEntry
-	40, // 25: seabird.LeaveChannelRequest.tags:type_name -> seabird.LeaveChannelRequest.TagsEntry
-	51, // 26: seabird.ListBackendsResponse.backends:type_name -> common.Backend
-	51, // 27: seabird.BackendInfoResponse.backend:type_name -> common.Backend
-	41, // 28: seabird.BackendInfoResponse.metadata:type_name -> seabird.BackendInfoResponse.MetadataEntry
-	52, // 29: seabird.ListChannelsResponse.channels:type_name -> common.Channel
-	52, // 30: seabird.ChannelInfoResponse.channel:type_name -> common.Channel
-	42, // 31: seabird.UpdateChannelInfoRequest.tags:type_name -> seabird.UpdateChannelInfoRequest.TagsEntry
-	43, // 32: seabird.CommandsResponse.commands:type_name -> seabird.CommandsResponse.CommandsEntry
-	2,  // 33: seabird.StreamEventsRequest.CommandsEntry.value:type_name -> seabird.CommandMetadata
-	2,  // 34: seabird.CommandsResponse.CommandsEntry.value:type_name -> seabird.CommandMetadata
-	1,  // 35: seabird.Seabird.StreamEvents:input_type -> seabird.StreamEventsRequest
-	3,  // 36: seabird.Seabird.PerformAction:input_type -> seabird.PerformActionRequest
-	6,  // 37: seabird.Seabird.PerformPrivateAction:input_type -> seabird.PerformPrivateActionRequest
-	9,  // 38: seabird.Seabird.SendMessage:input_type -> seabird.SendMessageRequest
-	12, // 39: seabird.Seabird.SendPrivateMessage:input_type -> seabird.SendPrivateMessageRequest
-	15, // 40: seabird.Seabird.JoinChannel:input_type -> seabird.JoinChannelRequest
-	17, // 41: seabird.Seabird.LeaveChannel:input_type -> seabird.LeaveChannelRequest
-	27, // 42: seabird.Seabird.UpdateChannelInfo:input_type -> seabird.UpdateChannelInfoRequest
-	19, // 43: seabird.Seabird.ListBackends:input_type -> seabird.ListBackendsRequest
-	21, // 44: seabird.Seabird.GetBackendInfo:input_type -> seabird.BackendInfoRequest
-	23, // 45: seabird.Seabird.ListChannels:input_type -> seabird.ListChannelsRequest
-	25, // 46: seabird.Seabird.GetChannelInfo:input_type -> seabird.ChannelInfoRequest
-	29, // 47: seabird.Seabird.GetCoreInfo:input_type -> seabird.CoreInfoRequest
-	31, // 48: seabird.Seabird.RegisteredCommands:input_type -> seabird.CommandsRequest
-	0,  // 49: seabird.Seabird.StreamEvents:output_type -> seabird.Event
-	4,  // 50: seabird.Seabird.PerformAction:output_type -> seabird.PerformActionResponse
-	7,  // 51: seabird.Seabird.PerformPrivateAction:output_type -> seabird.PerformPrivateActionResponse
-	10, // 52: seabird.Seabird.SendMessage:output_type -> seabird.SendMessageResponse
-	13, // 53: seabird.Seabird.SendPrivateMessage:output_type -> seabird.SendPrivateMessageResponse
-	16, // 54: seabird.Seabird.JoinChannel:output_type -> seabird.JoinChannelResponse
-	18, // 55: seabird.Seabird.LeaveChannel:output_type -> seabird.LeaveChannelResponse
-	28, // 56: seabird.Seabird.UpdateChannelInfo:output_type -> seabird.UpdateChannelInfoResponse
-	20, // 57: seabird.Seabird.ListBackends:output_type -> seabird.ListBackendsResponse
-	22, // 58: seabird.Seabird.GetBackendInfo:output_type -> seabird.BackendInfoResponse
-	24, // 59: seabird.Seabird.ListChannels:output_type -> seabird.ListChannelsResponse
-	26, // 60: seabird.Seabird.GetChannelInfo:output_type -> seabird.ChannelInfoResponse
-	30, // 61: seabird.Seabird.GetCoreInfo:output_type -> seabird.CoreInfoResponse
-	32, // 62: seabird.Seabird.RegisteredCommands:output_type -> seabird.CommandsResponse
-	49, // [49:63] is the sub-list for method output_type
-	35, // [35:49] is the sub-list for method input_type
-	35, // [35:35] is the sub-list for extension type_name
-	35, // [35:35] is the sub-list for extension extendee
-	0,  // [0:35] is the sub-list for field type_name
+	0,  // 0: seabird.Channel.state:type_name -> seabird.ChannelState
+	49, // 1: seabird.Event.message:type_name -> common.MessageEvent
+	50, // 2: seabird.Event.private_message:type_name -> common.PrivateMessageEvent
+	51, // 3: seabird.Event.mention:type_name -> common.MentionEvent
+	52, // 4: seabird.Event.command:type_name -> common.CommandEvent
+	53, // 5: seabird.Event.action:type_name -> common.ActionEvent
+	54, // 6: seabird.Event.private_action:type_name -> common.PrivateActionEvent
+	16, // 7: seabird.Event.send_message:type_name -> seabird.SendMessageEvent
+	19, // 8: seabird.Event.send_private_message:type_name -> seabird.SendPrivateMessageEvent
+	10, // 9: seabird.Event.perform_action:type_name -> seabird.PerformActionEvent
+	13, // 10: seabird.Event.perform_private_action:type_name -> seabird.PerformPrivateActionEvent
+	4,  // 11: seabird.Event.backend_updated:type_name -> seabird.BackendUpdatedEvent
+	5,  // 12: seabird.Event.channel_updated:type_name -> seabird.ChannelUpdatedEvent
+	38, // 13: seabird.Event.tags:type_name -> seabird.Event.TagsEntry
+	1,  // 14: seabird.BackendUpdatedEvent.backend:type_name -> seabird.Backend
+	2,  // 15: seabird.ChannelUpdatedEvent.channel:type_name -> seabird.Channel
+	39, // 16: seabird.StreamEventsRequest.commands:type_name -> seabird.StreamEventsRequest.CommandsEntry
+	55, // 17: seabird.PerformActionRequest.root_block:type_name -> common.Block
+	40, // 18: seabird.PerformActionRequest.tags:type_name -> seabird.PerformActionRequest.TagsEntry
+	55, // 19: seabird.PerformActionEvent.root_block:type_name -> common.Block
+	55, // 20: seabird.PerformPrivateActionRequest.root_block:type_name -> common.Block
+	41, // 21: seabird.PerformPrivateActionRequest.tags:type_name -> seabird.PerformPrivateActionRequest.TagsEntry
+	55, // 22: seabird.PerformPrivateActionEvent.root_block:type_name -> common.Block
+	55, // 23: seabird.SendMessageRequest.root_block:type_name -> common.Block
+	42, // 24: seabird.SendMessageRequest.tags:type_name -> seabird.SendMessageRequest.TagsEntry
+	55, // 25: seabird.SendMessageEvent.root_block:type_name -> common.Block
+	55, // 26: seabird.SendPrivateMessageRequest.root_block:type_name -> common.Block
+	43, // 27: seabird.SendPrivateMessageRequest.tags:type_name -> seabird.SendPrivateMessageRequest.TagsEntry
+	55, // 28: seabird.SendPrivateMessageEvent.root_block:type_name -> common.Block
+	44, // 29: seabird.JoinChannelRequest.tags:type_name -> seabird.JoinChannelRequest.TagsEntry
+	45, // 30: seabird.LeaveChannelRequest.tags:type_name -> seabird.LeaveChannelRequest.TagsEntry
+	1,  // 31: seabird.ListBackendsResponse.backends:type_name -> seabird.Backend
+	1,  // 32: seabird.BackendInfoResponse.backend:type_name -> seabird.Backend
+	46, // 33: seabird.BackendInfoResponse.metadata:type_name -> seabird.BackendInfoResponse.MetadataEntry
+	2,  // 34: seabird.ListChannelsResponse.channels:type_name -> seabird.Channel
+	2,  // 35: seabird.ChannelInfoResponse.channel:type_name -> seabird.Channel
+	47, // 36: seabird.UpdateChannelInfoRequest.tags:type_name -> seabird.UpdateChannelInfoRequest.TagsEntry
+	48, // 37: seabird.CommandsResponse.commands:type_name -> seabird.CommandsResponse.CommandsEntry
+	7,  // 38: seabird.StreamEventsRequest.CommandsEntry.value:type_name -> seabird.CommandMetadata
+	7,  // 39: seabird.CommandsResponse.CommandsEntry.value:type_name -> seabird.CommandMetadata
+	6,  // 40: seabird.Seabird.StreamEvents:input_type -> seabird.StreamEventsRequest
+	8,  // 41: seabird.Seabird.PerformAction:input_type -> seabird.PerformActionRequest
+	11, // 42: seabird.Seabird.PerformPrivateAction:input_type -> seabird.PerformPrivateActionRequest
+	14, // 43: seabird.Seabird.SendMessage:input_type -> seabird.SendMessageRequest
+	17, // 44: seabird.Seabird.SendPrivateMessage:input_type -> seabird.SendPrivateMessageRequest
+	20, // 45: seabird.Seabird.JoinChannel:input_type -> seabird.JoinChannelRequest
+	22, // 46: seabird.Seabird.LeaveChannel:input_type -> seabird.LeaveChannelRequest
+	32, // 47: seabird.Seabird.UpdateChannelInfo:input_type -> seabird.UpdateChannelInfoRequest
+	24, // 48: seabird.Seabird.ListBackends:input_type -> seabird.ListBackendsRequest
+	26, // 49: seabird.Seabird.GetBackendInfo:input_type -> seabird.BackendInfoRequest
+	28, // 50: seabird.Seabird.ListChannels:input_type -> seabird.ListChannelsRequest
+	30, // 51: seabird.Seabird.GetChannelInfo:input_type -> seabird.ChannelInfoRequest
+	34, // 52: seabird.Seabird.GetCoreInfo:input_type -> seabird.CoreInfoRequest
+	36, // 53: seabird.Seabird.RegisteredCommands:input_type -> seabird.CommandsRequest
+	3,  // 54: seabird.Seabird.StreamEvents:output_type -> seabird.Event
+	9,  // 55: seabird.Seabird.PerformAction:output_type -> seabird.PerformActionResponse
+	12, // 56: seabird.Seabird.PerformPrivateAction:output_type -> seabird.PerformPrivateActionResponse
+	15, // 57: seabird.Seabird.SendMessage:output_type -> seabird.SendMessageResponse
+	18, // 58: seabird.Seabird.SendPrivateMessage:output_type -> seabird.SendPrivateMessageResponse
+	21, // 59: seabird.Seabird.JoinChannel:output_type -> seabird.JoinChannelResponse
+	23, // 60: seabird.Seabird.LeaveChannel:output_type -> seabird.LeaveChannelResponse
+	33, // 61: seabird.Seabird.UpdateChannelInfo:output_type -> seabird.UpdateChannelInfoResponse
+	25, // 62: seabird.Seabird.ListBackends:output_type -> seabird.ListBackendsResponse
+	27, // 63: seabird.Seabird.GetBackendInfo:output_type -> seabird.BackendInfoResponse
+	29, // 64: seabird.Seabird.ListChannels:output_type -> seabird.ListChannelsResponse
+	31, // 65: seabird.Seabird.GetChannelInfo:output_type -> seabird.ChannelInfoResponse
+	35, // 66: seabird.Seabird.GetCoreInfo:output_type -> seabird.CoreInfoResponse
+	37, // 67: seabird.Seabird.RegisteredCommands:output_type -> seabird.CommandsResponse
+	54, // [54:68] is the sub-list for method output_type
+	40, // [40:54] is the sub-list for method input_type
+	40, // [40:40] is the sub-list for extension type_name
+	40, // [40:40] is the sub-list for extension extendee
+	0,  // [0:40] is the sub-list for field type_name
 }
 
 func init() { file_seabird_proto_init() }
@@ -2203,7 +2581,7 @@ func file_seabird_proto_init() {
 		return
 	}
 	file_common_proto_init()
-	file_seabird_proto_msgTypes[0].OneofWrappers = []any{
+	file_seabird_proto_msgTypes[2].OneofWrappers = []any{
 		(*Event_Message)(nil),
 		(*Event_PrivateMessage)(nil),
 		(*Event_Mention)(nil),
@@ -2214,19 +2592,22 @@ func file_seabird_proto_init() {
 		(*Event_SendPrivateMessage)(nil),
 		(*Event_PerformAction)(nil),
 		(*Event_PerformPrivateAction)(nil),
+		(*Event_BackendUpdated)(nil),
+		(*Event_ChannelUpdated)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_seabird_proto_rawDesc), len(file_seabird_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   44,
+			NumEnums:      1,
+			NumMessages:   48,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_seabird_proto_goTypes,
 		DependencyIndexes: file_seabird_proto_depIdxs,
+		EnumInfos:         file_seabird_proto_enumTypes,
 		MessageInfos:      file_seabird_proto_msgTypes,
 	}.Build()
 	File_seabird_proto = out.File

@@ -718,12 +718,11 @@ func (*ChatRequest_Metadata) isChatRequest_Inner() {}
 // backend_info. If the ID is not provided or is not unique, the connection will
 // be closed.
 //
-// Note that all IDs sent by a chat backend will be automatically namespaced by
-// core based on the backend. As an example, a backend of type "foo" and an ID
-// of "bar" may show up as something like "foo.bar" to plugins.
+// A chat backend refers to its channels and users the way its chat service
+// does, and core translates those to the IDs plugins use. See common.proto.
 type HelloChatEvent struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	BackendInfo   *Backend               `protobuf:"bytes,1,opt,name=backend_info,json=backendInfo,proto3" json:"backend_info,omitempty"`
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	BackendInfo   *HelloChatEvent_Backend `protobuf:"bytes,1,opt,name=backend_info,json=backendInfo,proto3" json:"backend_info,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -758,7 +757,7 @@ func (*HelloChatEvent) Descriptor() ([]byte, []int) {
 	return file_seabird_chat_ingest_proto_rawDescGZIP(), []int{9}
 }
 
-func (x *HelloChatEvent) GetBackendInfo() *Backend {
+func (x *HelloChatEvent) GetBackendInfo() *HelloChatEvent_Backend {
 	if x != nil {
 		return x.BackendInfo
 	}
@@ -851,8 +850,12 @@ func (x *FailedChatEvent) GetReason() string {
 	return ""
 }
 
-// JoinChannelEvent will be sent when a user joins a channel. The topic SHOULD
-// be included if possible, but it can be sent in a topic update event later.
+// JoinChannelEvent will be sent when the backend joins a channel. The topic
+// SHOULD be included if possible, but it can be sent in a change event later.
+//
+// Core forgets which channels a backend is in when its stream ends, so a
+// backend MUST send a join for every channel it is in at the start of each
+// stream.
 type JoinChannelChatEvent struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ChannelId     string                 `protobuf:"bytes,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
@@ -959,7 +962,7 @@ func (x *LeaveChannelChatEvent) GetChannelId() string {
 }
 
 // ChangeChannelEvent will occur when a channel's display name or topic is
-// updated.
+// updated. It replaces everything previously sent for the channel.
 type ChangeChannelChatEvent struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ChannelId     string                 `protobuf:"bytes,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
@@ -1067,9 +1070,9 @@ func (x *MetadataChatEvent) GetValues() map[string]string {
 }
 
 // ChatEvent contains all the different event types a chat backend can emit.
-// Note that these are slightly different to the seabird.Event types as channels
-// here will not be mapped to UUIDs and some events are only to support the data
-// that seabird-core tracks.
+// Note that these are slightly different to the seabird.Event types, as
+// channels and users here are referred to the way the chat service does, and
+// some events are only to support the data that seabird-core tracks.
 //
 // HelloChatEvent is the only message type that is required for a chat backend
 // to work.
@@ -1356,6 +1359,61 @@ func (*ChatEvent_ChangeChannel) isChatEvent_Inner() {}
 
 func (*ChatEvent_Metadata) isChatEvent_Inner() {}
 
+// How the backend introduces itself. The ID is the name it gives itself,
+// which MUST be unique among running backends of that type and SHOULD stay
+// the same across restarts.
+type HelloChatEvent_Backend struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Type          string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HelloChatEvent_Backend) Reset() {
+	*x = HelloChatEvent_Backend{}
+	mi := &file_seabird_chat_ingest_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HelloChatEvent_Backend) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HelloChatEvent_Backend) ProtoMessage() {}
+
+func (x *HelloChatEvent_Backend) ProtoReflect() protoreflect.Message {
+	mi := &file_seabird_chat_ingest_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HelloChatEvent_Backend.ProtoReflect.Descriptor instead.
+func (*HelloChatEvent_Backend) Descriptor() ([]byte, []int) {
+	return file_seabird_chat_ingest_proto_rawDescGZIP(), []int{9, 0}
+}
+
+func (x *HelloChatEvent_Backend) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *HelloChatEvent_Backend) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
 var File_seabird_chat_ingest_proto protoreflect.FileDescriptor
 
 const file_seabird_chat_ingest_proto_rawDesc = "" +
@@ -1431,9 +1489,12 @@ const file_seabird_chat_ingest_proto_rawDesc = "" +
 	"\x0eperform_action\x18\a \x01(\v2!.seabird.PerformActionChatRequestH\x00R\rperformAction\x12`\n" +
 	"\x16perform_private_action\x18\b \x01(\v2(.seabird.PerformPrivateActionChatRequestH\x00R\x14performPrivateAction\x12:\n" +
 	"\bmetadata\x18\t \x01(\v2\x1c.seabird.MetadataChatRequestH\x00R\bmetadataB\a\n" +
-	"\x05inner\"D\n" +
-	"\x0eHelloChatEvent\x122\n" +
-	"\fbackend_info\x18\x01 \x01(\v2\x0f.common.BackendR\vbackendInfo\"\x12\n" +
+	"\x05inner\"\x83\x01\n" +
+	"\x0eHelloChatEvent\x12B\n" +
+	"\fbackend_info\x18\x01 \x01(\v2\x1f.seabird.HelloChatEvent.BackendR\vbackendInfo\x1a-\n" +
+	"\aBackend\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04type\x18\x02 \x01(\tR\x04type\"\x12\n" +
 	"\x10SuccessChatEvent\")\n" +
 	"\x0fFailedChatEvent\x12\x16\n" +
 	"\x06reason\x18\x01 \x01(\tR\x06reason\"n\n" +
@@ -1493,7 +1554,7 @@ func file_seabird_chat_ingest_proto_rawDescGZIP() []byte {
 	return file_seabird_chat_ingest_proto_rawDescData
 }
 
-var file_seabird_chat_ingest_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
+var file_seabird_chat_ingest_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
 var file_seabird_chat_ingest_proto_goTypes = []any{
 	(*PerformActionChatRequest)(nil),        // 0: seabird.PerformActionChatRequest
 	(*PerformPrivateActionChatRequest)(nil), // 1: seabird.PerformPrivateActionChatRequest
@@ -1519,10 +1580,10 @@ var file_seabird_chat_ingest_proto_goTypes = []any{
 	nil,                                     // 21: seabird.JoinChannelChatRequest.TagsEntry
 	nil,                                     // 22: seabird.LeaveChannelChatRequest.TagsEntry
 	nil,                                     // 23: seabird.UpdateChannelInfoChatRequest.TagsEntry
-	nil,                                     // 24: seabird.MetadataChatEvent.ValuesEntry
-	nil,                                     // 25: seabird.ChatEvent.TagsEntry
-	(*Block)(nil),                           // 26: common.Block
-	(*Backend)(nil),                         // 27: common.Backend
+	(*HelloChatEvent_Backend)(nil),          // 24: seabird.HelloChatEvent.Backend
+	nil,                                     // 25: seabird.MetadataChatEvent.ValuesEntry
+	nil,                                     // 26: seabird.ChatEvent.TagsEntry
+	(*Block)(nil),                           // 27: common.Block
 	(*MessageEvent)(nil),                    // 28: common.MessageEvent
 	(*PrivateMessageEvent)(nil),             // 29: common.PrivateMessageEvent
 	(*MentionEvent)(nil),                    // 30: common.MentionEvent
@@ -1531,13 +1592,13 @@ var file_seabird_chat_ingest_proto_goTypes = []any{
 	(*PrivateActionEvent)(nil),              // 33: common.PrivateActionEvent
 }
 var file_seabird_chat_ingest_proto_depIdxs = []int32{
-	26, // 0: seabird.PerformActionChatRequest.root_block:type_name -> common.Block
+	27, // 0: seabird.PerformActionChatRequest.root_block:type_name -> common.Block
 	17, // 1: seabird.PerformActionChatRequest.tags:type_name -> seabird.PerformActionChatRequest.TagsEntry
-	26, // 2: seabird.PerformPrivateActionChatRequest.root_block:type_name -> common.Block
+	27, // 2: seabird.PerformPrivateActionChatRequest.root_block:type_name -> common.Block
 	18, // 3: seabird.PerformPrivateActionChatRequest.tags:type_name -> seabird.PerformPrivateActionChatRequest.TagsEntry
-	26, // 4: seabird.SendMessageChatRequest.root_block:type_name -> common.Block
+	27, // 4: seabird.SendMessageChatRequest.root_block:type_name -> common.Block
 	19, // 5: seabird.SendMessageChatRequest.tags:type_name -> seabird.SendMessageChatRequest.TagsEntry
-	26, // 6: seabird.SendPrivateMessageChatRequest.root_block:type_name -> common.Block
+	27, // 6: seabird.SendPrivateMessageChatRequest.root_block:type_name -> common.Block
 	20, // 7: seabird.SendPrivateMessageChatRequest.tags:type_name -> seabird.SendPrivateMessageChatRequest.TagsEntry
 	21, // 8: seabird.JoinChannelChatRequest.tags:type_name -> seabird.JoinChannelChatRequest.TagsEntry
 	22, // 9: seabird.LeaveChannelChatRequest.tags:type_name -> seabird.LeaveChannelChatRequest.TagsEntry
@@ -1550,8 +1611,8 @@ var file_seabird_chat_ingest_proto_depIdxs = []int32{
 	0,  // 16: seabird.ChatRequest.perform_action:type_name -> seabird.PerformActionChatRequest
 	1,  // 17: seabird.ChatRequest.perform_private_action:type_name -> seabird.PerformPrivateActionChatRequest
 	7,  // 18: seabird.ChatRequest.metadata:type_name -> seabird.MetadataChatRequest
-	27, // 19: seabird.HelloChatEvent.backend_info:type_name -> common.Backend
-	24, // 20: seabird.MetadataChatEvent.values:type_name -> seabird.MetadataChatEvent.ValuesEntry
+	24, // 19: seabird.HelloChatEvent.backend_info:type_name -> seabird.HelloChatEvent.Backend
+	25, // 20: seabird.MetadataChatEvent.values:type_name -> seabird.MetadataChatEvent.ValuesEntry
 	9,  // 21: seabird.ChatEvent.hello:type_name -> seabird.HelloChatEvent
 	10, // 22: seabird.ChatEvent.success:type_name -> seabird.SuccessChatEvent
 	11, // 23: seabird.ChatEvent.failed:type_name -> seabird.FailedChatEvent
@@ -1565,7 +1626,7 @@ var file_seabird_chat_ingest_proto_depIdxs = []int32{
 	13, // 31: seabird.ChatEvent.leave_channel:type_name -> seabird.LeaveChannelChatEvent
 	14, // 32: seabird.ChatEvent.change_channel:type_name -> seabird.ChangeChannelChatEvent
 	15, // 33: seabird.ChatEvent.metadata:type_name -> seabird.MetadataChatEvent
-	25, // 34: seabird.ChatEvent.tags:type_name -> seabird.ChatEvent.TagsEntry
+	26, // 34: seabird.ChatEvent.tags:type_name -> seabird.ChatEvent.TagsEntry
 	16, // 35: seabird.ChatIngest.IngestEvents:input_type -> seabird.ChatEvent
 	8,  // 36: seabird.ChatIngest.IngestEvents:output_type -> seabird.ChatRequest
 	36, // [36:37] is the sub-list for method output_type
@@ -1612,7 +1673,7 @@ func file_seabird_chat_ingest_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_seabird_chat_ingest_proto_rawDesc), len(file_seabird_chat_ingest_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   26,
+			NumMessages:   27,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

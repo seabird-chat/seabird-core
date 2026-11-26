@@ -22,65 +22,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// When sent by a chat backend, the ID MAY optionally be used as a hint to the
-// frontend to get the same external ID on reconnection. When sent by core to a
-// plugin, the ID MUST be an ID pointing to an exact backend instance.
-type Backend struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Type          string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Backend) Reset() {
-	*x = Backend{}
-	mi := &file_common_proto_msgTypes[0]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Backend) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Backend) ProtoMessage() {}
-
-func (x *Backend) ProtoReflect() protoreflect.Message {
-	mi := &file_common_proto_msgTypes[0]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Backend.ProtoReflect.Descriptor instead.
-func (*Backend) Descriptor() ([]byte, []int) {
-	return file_common_proto_rawDescGZIP(), []int{0}
-}
-
-func (x *Backend) GetId() string {
-	if x != nil {
-		return x.Id
-	}
-	return ""
-}
-
-func (x *Backend) GetType() string {
-	if x != nil {
-		return x.Type
-	}
-	return ""
-}
-
-// When sent by a chat backend, the ID MUST be unique across users in that running
-// backend. Failure to follow this will result in incorrect information being
-// sent to plugins. When sent by core to a plugin, the ID MUST be an ID pointing
-// to an instance of a user on chat backend.
+// User is someone on a chat service.
 type User struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -91,7 +33,7 @@ type User struct {
 
 func (x *User) Reset() {
 	*x = User{}
-	mi := &file_common_proto_msgTypes[1]
+	mi := &file_common_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -103,7 +45,7 @@ func (x *User) String() string {
 func (*User) ProtoMessage() {}
 
 func (x *User) ProtoReflect() protoreflect.Message {
-	mi := &file_common_proto_msgTypes[1]
+	mi := &file_common_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -116,7 +58,7 @@ func (x *User) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use User.ProtoReflect.Descriptor instead.
 func (*User) Descriptor() ([]byte, []int) {
-	return file_common_proto_rawDescGZIP(), []int{1}
+	return file_common_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *User) GetId() string {
@@ -129,70 +71,6 @@ func (x *User) GetId() string {
 func (x *User) GetDisplayName() string {
 	if x != nil {
 		return x.DisplayName
-	}
-	return ""
-}
-
-// When sent by a chat backend, the ID MUST be unique across channels in that
-// running backend. Failure to follow this will result in incorrect information
-// being sent to plugins. When sent by core to a plugin, the ID MUST be an ID
-// pointing to an instance of a channel on chat backend.
-type Channel struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	DisplayName   string                 `protobuf:"bytes,2,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
-	Topic         string                 `protobuf:"bytes,3,opt,name=topic,proto3" json:"topic,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Channel) Reset() {
-	*x = Channel{}
-	mi := &file_common_proto_msgTypes[2]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Channel) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Channel) ProtoMessage() {}
-
-func (x *Channel) ProtoReflect() protoreflect.Message {
-	mi := &file_common_proto_msgTypes[2]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Channel.ProtoReflect.Descriptor instead.
-func (*Channel) Descriptor() ([]byte, []int) {
-	return file_common_proto_rawDescGZIP(), []int{2}
-}
-
-func (x *Channel) GetId() string {
-	if x != nil {
-		return x.Id
-	}
-	return ""
-}
-
-func (x *Channel) GetDisplayName() string {
-	if x != nil {
-		return x.DisplayName
-	}
-	return ""
-}
-
-func (x *Channel) GetTopic() string {
-	if x != nil {
-		return x.Topic
 	}
 	return ""
 }
@@ -210,7 +88,7 @@ type ChannelSource struct {
 
 func (x *ChannelSource) Reset() {
 	*x = ChannelSource{}
-	mi := &file_common_proto_msgTypes[3]
+	mi := &file_common_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -222,7 +100,7 @@ func (x *ChannelSource) String() string {
 func (*ChannelSource) ProtoMessage() {}
 
 func (x *ChannelSource) ProtoReflect() protoreflect.Message {
-	mi := &file_common_proto_msgTypes[3]
+	mi := &file_common_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -235,7 +113,7 @@ func (x *ChannelSource) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChannelSource.ProtoReflect.Descriptor instead.
 func (*ChannelSource) Descriptor() ([]byte, []int) {
-	return file_common_proto_rawDescGZIP(), []int{3}
+	return file_common_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *ChannelSource) GetChannelId() string {
@@ -271,7 +149,7 @@ type MessageEvent struct {
 
 func (x *MessageEvent) Reset() {
 	*x = MessageEvent{}
-	mi := &file_common_proto_msgTypes[4]
+	mi := &file_common_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -283,7 +161,7 @@ func (x *MessageEvent) String() string {
 func (*MessageEvent) ProtoMessage() {}
 
 func (x *MessageEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_common_proto_msgTypes[4]
+	mi := &file_common_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -296,7 +174,7 @@ func (x *MessageEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MessageEvent.ProtoReflect.Descriptor instead.
 func (*MessageEvent) Descriptor() ([]byte, []int) {
-	return file_common_proto_rawDescGZIP(), []int{4}
+	return file_common_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *MessageEvent) GetSource() *ChannelSource {
@@ -333,7 +211,7 @@ type PrivateMessageEvent struct {
 
 func (x *PrivateMessageEvent) Reset() {
 	*x = PrivateMessageEvent{}
-	mi := &file_common_proto_msgTypes[5]
+	mi := &file_common_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -345,7 +223,7 @@ func (x *PrivateMessageEvent) String() string {
 func (*PrivateMessageEvent) ProtoMessage() {}
 
 func (x *PrivateMessageEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_common_proto_msgTypes[5]
+	mi := &file_common_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -358,7 +236,7 @@ func (x *PrivateMessageEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrivateMessageEvent.ProtoReflect.Descriptor instead.
 func (*PrivateMessageEvent) Descriptor() ([]byte, []int) {
-	return file_common_proto_rawDescGZIP(), []int{5}
+	return file_common_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *PrivateMessageEvent) GetSource() *User {
@@ -397,7 +275,7 @@ type MentionEvent struct {
 
 func (x *MentionEvent) Reset() {
 	*x = MentionEvent{}
-	mi := &file_common_proto_msgTypes[6]
+	mi := &file_common_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -409,7 +287,7 @@ func (x *MentionEvent) String() string {
 func (*MentionEvent) ProtoMessage() {}
 
 func (x *MentionEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_common_proto_msgTypes[6]
+	mi := &file_common_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -422,7 +300,7 @@ func (x *MentionEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MentionEvent.ProtoReflect.Descriptor instead.
 func (*MentionEvent) Descriptor() ([]byte, []int) {
-	return file_common_proto_rawDescGZIP(), []int{6}
+	return file_common_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *MentionEvent) GetSource() *ChannelSource {
@@ -460,7 +338,7 @@ type CommandEvent struct {
 
 func (x *CommandEvent) Reset() {
 	*x = CommandEvent{}
-	mi := &file_common_proto_msgTypes[7]
+	mi := &file_common_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -472,7 +350,7 @@ func (x *CommandEvent) String() string {
 func (*CommandEvent) ProtoMessage() {}
 
 func (x *CommandEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_common_proto_msgTypes[7]
+	mi := &file_common_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -485,7 +363,7 @@ func (x *CommandEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandEvent.ProtoReflect.Descriptor instead.
 func (*CommandEvent) Descriptor() ([]byte, []int) {
-	return file_common_proto_rawDescGZIP(), []int{7}
+	return file_common_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *CommandEvent) GetSource() *ChannelSource {
@@ -522,7 +400,7 @@ type ActionEvent struct {
 
 func (x *ActionEvent) Reset() {
 	*x = ActionEvent{}
-	mi := &file_common_proto_msgTypes[8]
+	mi := &file_common_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -534,7 +412,7 @@ func (x *ActionEvent) String() string {
 func (*ActionEvent) ProtoMessage() {}
 
 func (x *ActionEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_common_proto_msgTypes[8]
+	mi := &file_common_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -547,7 +425,7 @@ func (x *ActionEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ActionEvent.ProtoReflect.Descriptor instead.
 func (*ActionEvent) Descriptor() ([]byte, []int) {
-	return file_common_proto_rawDescGZIP(), []int{8}
+	return file_common_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ActionEvent) GetSource() *ChannelSource {
@@ -584,7 +462,7 @@ type PrivateActionEvent struct {
 
 func (x *PrivateActionEvent) Reset() {
 	*x = PrivateActionEvent{}
-	mi := &file_common_proto_msgTypes[9]
+	mi := &file_common_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -596,7 +474,7 @@ func (x *PrivateActionEvent) String() string {
 func (*PrivateActionEvent) ProtoMessage() {}
 
 func (x *PrivateActionEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_common_proto_msgTypes[9]
+	mi := &file_common_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -609,7 +487,7 @@ func (x *PrivateActionEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrivateActionEvent.ProtoReflect.Descriptor instead.
 func (*PrivateActionEvent) Descriptor() ([]byte, []int) {
-	return file_common_proto_rawDescGZIP(), []int{9}
+	return file_common_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *PrivateActionEvent) GetSource() *User {
@@ -661,7 +539,7 @@ type Block struct {
 
 func (x *Block) Reset() {
 	*x = Block{}
-	mi := &file_common_proto_msgTypes[10]
+	mi := &file_common_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -673,7 +551,7 @@ func (x *Block) String() string {
 func (*Block) ProtoMessage() {}
 
 func (x *Block) ProtoReflect() protoreflect.Message {
-	mi := &file_common_proto_msgTypes[10]
+	mi := &file_common_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -686,7 +564,7 @@ func (x *Block) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Block.ProtoReflect.Descriptor instead.
 func (*Block) Descriptor() ([]byte, []int) {
-	return file_common_proto_rawDescGZIP(), []int{10}
+	return file_common_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Block) GetPlain() string {
@@ -927,7 +805,7 @@ type TextBlock struct {
 
 func (x *TextBlock) Reset() {
 	*x = TextBlock{}
-	mi := &file_common_proto_msgTypes[11]
+	mi := &file_common_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -939,7 +817,7 @@ func (x *TextBlock) String() string {
 func (*TextBlock) ProtoMessage() {}
 
 func (x *TextBlock) ProtoReflect() protoreflect.Message {
-	mi := &file_common_proto_msgTypes[11]
+	mi := &file_common_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -952,7 +830,7 @@ func (x *TextBlock) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TextBlock.ProtoReflect.Descriptor instead.
 func (*TextBlock) Descriptor() ([]byte, []int) {
-	return file_common_proto_rawDescGZIP(), []int{11}
+	return file_common_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *TextBlock) GetText() string {
@@ -973,7 +851,7 @@ type ItalicsBlock struct {
 
 func (x *ItalicsBlock) Reset() {
 	*x = ItalicsBlock{}
-	mi := &file_common_proto_msgTypes[12]
+	mi := &file_common_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -985,7 +863,7 @@ func (x *ItalicsBlock) String() string {
 func (*ItalicsBlock) ProtoMessage() {}
 
 func (x *ItalicsBlock) ProtoReflect() protoreflect.Message {
-	mi := &file_common_proto_msgTypes[12]
+	mi := &file_common_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -998,7 +876,7 @@ func (x *ItalicsBlock) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ItalicsBlock.ProtoReflect.Descriptor instead.
 func (*ItalicsBlock) Descriptor() ([]byte, []int) {
-	return file_common_proto_rawDescGZIP(), []int{12}
+	return file_common_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ItalicsBlock) GetInner() *Block {
@@ -1019,7 +897,7 @@ type BoldBlock struct {
 
 func (x *BoldBlock) Reset() {
 	*x = BoldBlock{}
-	mi := &file_common_proto_msgTypes[13]
+	mi := &file_common_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1031,7 +909,7 @@ func (x *BoldBlock) String() string {
 func (*BoldBlock) ProtoMessage() {}
 
 func (x *BoldBlock) ProtoReflect() protoreflect.Message {
-	mi := &file_common_proto_msgTypes[13]
+	mi := &file_common_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1044,7 +922,7 @@ func (x *BoldBlock) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BoldBlock.ProtoReflect.Descriptor instead.
 func (*BoldBlock) Descriptor() ([]byte, []int) {
-	return file_common_proto_rawDescGZIP(), []int{13}
+	return file_common_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *BoldBlock) GetInner() *Block {
@@ -1065,7 +943,7 @@ type UnderlineBlock struct {
 
 func (x *UnderlineBlock) Reset() {
 	*x = UnderlineBlock{}
-	mi := &file_common_proto_msgTypes[14]
+	mi := &file_common_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1077,7 +955,7 @@ func (x *UnderlineBlock) String() string {
 func (*UnderlineBlock) ProtoMessage() {}
 
 func (x *UnderlineBlock) ProtoReflect() protoreflect.Message {
-	mi := &file_common_proto_msgTypes[14]
+	mi := &file_common_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1090,7 +968,7 @@ func (x *UnderlineBlock) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnderlineBlock.ProtoReflect.Descriptor instead.
 func (*UnderlineBlock) Descriptor() ([]byte, []int) {
-	return file_common_proto_rawDescGZIP(), []int{14}
+	return file_common_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *UnderlineBlock) GetInner() *Block {
@@ -1111,7 +989,7 @@ type StrikethroughBlock struct {
 
 func (x *StrikethroughBlock) Reset() {
 	*x = StrikethroughBlock{}
-	mi := &file_common_proto_msgTypes[15]
+	mi := &file_common_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1123,7 +1001,7 @@ func (x *StrikethroughBlock) String() string {
 func (*StrikethroughBlock) ProtoMessage() {}
 
 func (x *StrikethroughBlock) ProtoReflect() protoreflect.Message {
-	mi := &file_common_proto_msgTypes[15]
+	mi := &file_common_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1136,7 +1014,7 @@ func (x *StrikethroughBlock) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StrikethroughBlock.ProtoReflect.Descriptor instead.
 func (*StrikethroughBlock) Descriptor() ([]byte, []int) {
-	return file_common_proto_rawDescGZIP(), []int{15}
+	return file_common_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *StrikethroughBlock) GetInner() *Block {
@@ -1157,7 +1035,7 @@ type InlineCodeBlock struct {
 
 func (x *InlineCodeBlock) Reset() {
 	*x = InlineCodeBlock{}
-	mi := &file_common_proto_msgTypes[16]
+	mi := &file_common_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1169,7 +1047,7 @@ func (x *InlineCodeBlock) String() string {
 func (*InlineCodeBlock) ProtoMessage() {}
 
 func (x *InlineCodeBlock) ProtoReflect() protoreflect.Message {
-	mi := &file_common_proto_msgTypes[16]
+	mi := &file_common_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1182,7 +1060,7 @@ func (x *InlineCodeBlock) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InlineCodeBlock.ProtoReflect.Descriptor instead.
 func (*InlineCodeBlock) Descriptor() ([]byte, []int) {
-	return file_common_proto_rawDescGZIP(), []int{16}
+	return file_common_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *InlineCodeBlock) GetText() string {
@@ -1204,7 +1082,7 @@ type FencedCodeBlock struct {
 
 func (x *FencedCodeBlock) Reset() {
 	*x = FencedCodeBlock{}
-	mi := &file_common_proto_msgTypes[17]
+	mi := &file_common_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1216,7 +1094,7 @@ func (x *FencedCodeBlock) String() string {
 func (*FencedCodeBlock) ProtoMessage() {}
 
 func (x *FencedCodeBlock) ProtoReflect() protoreflect.Message {
-	mi := &file_common_proto_msgTypes[17]
+	mi := &file_common_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1229,7 +1107,7 @@ func (x *FencedCodeBlock) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FencedCodeBlock.ProtoReflect.Descriptor instead.
 func (*FencedCodeBlock) Descriptor() ([]byte, []int) {
-	return file_common_proto_rawDescGZIP(), []int{17}
+	return file_common_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *FencedCodeBlock) GetInfo() string {
@@ -1257,7 +1135,7 @@ type SpoilerBlock struct {
 
 func (x *SpoilerBlock) Reset() {
 	*x = SpoilerBlock{}
-	mi := &file_common_proto_msgTypes[18]
+	mi := &file_common_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1269,7 +1147,7 @@ func (x *SpoilerBlock) String() string {
 func (*SpoilerBlock) ProtoMessage() {}
 
 func (x *SpoilerBlock) ProtoReflect() protoreflect.Message {
-	mi := &file_common_proto_msgTypes[18]
+	mi := &file_common_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1282,7 +1160,7 @@ func (x *SpoilerBlock) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SpoilerBlock.ProtoReflect.Descriptor instead.
 func (*SpoilerBlock) Descriptor() ([]byte, []int) {
-	return file_common_proto_rawDescGZIP(), []int{18}
+	return file_common_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *SpoilerBlock) GetInner() *Block {
@@ -1303,7 +1181,7 @@ type ListBlock struct {
 
 func (x *ListBlock) Reset() {
 	*x = ListBlock{}
-	mi := &file_common_proto_msgTypes[19]
+	mi := &file_common_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1315,7 +1193,7 @@ func (x *ListBlock) String() string {
 func (*ListBlock) ProtoMessage() {}
 
 func (x *ListBlock) ProtoReflect() protoreflect.Message {
-	mi := &file_common_proto_msgTypes[19]
+	mi := &file_common_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1328,7 +1206,7 @@ func (x *ListBlock) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBlock.ProtoReflect.Descriptor instead.
 func (*ListBlock) Descriptor() ([]byte, []int) {
-	return file_common_proto_rawDescGZIP(), []int{19}
+	return file_common_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ListBlock) GetInner() []*Block {
@@ -1350,7 +1228,7 @@ type LinkBlock struct {
 
 func (x *LinkBlock) Reset() {
 	*x = LinkBlock{}
-	mi := &file_common_proto_msgTypes[20]
+	mi := &file_common_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1362,7 +1240,7 @@ func (x *LinkBlock) String() string {
 func (*LinkBlock) ProtoMessage() {}
 
 func (x *LinkBlock) ProtoReflect() protoreflect.Message {
-	mi := &file_common_proto_msgTypes[20]
+	mi := &file_common_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1375,7 +1253,7 @@ func (x *LinkBlock) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LinkBlock.ProtoReflect.Descriptor instead.
 func (*LinkBlock) Descriptor() ([]byte, []int) {
-	return file_common_proto_rawDescGZIP(), []int{20}
+	return file_common_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *LinkBlock) GetUrl() string {
@@ -1403,7 +1281,7 @@ type BlockquoteBlock struct {
 
 func (x *BlockquoteBlock) Reset() {
 	*x = BlockquoteBlock{}
-	mi := &file_common_proto_msgTypes[21]
+	mi := &file_common_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1415,7 +1293,7 @@ func (x *BlockquoteBlock) String() string {
 func (*BlockquoteBlock) ProtoMessage() {}
 
 func (x *BlockquoteBlock) ProtoReflect() protoreflect.Message {
-	mi := &file_common_proto_msgTypes[21]
+	mi := &file_common_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1428,7 +1306,7 @@ func (x *BlockquoteBlock) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BlockquoteBlock.ProtoReflect.Descriptor instead.
 func (*BlockquoteBlock) Descriptor() ([]byte, []int) {
-	return file_common_proto_rawDescGZIP(), []int{21}
+	return file_common_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *BlockquoteBlock) GetInner() *Block {
@@ -1450,7 +1328,7 @@ type ContainerBlock struct {
 
 func (x *ContainerBlock) Reset() {
 	*x = ContainerBlock{}
-	mi := &file_common_proto_msgTypes[22]
+	mi := &file_common_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1462,7 +1340,7 @@ func (x *ContainerBlock) String() string {
 func (*ContainerBlock) ProtoMessage() {}
 
 func (x *ContainerBlock) ProtoReflect() protoreflect.Message {
-	mi := &file_common_proto_msgTypes[22]
+	mi := &file_common_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1475,7 +1353,7 @@ func (x *ContainerBlock) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ContainerBlock.ProtoReflect.Descriptor instead.
 func (*ContainerBlock) Descriptor() ([]byte, []int) {
-	return file_common_proto_rawDescGZIP(), []int{22}
+	return file_common_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ContainerBlock) GetInner() []*Block {
@@ -1496,7 +1374,7 @@ type TimestampBlock struct {
 
 func (x *TimestampBlock) Reset() {
 	*x = TimestampBlock{}
-	mi := &file_common_proto_msgTypes[23]
+	mi := &file_common_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1508,7 +1386,7 @@ func (x *TimestampBlock) String() string {
 func (*TimestampBlock) ProtoMessage() {}
 
 func (x *TimestampBlock) ProtoReflect() protoreflect.Message {
-	mi := &file_common_proto_msgTypes[23]
+	mi := &file_common_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1521,7 +1399,7 @@ func (x *TimestampBlock) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TimestampBlock.ProtoReflect.Descriptor instead.
 func (*TimestampBlock) Descriptor() ([]byte, []int) {
-	return file_common_proto_rawDescGZIP(), []int{23}
+	return file_common_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *TimestampBlock) GetInner() *timestamppb.Timestamp {
@@ -1543,7 +1421,7 @@ type HeadingBlock struct {
 
 func (x *HeadingBlock) Reset() {
 	*x = HeadingBlock{}
-	mi := &file_common_proto_msgTypes[24]
+	mi := &file_common_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1555,7 +1433,7 @@ func (x *HeadingBlock) String() string {
 func (*HeadingBlock) ProtoMessage() {}
 
 func (x *HeadingBlock) ProtoReflect() protoreflect.Message {
-	mi := &file_common_proto_msgTypes[24]
+	mi := &file_common_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1568,7 +1446,7 @@ func (x *HeadingBlock) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeadingBlock.ProtoReflect.Descriptor instead.
 func (*HeadingBlock) Descriptor() ([]byte, []int) {
-	return file_common_proto_rawDescGZIP(), []int{24}
+	return file_common_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *HeadingBlock) GetLevel() int32 {
@@ -1589,17 +1467,10 @@ var File_common_proto protoreflect.FileDescriptor
 
 const file_common_proto_rawDesc = "" +
 	"\n" +
-	"\fcommon.proto\x12\x06common\x1a\x1fgoogle/protobuf/timestamp.proto\"-\n" +
-	"\aBackend\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
-	"\x04type\x18\x02 \x01(\tR\x04type\"9\n" +
+	"\fcommon.proto\x12\x06common\x1a\x1fgoogle/protobuf/timestamp.proto\"9\n" +
 	"\x04User\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12!\n" +
-	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\"R\n" +
-	"\aChannel\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12!\n" +
-	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x12\x14\n" +
-	"\x05topic\x18\x03 \x01(\tR\x05topic\"P\n" +
+	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\"P\n" +
 	"\rChannelSource\x12\x1d\n" +
 	"\n" +
 	"channel_id\x18\x01 \x01(\tR\tchannelId\x12 \n" +
@@ -1700,73 +1571,71 @@ func file_common_proto_rawDescGZIP() []byte {
 	return file_common_proto_rawDescData
 }
 
-var file_common_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
+var file_common_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
 var file_common_proto_goTypes = []any{
-	(*Backend)(nil),               // 0: common.Backend
-	(*User)(nil),                  // 1: common.User
-	(*Channel)(nil),               // 2: common.Channel
-	(*ChannelSource)(nil),         // 3: common.ChannelSource
-	(*MessageEvent)(nil),          // 4: common.MessageEvent
-	(*PrivateMessageEvent)(nil),   // 5: common.PrivateMessageEvent
-	(*MentionEvent)(nil),          // 6: common.MentionEvent
-	(*CommandEvent)(nil),          // 7: common.CommandEvent
-	(*ActionEvent)(nil),           // 8: common.ActionEvent
-	(*PrivateActionEvent)(nil),    // 9: common.PrivateActionEvent
-	(*Block)(nil),                 // 10: common.Block
-	(*TextBlock)(nil),             // 11: common.TextBlock
-	(*ItalicsBlock)(nil),          // 12: common.ItalicsBlock
-	(*BoldBlock)(nil),             // 13: common.BoldBlock
-	(*UnderlineBlock)(nil),        // 14: common.UnderlineBlock
-	(*StrikethroughBlock)(nil),    // 15: common.StrikethroughBlock
-	(*InlineCodeBlock)(nil),       // 16: common.InlineCodeBlock
-	(*FencedCodeBlock)(nil),       // 17: common.FencedCodeBlock
-	(*SpoilerBlock)(nil),          // 18: common.SpoilerBlock
-	(*ListBlock)(nil),             // 19: common.ListBlock
-	(*LinkBlock)(nil),             // 20: common.LinkBlock
-	(*BlockquoteBlock)(nil),       // 21: common.BlockquoteBlock
-	(*ContainerBlock)(nil),        // 22: common.ContainerBlock
-	(*TimestampBlock)(nil),        // 23: common.TimestampBlock
-	(*HeadingBlock)(nil),          // 24: common.HeadingBlock
-	(*timestamppb.Timestamp)(nil), // 25: google.protobuf.Timestamp
+	(*User)(nil),                  // 0: common.User
+	(*ChannelSource)(nil),         // 1: common.ChannelSource
+	(*MessageEvent)(nil),          // 2: common.MessageEvent
+	(*PrivateMessageEvent)(nil),   // 3: common.PrivateMessageEvent
+	(*MentionEvent)(nil),          // 4: common.MentionEvent
+	(*CommandEvent)(nil),          // 5: common.CommandEvent
+	(*ActionEvent)(nil),           // 6: common.ActionEvent
+	(*PrivateActionEvent)(nil),    // 7: common.PrivateActionEvent
+	(*Block)(nil),                 // 8: common.Block
+	(*TextBlock)(nil),             // 9: common.TextBlock
+	(*ItalicsBlock)(nil),          // 10: common.ItalicsBlock
+	(*BoldBlock)(nil),             // 11: common.BoldBlock
+	(*UnderlineBlock)(nil),        // 12: common.UnderlineBlock
+	(*StrikethroughBlock)(nil),    // 13: common.StrikethroughBlock
+	(*InlineCodeBlock)(nil),       // 14: common.InlineCodeBlock
+	(*FencedCodeBlock)(nil),       // 15: common.FencedCodeBlock
+	(*SpoilerBlock)(nil),          // 16: common.SpoilerBlock
+	(*ListBlock)(nil),             // 17: common.ListBlock
+	(*LinkBlock)(nil),             // 18: common.LinkBlock
+	(*BlockquoteBlock)(nil),       // 19: common.BlockquoteBlock
+	(*ContainerBlock)(nil),        // 20: common.ContainerBlock
+	(*TimestampBlock)(nil),        // 21: common.TimestampBlock
+	(*HeadingBlock)(nil),          // 22: common.HeadingBlock
+	(*timestamppb.Timestamp)(nil), // 23: google.protobuf.Timestamp
 }
 var file_common_proto_depIdxs = []int32{
-	1,  // 0: common.ChannelSource.user:type_name -> common.User
-	3,  // 1: common.MessageEvent.source:type_name -> common.ChannelSource
-	10, // 2: common.MessageEvent.root_block:type_name -> common.Block
-	1,  // 3: common.PrivateMessageEvent.source:type_name -> common.User
-	10, // 4: common.PrivateMessageEvent.root_block:type_name -> common.Block
-	3,  // 5: common.MentionEvent.source:type_name -> common.ChannelSource
-	10, // 6: common.MentionEvent.root_block:type_name -> common.Block
-	3,  // 7: common.CommandEvent.source:type_name -> common.ChannelSource
-	3,  // 8: common.ActionEvent.source:type_name -> common.ChannelSource
-	10, // 9: common.ActionEvent.root_block:type_name -> common.Block
-	1,  // 10: common.PrivateActionEvent.source:type_name -> common.User
-	10, // 11: common.PrivateActionEvent.root_block:type_name -> common.Block
-	11, // 12: common.Block.text:type_name -> common.TextBlock
-	12, // 13: common.Block.italics:type_name -> common.ItalicsBlock
-	13, // 14: common.Block.bold:type_name -> common.BoldBlock
-	14, // 15: common.Block.underline:type_name -> common.UnderlineBlock
-	15, // 16: common.Block.strikethrough:type_name -> common.StrikethroughBlock
-	16, // 17: common.Block.inline_code:type_name -> common.InlineCodeBlock
-	17, // 18: common.Block.fenced_code:type_name -> common.FencedCodeBlock
-	18, // 19: common.Block.spoiler:type_name -> common.SpoilerBlock
-	19, // 20: common.Block.list:type_name -> common.ListBlock
-	20, // 21: common.Block.link:type_name -> common.LinkBlock
-	21, // 22: common.Block.blockquote:type_name -> common.BlockquoteBlock
-	23, // 23: common.Block.timestamp:type_name -> common.TimestampBlock
-	22, // 24: common.Block.container:type_name -> common.ContainerBlock
-	24, // 25: common.Block.heading:type_name -> common.HeadingBlock
-	10, // 26: common.ItalicsBlock.inner:type_name -> common.Block
-	10, // 27: common.BoldBlock.inner:type_name -> common.Block
-	10, // 28: common.UnderlineBlock.inner:type_name -> common.Block
-	10, // 29: common.StrikethroughBlock.inner:type_name -> common.Block
-	10, // 30: common.SpoilerBlock.inner:type_name -> common.Block
-	10, // 31: common.ListBlock.inner:type_name -> common.Block
-	10, // 32: common.LinkBlock.inner:type_name -> common.Block
-	10, // 33: common.BlockquoteBlock.inner:type_name -> common.Block
-	10, // 34: common.ContainerBlock.inner:type_name -> common.Block
-	25, // 35: common.TimestampBlock.inner:type_name -> google.protobuf.Timestamp
-	10, // 36: common.HeadingBlock.inner:type_name -> common.Block
+	0,  // 0: common.ChannelSource.user:type_name -> common.User
+	1,  // 1: common.MessageEvent.source:type_name -> common.ChannelSource
+	8,  // 2: common.MessageEvent.root_block:type_name -> common.Block
+	0,  // 3: common.PrivateMessageEvent.source:type_name -> common.User
+	8,  // 4: common.PrivateMessageEvent.root_block:type_name -> common.Block
+	1,  // 5: common.MentionEvent.source:type_name -> common.ChannelSource
+	8,  // 6: common.MentionEvent.root_block:type_name -> common.Block
+	1,  // 7: common.CommandEvent.source:type_name -> common.ChannelSource
+	1,  // 8: common.ActionEvent.source:type_name -> common.ChannelSource
+	8,  // 9: common.ActionEvent.root_block:type_name -> common.Block
+	0,  // 10: common.PrivateActionEvent.source:type_name -> common.User
+	8,  // 11: common.PrivateActionEvent.root_block:type_name -> common.Block
+	9,  // 12: common.Block.text:type_name -> common.TextBlock
+	10, // 13: common.Block.italics:type_name -> common.ItalicsBlock
+	11, // 14: common.Block.bold:type_name -> common.BoldBlock
+	12, // 15: common.Block.underline:type_name -> common.UnderlineBlock
+	13, // 16: common.Block.strikethrough:type_name -> common.StrikethroughBlock
+	14, // 17: common.Block.inline_code:type_name -> common.InlineCodeBlock
+	15, // 18: common.Block.fenced_code:type_name -> common.FencedCodeBlock
+	16, // 19: common.Block.spoiler:type_name -> common.SpoilerBlock
+	17, // 20: common.Block.list:type_name -> common.ListBlock
+	18, // 21: common.Block.link:type_name -> common.LinkBlock
+	19, // 22: common.Block.blockquote:type_name -> common.BlockquoteBlock
+	21, // 23: common.Block.timestamp:type_name -> common.TimestampBlock
+	20, // 24: common.Block.container:type_name -> common.ContainerBlock
+	22, // 25: common.Block.heading:type_name -> common.HeadingBlock
+	8,  // 26: common.ItalicsBlock.inner:type_name -> common.Block
+	8,  // 27: common.BoldBlock.inner:type_name -> common.Block
+	8,  // 28: common.UnderlineBlock.inner:type_name -> common.Block
+	8,  // 29: common.StrikethroughBlock.inner:type_name -> common.Block
+	8,  // 30: common.SpoilerBlock.inner:type_name -> common.Block
+	8,  // 31: common.ListBlock.inner:type_name -> common.Block
+	8,  // 32: common.LinkBlock.inner:type_name -> common.Block
+	8,  // 33: common.BlockquoteBlock.inner:type_name -> common.Block
+	8,  // 34: common.ContainerBlock.inner:type_name -> common.Block
+	23, // 35: common.TimestampBlock.inner:type_name -> google.protobuf.Timestamp
+	8,  // 36: common.HeadingBlock.inner:type_name -> common.Block
 	37, // [37:37] is the sub-list for method output_type
 	37, // [37:37] is the sub-list for method input_type
 	37, // [37:37] is the sub-list for extension type_name
@@ -1779,7 +1648,7 @@ func file_common_proto_init() {
 	if File_common_proto != nil {
 		return
 	}
-	file_common_proto_msgTypes[10].OneofWrappers = []any{
+	file_common_proto_msgTypes[8].OneofWrappers = []any{
 		(*Block_Text)(nil),
 		(*Block_Italics)(nil),
 		(*Block_Bold)(nil),
@@ -1801,7 +1670,7 @@ func file_common_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_common_proto_rawDesc), len(file_common_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   25,
+			NumMessages:   23,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

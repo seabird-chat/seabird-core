@@ -317,7 +317,7 @@ func dialBackend(t *testing.T, conn *grpc.ClientConn) *fakeBackend {
 // helloEvent is the first event a backend with the given ID sends.
 func helloEvent(id BackendID) *pb.ChatEvent {
 	return &pb.ChatEvent{Inner: &pb.ChatEvent_Hello{Hello: &pb.HelloChatEvent{
-		BackendInfo: &pb.Backend{Type: id.Type, Id: id.ID},
+		BackendInfo: &pb.HelloChatEvent_Backend{Type: id.Type, Id: id.ID},
 	}}}
 }
 

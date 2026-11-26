@@ -14,8 +14,14 @@ import (
 )
 
 type rootConfig struct {
-	LogFormat slogx.Format
-	LogLevel  slogx.Level
+	LogFormat   slogx.Format
+	LogLevel    slogx.Level
+	DatabaseURL string
+}
+
+// logger returns a logger configured by the root flags.
+func (c *rootConfig) logger() *slogx.Logger {
+	return slogx.New(c.LogFormat, c.LogLevel)
 }
 
 func main() {
@@ -57,6 +63,7 @@ func newRootCommand() *ff.Command {
 
 	fs.ValueLong("log-format", &rootConfig.LogFormat, "log output format (json, pretty, or text)")
 	fs.ValueLong("log-level", &rootConfig.LogLevel, "log level (debug, info, warn, or error)")
+	fs.StringVar(&rootConfig.DatabaseURL, 0, "database-url", "", "SQLite filename or file: URI (required by commands that use it)")
 
 	return &ff.Command{
 		Name:  "seabird-core",

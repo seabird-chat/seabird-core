@@ -13,14 +13,15 @@ import (
 )
 
 // Backend is a chat backend that is or was connected to core, as stored in
-// seabird_backends. Type and Name are the type and name from its hello.
+// seabird_backends. Type, Name and DisplayName are from its latest hello.
 type Backend struct {
-	ID        string     `db:"id"`
-	Type      string     `db:"type"`
-	Name      string     `db:"name"`
-	FirstSeen time.Time  `db:"first_seen"`
-	LastSeen  *time.Time `db:"last_seen"` // nil if it has never connected
-	Connected bool       `db:"connected"`
+	ID          string     `db:"id"`
+	Type        string     `db:"type"`
+	Name        string     `db:"name"`
+	DisplayName string     `db:"display_name"`
+	FirstSeen   time.Time  `db:"first_seen"`
+	LastSeen    *time.Time `db:"last_seen"` // nil if it has never connected
+	Connected   bool       `db:"connected"`
 }
 
 // Channel is a channel on a backend, as stored in seabird_channels. ExternalID
@@ -67,14 +68,17 @@ func (d *DB) ResetConnections(ctx context.Context) error {
 }
 
 // ConnectBackend marks a backend as connected, creating it the first time it
-// is seen.
-func (d *DB) ConnectBackend(ctx context.Context, backendType, name string) (*Backend, error) {
+// is seen, and records its display name.
+func (d *DB) ConnectBackend(ctx context.Context, backendType, name, displayName string) (*Backend, error) {
 	return insertWithNewID[Backend](ctx, d.inner, d.newID, backendIDPrefix, `
-		INSERT INTO seabird_backends (id, type, name, last_seen, connected)
-		VALUES (?, ?, ?, CURRENT_TIMESTAMP, 1)
-		ON CONFLICT (type, name) DO UPDATE SET last_seen = CURRENT_TIMESTAMP, connected = 1
+		INSERT INTO seabird_backends (id, type, name, display_name, last_seen, connected)
+		VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 1)
+		ON CONFLICT (type, name) DO UPDATE SET
+			display_name = excluded.display_name,
+			last_seen = CURRENT_TIMESTAMP,
+			connected = 1
 		RETURNING *`,
-		backendType, name)
+		backendType, name, displayName)
 }
 
 // DisconnectBackend marks a backend as disconnected and its channels as not

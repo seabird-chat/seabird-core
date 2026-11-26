@@ -1,6 +1,7 @@
 package core
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 
@@ -64,13 +65,13 @@ func (s *Server) relayChat(ctx context.Context, from *backend, channel *Channel,
 
 // relayRequest is what target is asked to send to member. Backends that show
 // authors themselves are told who it's from, and the rest get the author in
-// the message.
+// the message, with their backend's display name or, failing that, its type.
 func relayRequest(target *backend, member Channel, from *Backend, content chatContent) *pb.ChatRequest {
 	if target.features[pb.BackendFeature_BACKEND_FEATURE_AUTHOR] {
 		// Backends never see seabird IDs, so only what describes the author
 		// is passed on.
 		author := &pb.User{DisplayName: content.author.GetDisplayName()}
-		authorBackend := &pb.Backend{Type: from.Type}
+		authorBackend := &pb.Backend{Type: from.Type, DisplayName: from.DisplayName}
 
 		if content.action {
 			return &pb.ChatRequest{Inner: &pb.ChatRequest_PerformAction{PerformAction: &pb.PerformActionChatRequest{
@@ -92,7 +93,7 @@ func relayRequest(target *backend, member Channel, from *Backend, content chatCo
 		}}}
 	}
 
-	block := withAuthor(content, from.Type)
+	block := withAuthor(content, cmp.Or(from.DisplayName, from.Type))
 	return &pb.ChatRequest{Inner: &pb.ChatRequest_SendMessage{SendMessage: &pb.SendMessageChatRequest{
 		ChannelId: member.ExternalID,
 		Text:      block.GetPlain(),
@@ -101,14 +102,15 @@ func relayRequest(target *backend, member Channel, from *Backend, content chatCo
 	}}}
 }
 
-// withAuthor puts the author ahead of content's body, as "alice (irc): hi", or
-// "* alice (irc) waves" for actions, with the author in bold.
-func withAuthor(content chatContent, backendType string) *pb.Block {
+// withAuthor puts the author ahead of content's body, as "alice (IRC): hi", or
+// "* alice (IRC) waves" for actions, with the author in bold. backendName is
+// what the author's backend is called.
+func withAuthor(content chatContent, backendName string) *pb.Block {
 	lead, tail := "", ": "
 	if content.action {
 		lead, tail = "* ", " "
 	}
-	label := fmt.Sprintf("%s (%s)", content.author.GetDisplayName(), backendType)
+	label := fmt.Sprintf("%s (%s)", content.author.GetDisplayName(), backendName)
 
 	// The body is shared with the published event, so it's copied before
 	// its plain text is rendered again.

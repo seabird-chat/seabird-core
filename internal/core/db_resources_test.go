@@ -15,7 +15,7 @@ func TestConnectBackend(t *testing.T) {
 	ctx := context.Background()
 	db := openTestDB(t)
 
-	backend, err := db.ConnectBackend(ctx, "irc", "libera")
+	backend, err := db.ConnectBackend(ctx, "irc", "libera", "")
 	assert.NoError(t, err)
 	assertSeabirdID(t, backendIDPrefix, backend.ID)
 	assert.Equal(t, "irc", backend.Type)
@@ -23,13 +23,21 @@ func TestConnectBackend(t *testing.T) {
 	assert.True(t, backend.Connected)
 	assert.NotZero(t, backend.LastSeen)
 
-	again, err := db.ConnectBackend(ctx, "irc", "libera")
+	again, err := db.ConnectBackend(ctx, "irc", "libera", "")
 	assert.NoError(t, err)
 	assert.Equal(t, backend.ID, again.ID, "a backend keeps its ID")
 
-	other, err := db.ConnectBackend(ctx, "discord", "libera")
+	other, err := db.ConnectBackend(ctx, "discord", "libera", "")
 	assert.NoError(t, err)
 	assert.NotEqual(t, backend.ID, other.ID, "backends of different types are different backends")
+
+	// The display name is whatever the latest hello gave.
+	named, err := db.ConnectBackend(ctx, "irc", "libera", "Libera")
+	assert.NoError(t, err)
+	assert.Equal(t, "Libera", named.DisplayName)
+	unnamed, err := db.ConnectBackend(ctx, "irc", "libera", "")
+	assert.NoError(t, err)
+	assert.Equal(t, "", unnamed.DisplayName)
 }
 
 func TestDisconnectBackend(t *testing.T) {
@@ -255,7 +263,7 @@ func TestInsertWithNewIDRetriesTakenIDs(t *testing.T) {
 			}
 			return newSeabirdID(prefix)
 		}
-		_, err := db.ConnectBackend(ctx, "irc", name)
+		_, err := db.ConnectBackend(ctx, "irc", name, "")
 		return attempts, err
 	}
 
@@ -284,7 +292,7 @@ func assertSeabirdID(t *testing.T, prefix, id string) {
 func connectTestBackend(t *testing.T, db *DB, name string) string {
 	t.Helper()
 
-	backend, err := db.ConnectBackend(context.Background(), "irc", name)
+	backend, err := db.ConnectBackend(context.Background(), "irc", name, "")
 	assert.NoError(t, err)
 	return backend.ID
 }

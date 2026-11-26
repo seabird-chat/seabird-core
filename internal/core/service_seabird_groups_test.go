@@ -24,13 +24,15 @@ type groupEnv struct {
 	discordChan string // the Discord channel's own ID
 }
 
-// startGroupEnv starts a groupEnv whose Discord backend supports features.
+// startGroupEnv starts a groupEnv whose Discord backend supports features. It
+// calls itself "Discord", and the IRC backend gives no display name.
 func startGroupEnv(t *testing.T, features ...pb.BackendFeature) *groupEnv {
 	t.Helper()
 
 	env := &groupEnv{testEnv: startTestEnv(t)}
 	env.discord = dialBackend(t, env.conn)
 	hello := helloEvent(discordBackendKey)
+	hello.GetHello().BackendInfo.DisplayName = "Discord"
 	hello.GetHello().Features = features
 	env.discord.send(hello)
 	env.waitForBackend(t, discordBackendKey, true)

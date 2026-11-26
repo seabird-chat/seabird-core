@@ -89,6 +89,8 @@ leaving its channels ungrouped. A channel can only be in one group. A running
 core sees changes the next time it looks a channel up, but plugins aren't sent
 updates for them, so they may need restarting.
 
-Relayed messages name their author. Backends that support it show the author
-themselves, such as by posting under their name, and the rest get it at the
-start of the message, as in "alice (discord): hi".
+Relayed messages name their author and the backend they came from. Backends
+that support it show the author themselves, such as by posting under their
+name, and the rest get it at the start of the message, as in "alice (Discord):
+hi". The backend is shown by the display name it gives core, or by its type,
+such as "discord", if it gives none.

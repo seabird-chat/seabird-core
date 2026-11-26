@@ -51,7 +51,7 @@ func (s *Server) IngestEvents(stream pb.ChatIngest_IngestEventsServer) (err erro
 	)
 	ctx = slogx.WithLogger(ctx, logger)
 
-	row, err := s.DB.ConnectBackend(ctx, key.Type, key.Name)
+	row, err := s.DB.ConnectBackend(ctx, key.Type, key.Name, hello.GetBackendInfo().GetDisplayName())
 	if err != nil {
 		return fmt.Errorf("record backend: %w", err)
 	}

@@ -33,9 +33,9 @@ func TestRelaysIncludeTheAuthor(t *testing.T) {
 	// A backend that doesn't show authors gets them in the message, in bold.
 	message := relayed(t, env.backend).GetSendMessage()
 	assert.Equal(t, testChannelPath, message.GetChannelId())
-	assert.Equal(t, "Alice (discord): hello", message.GetText())
+	assert.Equal(t, "Alice (Discord): hello", message.GetText())
 	assertProtoEqual(t, newContainerBlock(
-		newBoldBlock(newTextBlock("Alice (discord)")), newTextBlock(": "), newTextBlock("hello"),
+		newBoldBlock(newTextBlock("Alice (Discord)")), newTextBlock(": "), newTextBlock("hello"),
 	), message.GetRootBlock())
 	assert.Equal(t, map[string]string{"backend/tag": "x"}, message.GetTags())
 	assert.Zero(t, message.GetAuthor())
@@ -43,6 +43,10 @@ func TestRelaysIncludeTheAuthor(t *testing.T) {
 	// Plugins see the message once, and never the relay.
 	assert.Equal(t, "hello", env.events.next(t).GetMessage().GetText())
 	env.assertNothingPublished(t)
+
+	// A backend with no display name is called by its type.
+	env.backend.send(messageFrom(testChannelPath, "hi back"))
+	assert.Equal(t, "Alice (irc): hi back", relayed(t, env.discord).GetSendMessage().GetText())
 }
 
 func TestRelaysToBackendsThatShowAuthors(t *testing.T) {
@@ -77,16 +81,16 @@ func TestRelaysRebuildWhatWasTyped(t *testing.T) {
 	}{
 		{"action", &pb.ChatEvent{Inner: &pb.ChatEvent_Action{Action: &pb.ActionEvent{
 			Source: source, Text: "waves",
-		}}}, "* Alice (discord) waves"},
+		}}}, "* Alice (Discord) waves"},
 		{"command", &pb.ChatEvent{Inner: &pb.ChatEvent_Command{Command: &pb.CommandEvent{
 			Source: source, Command: "help", Arg: "foo",
-		}}}, "Alice (discord): !help foo"},
+		}}}, "Alice (Discord): !help foo"},
 		{"command without an argument", &pb.ChatEvent{Inner: &pb.ChatEvent_Command{Command: &pb.CommandEvent{
 			Source: source, Command: "help",
-		}}}, "Alice (discord): !help"},
+		}}}, "Alice (Discord): !help"},
 		{"mention", &pb.ChatEvent{Inner: &pb.ChatEvent_Mention{Mention: &pb.MentionEvent{
 			Source: source, Text: "hi",
-		}}}, "Alice (discord): seabird: hi"},
+		}}}, "Alice (Discord): seabird: hi"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -107,7 +111,7 @@ func TestRelaysKeepTheirOrder(t *testing.T) {
 		env.discord.send(messageFrom("123", text))
 	}
 	for _, text := range []string{"one", "two", "three"} {
-		assert.Equal(t, "Alice (discord): "+text, relayed(t, env.backend).GetSendMessage().GetText())
+		assert.Equal(t, "Alice (Discord): "+text, relayed(t, env.backend).GetSendMessage().GetText())
 	}
 }
 
@@ -120,7 +124,7 @@ func TestOnlyGroupsRelay(t *testing.T) {
 	env.discord.send(messageFrom("123", "grouped"))
 
 	// The first relay is the grouped message, so the other wasn't relayed.
-	assert.Equal(t, "Alice (discord): grouped", relayed(t, env.backend).GetSendMessage().GetText())
+	assert.Equal(t, "Alice (Discord): grouped", relayed(t, env.backend).GetSendMessage().GetText())
 }
 
 func TestRelaysSkipDisconnectedMembers(t *testing.T) {
@@ -151,4 +155,29 @@ func TestFullRelayQueuesDrop(t *testing.T) {
 	server.queueRelay(t.Context(), b, relay{channelID: "second"})
 	assert.Equal(t, "first", (<-b.relays).channelID)
 	assert.Equal(t, 0, len(b.relays))
+}
+
+func TestRelaysDescribeTheAuthorsBackend(t *testing.T) {
+	t.Parallel()
+
+	target := &backend{features: map[pb.BackendFeature]bool{pb.BackendFeature_BACKEND_FEATURE_AUTHOR: true}}
+	from := &Backend{ID: "sbb_from", Type: "discord", Name: "guild", DisplayName: "Discord"}
+	content := chatContent{author: &pb.User{Id: "sbu_alice", DisplayName: "Alice"}, body: newTextBlock("hi")}
+
+	// Only what describes the author is passed on, never seabird IDs.
+	message := relayRequest(target, Channel{ExternalID: "#chan"}, from, content).GetSendMessage()
+	assertProtoEqual(t, &pb.User{DisplayName: "Alice"}, message.GetAuthor())
+	assertProtoEqual(t, &pb.Backend{Type: "discord", DisplayName: "Discord"}, message.GetAuthorBackend())
+}
+
+func TestPluginsSeeBackendDisplayNames(t *testing.T) {
+	t.Parallel()
+
+	env := startGroupEnv(t)
+	resp, err := env.plugin.ListBackends(env.ctx, &pb.ListBackendsRequest{})
+	assert.NoError(t, err)
+	assertProtosEqual(t, []*pb.Backend{
+		{Id: env.discordID, Type: "discord", Connected: true, DisplayName: "Discord"},
+		{Id: env.backendID, Type: "irc", Connected: true},
+	}, resp.GetBackends())
 }

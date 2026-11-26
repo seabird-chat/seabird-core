@@ -35,11 +35,12 @@ func listBackends(ctx context.Context, db *core.DB, args []string) error {
 		return err
 	}
 
+	// Display names can contain spaces, so they come last.
 	w := newTable()
-	fmt.Fprintln(w, "ID\tBACKEND\tCONNECTED\tLAST SEEN")
+	fmt.Fprintln(w, "ID\tBACKEND\tCONNECTED\tLAST SEEN\tDISPLAY NAME")
 	for _, backend := range backends {
-		fmt.Fprintf(w, "%s\t%s\t%t\t%s\n",
-			backend.ID, backendName(backend), backend.Connected, formatLastSeen(backend.LastSeen))
+		fmt.Fprintf(w, "%s\t%s\t%t\t%s\t%s\n",
+			backend.ID, backendName(backend), backend.Connected, formatLastSeen(backend.LastSeen), backend.DisplayName)
 	}
 	return w.Flush()
 }

@@ -10,7 +10,7 @@ import (
 
 // backendProto describes a backend for plugins.
 func backendProto(b Backend) *pb.Backend {
-	return &pb.Backend{Id: b.ID, Type: b.Type, Connected: b.Connected}
+	return &pb.Backend{Id: b.ID, Type: b.Type, Connected: b.Connected, DisplayName: b.DisplayName}
 }
 
 func backendUpdatedEvent(b Backend) *pb.Event {

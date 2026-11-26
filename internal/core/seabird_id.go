@@ -11,6 +11,7 @@ import (
 const (
 	backendIDPrefix = "sbb"
 	channelIDPrefix = "sbc"
+	groupIDPrefix   = "sbg"
 	userIDPrefix    = "sbu"
 	tokenPrefix     = "sbt"
 )

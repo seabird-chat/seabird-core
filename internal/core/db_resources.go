@@ -34,6 +34,7 @@ type Channel struct {
 	FirstSeen   time.Time  `db:"first_seen"`
 	LastSeen    *time.Time `db:"last_seen"` // nil if the backend has never reported it
 	Joined      bool       `db:"joined"`
+	GroupID     *string    `db:"group_id"` // nil if it isn't in a group
 }
 
 // User is a user on a backend, as stored in seabird_users. ExternalID is what

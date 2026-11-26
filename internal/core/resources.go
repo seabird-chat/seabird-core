@@ -56,6 +56,7 @@ func channelUpdatedEvent(c Channel, backendConnected bool) *pb.Event {
 var idKinds = map[string]string{
 	backendIDPrefix: "backend",
 	channelIDPrefix: "channel",
+	groupIDPrefix:   "channel group",
 	userIDPrefix:    "user",
 }
 

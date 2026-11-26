@@ -24,10 +24,13 @@ const (
 
 // Backend is a chat backend connected to core, or one that has been.
 type Backend struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Type          string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
-	Connected     bool                   `protobuf:"varint,3,opt,name=connected,proto3" json:"connected,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Id        string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Type      string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
+	Connected bool                   `protobuf:"varint,3,opt,name=connected,proto3" json:"connected,omitempty"`
+	// How people refer to the backend, such as "IRC" or "Libera". Empty if the
+	// backend didn't give one.
+	DisplayName   string `protobuf:"bytes,4,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -81,6 +84,13 @@ func (x *Backend) GetConnected() bool {
 		return x.Connected
 	}
 	return false
+}
+
+func (x *Backend) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
 }
 
 // User is someone on a chat service.
@@ -1528,11 +1538,12 @@ var File_common_proto protoreflect.FileDescriptor
 
 const file_common_proto_rawDesc = "" +
 	"\n" +
-	"\fcommon.proto\x12\x06common\x1a\x1fgoogle/protobuf/timestamp.proto\"K\n" +
+	"\fcommon.proto\x12\x06common\x1a\x1fgoogle/protobuf/timestamp.proto\"n\n" +
 	"\aBackend\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12\x1c\n" +
-	"\tconnected\x18\x03 \x01(\bR\tconnected\"9\n" +
+	"\tconnected\x18\x03 \x01(\bR\tconnected\x12!\n" +
+	"\fdisplay_name\x18\x04 \x01(\tR\vdisplayName\"9\n" +
 	"\x04User\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12!\n" +
 	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\"P\n" +

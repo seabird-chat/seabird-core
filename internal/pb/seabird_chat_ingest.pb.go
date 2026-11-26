@@ -84,7 +84,8 @@ type PerformActionChatRequest struct {
 	Tags      map[string]string      `protobuf:"bytes,3,rep,name=tags,proto3" json:"tags,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// Who the action is on behalf of, if anyone. Only set for backends with
 	// BACKEND_FEATURE_AUTHOR. See BackendFeature. Backends never see seabird
-	// IDs, so only the author's display_name and their backend's type are set.
+	// IDs, so only the author's display_name and their backend's type and
+	// display_name are set.
 	Author        *User    `protobuf:"bytes,5,opt,name=author,proto3" json:"author,omitempty"`
 	AuthorBackend *Backend `protobuf:"bytes,6,opt,name=author_backend,json=authorBackend,proto3" json:"author_backend,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -247,7 +248,8 @@ type SendMessageChatRequest struct {
 	Tags      map[string]string      `protobuf:"bytes,3,rep,name=tags,proto3" json:"tags,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// Who the message is on behalf of, if anyone. Only set for backends with
 	// BACKEND_FEATURE_AUTHOR. See BackendFeature. Backends never see seabird
-	// IDs, so only the author's display_name and their backend's type are set.
+	// IDs, so only the author's display_name and their backend's type and
+	// display_name are set.
 	Author        *User    `protobuf:"bytes,5,opt,name=author,proto3" json:"author,omitempty"`
 	AuthorBackend *Backend `protobuf:"bytes,6,opt,name=author_backend,json=authorBackend,proto3" json:"author_backend,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -1460,11 +1462,13 @@ func (*ChatEvent_Metadata) isChatEvent_Inner() {}
 
 // How the backend introduces itself. The ID is the name it gives itself,
 // which MUST be unique among running backends of that type and SHOULD stay
-// the same across restarts.
+// the same across restarts. The display name is how people refer to it, such
+// as "IRC" or "Libera", and is shown with chat relayed from it.
 type HelloChatEvent_Backend struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	Type          string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
+	DisplayName   string                 `protobuf:"bytes,3,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1509,6 +1513,13 @@ func (x *HelloChatEvent_Backend) GetId() string {
 func (x *HelloChatEvent_Backend) GetType() string {
 	if x != nil {
 		return x.Type
+	}
+	return ""
+}
+
+func (x *HelloChatEvent_Backend) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
 	}
 	return ""
 }
@@ -1592,13 +1603,14 @@ const file_seabird_chat_ingest_proto_rawDesc = "" +
 	"\x0eperform_action\x18\a \x01(\v2!.seabird.PerformActionChatRequestH\x00R\rperformAction\x12`\n" +
 	"\x16perform_private_action\x18\b \x01(\v2(.seabird.PerformPrivateActionChatRequestH\x00R\x14performPrivateAction\x12:\n" +
 	"\bmetadata\x18\t \x01(\v2\x1c.seabird.MetadataChatRequestH\x00R\bmetadataB\a\n" +
-	"\x05inner\"\xb8\x01\n" +
+	"\x05inner\"\xdb\x01\n" +
 	"\x0eHelloChatEvent\x12B\n" +
 	"\fbackend_info\x18\x01 \x01(\v2\x1f.seabird.HelloChatEvent.BackendR\vbackendInfo\x123\n" +
-	"\bfeatures\x18\x02 \x03(\x0e2\x17.seabird.BackendFeatureR\bfeatures\x1a-\n" +
+	"\bfeatures\x18\x02 \x03(\x0e2\x17.seabird.BackendFeatureR\bfeatures\x1aP\n" +
 	"\aBackend\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
-	"\x04type\x18\x02 \x01(\tR\x04type\"\x12\n" +
+	"\x04type\x18\x02 \x01(\tR\x04type\x12!\n" +
+	"\fdisplay_name\x18\x03 \x01(\tR\vdisplayName\"\x12\n" +
 	"\x10SuccessChatEvent\")\n" +
 	"\x0fFailedChatEvent\x12\x16\n" +
 	"\x06reason\x18\x01 \x01(\tR\x06reason\"n\n" +

@@ -31,14 +31,15 @@ func (s *Server) IngestEvents(stream pb.ChatIngest_IngestEventsServer) (err erro
 	recv := make(chan received)
 	go readStream(ctx, stream, recv)
 
-	key, err := receiveHello(ctx, recv, s.helloTimeout())
+	hello, err := receiveHello(ctx, recv, s.helloTimeout())
 	if err != nil {
 		return err
 	}
+	key := backendKey{Type: hello.GetBackendInfo().GetType(), Name: hello.GetBackendInfo().GetId()}
 
 	// The key is released last, so a backend reconnecting under the same name
 	// can't connect until this stream has finished disconnecting.
-	b, err := s.backends.register(key)
+	b, err := s.backends.register(key, hello.GetFeatures())
 	if err != nil {
 		return err
 	}
@@ -56,6 +57,19 @@ func (s *Server) IngestEvents(stream pb.ChatIngest_IngestEventsServer) (err erro
 	}
 	s.backends.activate(b, row)
 	defer s.disconnectBackend(ctx, b)
+
+	// Relays stop before the backend is disconnected, since the stream's
+	// context only ends once this returns.
+	relayCtx, stopRelays := context.WithCancel(ctx)
+	relaysDone := make(chan struct{})
+	go func() {
+		defer close(relaysDone)
+		s.runRelays(relayCtx, b)
+	}()
+	defer func() {
+		stopRelays()
+		<-relaysDone
+	}()
 
 	logger.InfoContext(ctx, "backend connected", slogx.String("backend_id", row.ID))
 	defer func() {
@@ -112,34 +126,34 @@ func readStream(ctx context.Context, stream pb.ChatIngest_IngestEventsServer, ou
 var errBadHello = status.Error(codes.InvalidArgument, "first message must be a hello with a backend type and id")
 
 // receiveHello waits up to timeout for the backend's first event, which must
-// identify it.
+// be a hello identifying it.
 func receiveHello(
 	ctx context.Context, recv <-chan received, timeout time.Duration,
-) (backendKey, error) {
+) (*pb.HelloChatEvent, error) {
 	var event *pb.ChatEvent
 
 	select {
 	case got := <-recv:
 		if errors.Is(got.err, io.EOF) {
-			return backendKey{}, errBadHello
+			return nil, errBadHello
 		}
 		if got.err != nil {
-			return backendKey{}, got.err
+			return nil, got.err
 		}
 		event = got.event
 	case <-time.After(timeout):
-		return backendKey{}, status.Error(codes.DeadlineExceeded, "timed out waiting for hello message")
+		return nil, status.Error(codes.DeadlineExceeded, "timed out waiting for hello message")
 	case <-ctx.Done():
-		return backendKey{}, ctx.Err()
+		return nil, ctx.Err()
 	}
 
 	// The getters return zero values for anything missing, so one check covers
 	// a missing hello, backend info, type or ID.
-	info := event.GetHello().GetBackendInfo()
-	if info.GetType() == "" || info.GetId() == "" {
-		return backendKey{}, errBadHello
+	hello := event.GetHello()
+	if hello.GetBackendInfo().GetType() == "" || hello.GetBackendInfo().GetId() == "" {
+		return nil, errBadHello
 	}
-	return backendKey{Type: info.GetType(), Name: info.GetId()}, nil
+	return hello, nil
 }
 
 // receiveEvents handles the backend's events until the stream ends. It returns
@@ -221,7 +235,7 @@ func (s *Server) handleChatEvent(ctx context.Context, b *backend, event *pb.Chat
 	// text and blocks made consistent.
 	case *pb.ChatEvent_Message:
 		message := inner.Message
-		source, err := s.resolveSource(ctx, b, message.GetSource())
+		source, channel, err := s.resolveSource(ctx, b, message.GetSource())
 		if err != nil {
 			return err
 		}
@@ -229,11 +243,11 @@ func (s *Server) handleChatEvent(ctx context.Context, b *backend, event *pb.Chat
 		if err != nil {
 			return err
 		}
-		return s.publish(ctx, &pb.Event{Tags: event.GetTags(), Inner: &pb.Event_Message{Message: &pb.MessageEvent{
+		return s.publishAndRelay(ctx, b, &pb.Event{Tags: event.GetTags(), Inner: &pb.Event_Message{Message: &pb.MessageEvent{
 			Source:    source,
 			Text:      block.GetPlain(),
 			RootBlock: block,
-		}}})
+		}}}, channel, chatContent{author: source.GetUser(), body: block, tags: event.GetTags()})
 	case *pb.ChatEvent_PrivateMessage:
 		message := inner.PrivateMessage
 		source, err := s.resolveUser(ctx, b, message.GetSource())
@@ -251,7 +265,7 @@ func (s *Server) handleChatEvent(ctx context.Context, b *backend, event *pb.Chat
 		}}})
 	case *pb.ChatEvent_Mention:
 		mention := inner.Mention
-		source, err := s.resolveSource(ctx, b, mention.GetSource())
+		source, channel, err := s.resolveSource(ctx, b, mention.GetSource())
 		if err != nil {
 			return err
 		}
@@ -259,14 +273,17 @@ func (s *Server) handleChatEvent(ctx context.Context, b *backend, event *pb.Chat
 		if err != nil {
 			return err
 		}
-		return s.publish(ctx, &pb.Event{Tags: event.GetTags(), Inner: &pb.Event_Mention{Mention: &pb.MentionEvent{
+		// The backend took out the bot's name, so it's put back for the other
+		// members.
+		relayed := mentionBody(block)
+		return s.publishAndRelay(ctx, b, &pb.Event{Tags: event.GetTags(), Inner: &pb.Event_Mention{Mention: &pb.MentionEvent{
 			Source:    source,
 			Text:      block.GetPlain(),
 			RootBlock: block,
-		}}})
+		}}}, channel, chatContent{author: source.GetUser(), body: relayed, tags: event.GetTags()})
 	case *pb.ChatEvent_Action:
 		action := inner.Action
-		source, err := s.resolveSource(ctx, b, action.GetSource())
+		source, channel, err := s.resolveSource(ctx, b, action.GetSource())
 		if err != nil {
 			return err
 		}
@@ -274,11 +291,11 @@ func (s *Server) handleChatEvent(ctx context.Context, b *backend, event *pb.Chat
 		if err != nil {
 			return err
 		}
-		return s.publish(ctx, &pb.Event{Tags: event.GetTags(), Inner: &pb.Event_Action{Action: &pb.ActionEvent{
+		return s.publishAndRelay(ctx, b, &pb.Event{Tags: event.GetTags(), Inner: &pb.Event_Action{Action: &pb.ActionEvent{
 			Source:    source,
 			Text:      block.GetPlain(),
 			RootBlock: block,
-		}}})
+		}}}, channel, chatContent{author: source.GetUser(), action: true, body: block, tags: event.GetTags()})
 	case *pb.ChatEvent_PrivateAction:
 		action := inner.PrivateAction
 		source, err := s.resolveUser(ctx, b, action.GetSource())
@@ -295,18 +312,20 @@ func (s *Server) handleChatEvent(ctx context.Context, b *backend, event *pb.Chat
 			RootBlock: block,
 		}}})
 
-	// Commands are already split up, so there is no text to normalize.
+	// Commands are already split up, so there is no text to normalize. The
+	// other members of a group are sent the command as it was typed.
 	case *pb.ChatEvent_Command:
 		command := inner.Command
-		source, err := s.resolveSource(ctx, b, command.GetSource())
+		source, channel, err := s.resolveSource(ctx, b, command.GetSource())
 		if err != nil {
 			return err
 		}
-		return s.publish(ctx, &pb.Event{Tags: event.GetTags(), Inner: &pb.Event_Command{Command: &pb.CommandEvent{
+		relayed := commandBody(command)
+		return s.publishAndRelay(ctx, b, &pb.Event{Tags: event.GetTags(), Inner: &pb.Event_Command{Command: &pb.CommandEvent{
 			Source:  source,
 			Command: command.GetCommand(),
 			Arg:     command.GetArg(),
-		}}})
+		}}}, channel, chatContent{author: source.GetUser(), body: relayed, tags: event.GetTags()})
 
 	default:
 		return status.Errorf(codes.Unimplemented, "chat event %T not implemented", inner)
@@ -385,34 +404,48 @@ func (s *Server) publishChannel(ctx context.Context, channel *Channel, changed b
 }
 
 // resolveSource returns a source from a backend with the IDs plugins use,
-// recording its channel and user if they're new.
-func (s *Server) resolveSource(ctx context.Context, b *backend, source *pb.ChannelSource) (*pb.ChannelSource, error) {
+// recording its channel and user if they're new. It also returns the channel,
+// which is nil if the source has none.
+func (s *Server) resolveSource(
+	ctx context.Context, b *backend, source *pb.ChannelSource,
+) (*pb.ChannelSource, *Channel, error) {
 	if source == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	user, err := s.resolveUser(ctx, b, source.GetUser())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	resolved := &pb.ChannelSource{User: user}
 	if source.GetChannelId() == "" {
-		return resolved, nil
+		return resolved, nil, nil
 	}
 
 	channel, changed, err := s.DB.RecordChannel(ctx, b.row.ID, source.GetChannelId())
 	if err != nil {
-		return nil, fmt.Errorf("record channel: %w", err)
+		return nil, nil, fmt.Errorf("record channel: %w", err)
 	}
 	if err := s.publishChannel(ctx, channel, changed); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	// Plugins know a channel in a group by the group.
 	resolved.ChannelId = channel.ID
 	if channel.GroupID != nil {
 		resolved.ChannelId = *channel.GroupID
 	}
-	return resolved, nil
+	return resolved, channel, nil
+}
+
+// publishAndRelay publishes chat from a channel, then relays it to the rest of
+// the channel's group.
+func (s *Server) publishAndRelay(
+	ctx context.Context, b *backend, event *pb.Event, channel *Channel, content chatContent,
+) error {
+	if err := s.publish(ctx, event); err != nil {
+		return err
+	}
+	return s.relayChat(ctx, b, channel, content)
 }
 
 // resolveUser returns a user from a backend with the ID plugins use, recording

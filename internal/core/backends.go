@@ -29,12 +29,19 @@ type backendKey struct {
 type backend struct {
 	key backendKey
 
+	// features are what the backend said it supports in its hello.
+	features map[pb.BackendFeature]bool
+
 	// row is the backend as recorded in the database, whose ID plugins use. It
 	// is set before the backend can be found by that ID.
 	row *Backend
 
 	// requests are sent to the backend by its IngestEvents handler.
 	requests chan *pb.ChatRequest
+
+	// relays are chat from other members of its channels' groups, sent to it
+	// by runRelays.
+	relays chan relay
 
 	// done is closed when the backend stops taking requests.
 	done      chan struct{}
@@ -87,9 +94,9 @@ type backendRegistry struct {
 	byID  map[string]*backend // by row ID, once activated
 }
 
-// register reserves key for a new backend. It fails if a backend with the
-// same key is connected, or hasn't finished disconnecting.
-func (r *backendRegistry) register(key backendKey) (*backend, error) {
+// register reserves key for a new backend with the given features. It fails if
+// a backend with the same key is connected, or hasn't finished disconnecting.
+func (r *backendRegistry) register(key backendKey, features []pb.BackendFeature) (*backend, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -103,9 +110,14 @@ func (r *backendRegistry) register(key backendKey) (*backend, error) {
 
 	b := &backend{
 		key:      key,
+		features: make(map[pb.BackendFeature]bool, len(features)),
 		requests: make(chan *pb.ChatRequest, backendQueueSize),
+		relays:   make(chan relay, relayQueueSize),
 		done:     make(chan struct{}),
 		pending:  make(map[string]chan *pb.ChatEvent),
+	}
+	for _, feature := range features {
+		b.features[feature] = true
 	}
 	r.byKey[key] = b
 	return b, nil

@@ -24,11 +24,17 @@ type groupEnv struct {
 	discordChan string // the Discord channel's own ID
 }
 
-func startGroupEnv(t *testing.T) *groupEnv {
+// startGroupEnv starts a groupEnv whose Discord backend supports features.
+func startGroupEnv(t *testing.T, features ...pb.BackendFeature) *groupEnv {
 	t.Helper()
 
 	env := &groupEnv{testEnv: startTestEnv(t)}
-	env.discord, env.discordID = env.connectBackend(t, discordBackendKey)
+	env.discord = dialBackend(t, env.conn)
+	hello := helloEvent(discordBackendKey)
+	hello.GetHello().Features = features
+	env.discord.send(hello)
+	env.waitForBackend(t, discordBackendKey, true)
+	env.discordID = env.backendIDFor(t, discordBackendKey)
 	env.discord.send(joinEvent("123", "#main", ""))
 	env.discordChan = env.waitForChannel(t, env.discordID, "123")
 

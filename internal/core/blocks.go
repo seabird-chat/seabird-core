@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/seabird-chat/seabird-go/pb"
+	"github.com/seabird-chat/seabird-core/internal/pb"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

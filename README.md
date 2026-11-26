@@ -19,6 +19,12 @@ just run serve --bind-host 127.0.0.1:11235 --database-url file:seabird-core.db
 `just test` runs the tests, `just check` adds vet and the race detector, and
 `just fmt` formats everything.
 
+The protocol is defined in the `proto` submodule, which is
+[seabird-chat/proto](https://github.com/seabird-chat/proto). The code
+generated from it is committed in `internal/pb`, so building doesn't need the
+submodule. To change the protocol, check it out with `git submodule update
+--init`, move it to the proto commit you want, and run `just generate`.
+
 ## Configuring
 
 Every flag can also be set with a `SEABIRD_` environment variable:

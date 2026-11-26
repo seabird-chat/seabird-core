@@ -7,7 +7,7 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/seabird-chat/seabird-go/pb"
+	"github.com/seabird-chat/seabird-core/internal/pb"
 )
 
 // ErrLagged is returned by EventSubscription.Next when the subscriber fell

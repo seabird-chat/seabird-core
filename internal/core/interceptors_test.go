@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/alecthomas/assert/v2"
-	"github.com/seabird-chat/seabird-go/pb"
+	"github.com/seabird-chat/seabird-core/internal/pb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

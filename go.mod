@@ -8,7 +8,6 @@ require (
 	github.com/georgysavva/scany/v2 v2.1.4
 	github.com/ncruces/go-sqlite3 v0.38.0
 	github.com/peterbourgon/ff/v4 v4.0.0-beta.1
-	github.com/seabird-chat/seabird-go v0.6.1
 	google.golang.org/grpc v1.85.0
 	google.golang.org/protobuf v1.36.12
 )

@@ -5,8 +5,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
-	seabird "github.com/seabird-chat/seabird-go"
-	"github.com/seabird-chat/seabird-go/pb"
+	"github.com/seabird-chat/seabird-core/internal/pb"
 	"google.golang.org/grpc/codes"
 )
 
@@ -112,7 +111,7 @@ func TestSendRPCsForwardRequests(t *testing.T) {
 		{
 			name:     "blocks",
 			text:     "ignored",
-			block:    func() *pb.Block { return seabird.NewBoldBlock(seabird.NewTextBlock("hi")) },
+			block:    func() *pb.Block { return newBoldBlock(newTextBlock("hi")) },
 			wantText: "hi",
 		},
 	}

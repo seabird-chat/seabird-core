@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/belak/x/slogx"
-	"github.com/seabird-chat/seabird-go/pb"
+	"github.com/seabird-chat/seabird-core/internal/pb"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"

@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/alecthomas/assert/v2"
-	"github.com/seabird-chat/seabird-go/pb"
+	"github.com/seabird-chat/seabird-core/internal/pb"
 )
 
 // nextTestEvent returns the next event on sub, failing the test if none

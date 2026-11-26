@@ -5,8 +5,7 @@ import (
 	"time"
 
 	"github.com/alecthomas/assert/v2"
-	seabird "github.com/seabird-chat/seabird-go"
-	"github.com/seabird-chat/seabird-go/pb"
+	"github.com/seabird-chat/seabird-core/internal/pb"
 	"google.golang.org/grpc/codes"
 )
 
@@ -29,7 +28,7 @@ func (e *testEnv) sendBlock(t *testing.T, text string, block *pb.Block) *pb.Send
 // Backends and plugins without block support read the plain text, so its
 // format is part of the protocol.
 func TestBlocksPlainText(t *testing.T) {
-	text := seabird.NewTextBlock
+	text := newTextBlock
 
 	tests := []struct {
 		name  string
@@ -37,31 +36,31 @@ func TestBlocksPlainText(t *testing.T) {
 		want  string
 	}{
 		{name: "text", block: text("héllo *not bold*"), want: "héllo *not bold*"},
-		{name: "inline code", block: seabird.NewInlineCodeBlock("x := 1"), want: "x := 1"},
-		{name: "fenced code drops the info string", block: seabird.NewFencedCodeBlock("go", "f()"), want: "f()"},
-		{name: "timestamp in whole seconds", block: seabird.NewTimestampBlock(time.Unix(5, 999)), want: "5"},
+		{name: "inline code", block: newInlineCodeBlock("x := 1"), want: "x := 1"},
+		{name: "fenced code drops the info string", block: newFencedCodeBlock("go", "f()"), want: "f()"},
+		{name: "timestamp in whole seconds", block: newTimestampBlock(time.Unix(5, 999)), want: "5"},
 		{
 			name:  "missing timestamp renders as zero",
 			block: &pb.Block{Inner: &pb.Block_Timestamp{Timestamp: &pb.TimestampBlock{}}},
 			want:  "0",
 		},
-		{name: "formatting passes its children through", block: seabird.NewBoldBlock(text("a"), text("b")), want: "ab"},
-		{name: "heading drops the level", block: seabird.NewHeadingBlock(2, text("Title")), want: "Title"},
+		{name: "formatting passes its children through", block: newBoldBlock(text("a"), text("b")), want: "ab"},
+		{name: "heading drops the level", block: newHeadingBlock(2, text("Title")), want: "Title"},
 		{
 			name:  "link appends its URL",
-			block: seabird.NewLinkBlock("https://example.com", text("example")),
+			block: newLinkBlock("https://example.com", text("example")),
 			want:  "example (https://example.com)",
 		},
-		{name: "list separates items", block: seabird.NewListBlock(text("one"), text("two")), want: "one, two"},
-		{name: "container doesn't separate", block: seabird.NewContainerBlock(text("a"), text("b")), want: "ab"},
+		{name: "list separates items", block: newListBlock(text("one"), text("two")), want: "one, two"},
+		{name: "container doesn't separate", block: newContainerBlock(text("a"), text("b")), want: "ab"},
 		{
 			name: "mixed message",
-			block: seabird.NewContainerBlock(
-				seabird.NewBoldBlock(text("Build")),
+			block: newContainerBlock(
+				newBoldBlock(text("Build")),
 				text(" "),
-				seabird.NewLinkBlock("https://ci.example/1", text("#1")),
+				newLinkBlock("https://ci.example/1", text("#1")),
 				text(": "),
-				seabird.NewListBlock(text("a"), seabird.NewItalicsBlock(text("b"))),
+				newListBlock(text("a"), newItalicsBlock(text("b"))),
 			),
 			want: "Build #1 (https://ci.example/1): a, b",
 		},
@@ -95,9 +94,9 @@ func TestBlocksReplaceSenderPlain(t *testing.T) {
 	t.Parallel()
 
 	env := startTestEnv(t)
-	leaf := seabird.NewTextBlock("real")
+	leaf := newTextBlock("real")
 	leaf.Plain = "leaf lie"
-	root := seabird.NewBoldBlock(leaf, seabird.NewItalicsBlock(seabird.NewTextBlock("!")))
+	root := newBoldBlock(leaf, newItalicsBlock(newTextBlock("!")))
 	root.Plain = "root lie"
 
 	got := env.sendBlock(t, "", root).GetRootBlock()
@@ -126,9 +125,9 @@ func TestBlocksRejectInvalid(t *testing.T) {
 		},
 		{
 			name: "error deep in the tree",
-			block: seabird.NewContainerBlock(
-				seabird.NewTextBlock("a"),
-				seabird.NewListBlock(seabird.NewBoldBlock(
+			block: newContainerBlock(
+				newTextBlock("a"),
+				newListBlock(newBoldBlock(
 					&pb.Block{Inner: &pb.Block_Link{Link: &pb.LinkBlock{Url: "https://example.com"}}},
 				)),
 			),

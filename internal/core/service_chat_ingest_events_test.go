@@ -4,8 +4,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
-	seabird "github.com/seabird-chat/seabird-go"
-	"github.com/seabird-chat/seabird-go/pb"
+	"github.com/seabird-chat/seabird-core/internal/pb"
 )
 
 func TestIngestEventsPublishesChat(t *testing.T) {
@@ -21,7 +20,7 @@ func TestIngestEventsPublishesChat(t *testing.T) {
 		return &pb.Block{Plain: s, Inner: &pb.Block_Text{Text: &pb.TextBlock{Text: s}}}
 	}
 	// The block a sender provides, and what core makes of it.
-	bold := func() *pb.Block { return seabird.NewBoldBlock(seabird.NewTextBlock("hi")) }
+	bold := func() *pb.Block { return newBoldBlock(newTextBlock("hi")) }
 	wantBold := &pb.Block{Plain: "hi", Inner: &pb.Block_Bold{Bold: &pb.BoldBlock{
 		Inner: &pb.Block{Plain: "hi", Inner: &pb.Block_Text{Text: &pb.TextBlock{Text: "hi"}}},
 	}}}

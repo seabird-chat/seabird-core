@@ -1,5 +1,8 @@
 on-unmatched = "info"
 
+# The submodule and the code generated from it are formatted at their source.
+excludes = ["proto/*", "internal/pb/*.pb.go"]
+
 [formatter.nixfmt]
 command = "nixfmt"
 includes = ["*.nix"]

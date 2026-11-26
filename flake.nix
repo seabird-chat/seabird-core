@@ -33,7 +33,7 @@
               pname = "seabird-core";
               version = "0.4.2-dev";
               src = ./.;
-              vendorHash = "sha256-r7tDqtkLHf8zPqusExJd3JLlaIhtzzvS7FODrkLtXHA=";
+              vendorHash = "sha256-ZYZ3+s8ptwK/VflUkCgo6pMCtkFR+ppUTq0KYktmKpg=";
               subPackages = [ "cmd/seabird-core" ];
 
               ldflags = [
@@ -55,6 +55,10 @@
               pkgs.just
               pkgs.sqlite
               pkgs.treefmt
+
+              pkgs.protobuf
+              pkgs.protoc-gen-go
+              pkgs.protoc-gen-go-grpc
             ]
             ++ formatters;
           };

@@ -18,6 +18,10 @@ test *args="":
 test-race *args="":
     go test -race ./... {{ args }}
 
+# Regenerate internal/pb from the proto submodule
+generate:
+    go generate ./internal/pb
+
 # Run go vet
 vet:
     go vet ./...

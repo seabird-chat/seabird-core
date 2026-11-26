@@ -83,7 +83,8 @@ type PerformActionChatRequest struct {
 	RootBlock *Block                 `protobuf:"bytes,4,opt,name=root_block,json=rootBlock,proto3" json:"root_block,omitempty"`
 	Tags      map[string]string      `protobuf:"bytes,3,rep,name=tags,proto3" json:"tags,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// Who the action is on behalf of, if anyone. Only set for backends with
-	// BACKEND_FEATURE_AUTHOR. See BackendFeature.
+	// BACKEND_FEATURE_AUTHOR. See BackendFeature. Backends never see seabird
+	// IDs, so only the author's display_name and their backend's type are set.
 	Author        *User    `protobuf:"bytes,5,opt,name=author,proto3" json:"author,omitempty"`
 	AuthorBackend *Backend `protobuf:"bytes,6,opt,name=author_backend,json=authorBackend,proto3" json:"author_backend,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -245,7 +246,8 @@ type SendMessageChatRequest struct {
 	RootBlock *Block                 `protobuf:"bytes,4,opt,name=root_block,json=rootBlock,proto3" json:"root_block,omitempty"`
 	Tags      map[string]string      `protobuf:"bytes,3,rep,name=tags,proto3" json:"tags,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// Who the message is on behalf of, if anyone. Only set for backends with
-	// BACKEND_FEATURE_AUTHOR. See BackendFeature.
+	// BACKEND_FEATURE_AUTHOR. See BackendFeature. Backends never see seabird
+	// IDs, so only the author's display_name and their backend's type are set.
 	Author        *User    `protobuf:"bytes,5,opt,name=author,proto3" json:"author,omitempty"`
 	AuthorBackend *Backend `protobuf:"bytes,6,opt,name=author_backend,json=authorBackend,proto3" json:"author_backend,omitempty"`
 	unknownFields protoimpl.UnknownFields

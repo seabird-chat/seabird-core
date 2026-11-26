@@ -73,6 +73,7 @@ func newRootCommand() *ff.Command {
 			newServeCommand(fs, rootConfig),
 			newBackendCommand(fs, rootConfig),
 			newChannelCommand(fs, rootConfig),
+			newGroupCommand(fs, rootConfig),
 			newUserCommand(fs, rootConfig),
 			newTokenCommand(fs, rootConfig),
 			newVersionCommand(),

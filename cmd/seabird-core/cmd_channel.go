@@ -34,6 +34,10 @@ func listChannels(ctx context.Context, db *core.DB, args []string) error {
 	if err != nil {
 		return err
 	}
+	groups, err := groupNames(ctx, db)
+	if err != nil {
+		return err
+	}
 	channels, err := db.ListChannels(ctx, "", true)
 	if err != nil {
 		return err
@@ -41,10 +45,14 @@ func listChannels(ctx context.Context, db *core.DB, args []string) error {
 
 	// Names and external IDs can contain spaces, so they come last.
 	w := newTable()
-	fmt.Fprintln(w, "ID\tBACKEND\tJOINED\tLAST SEEN\tNAME\tEXTERNAL ID")
+	fmt.Fprintln(w, "ID\tBACKEND\tGROUP\tJOINED\tLAST SEEN\tNAME\tEXTERNAL ID")
 	for _, channel := range channels {
-		fmt.Fprintf(w, "%s\t%s\t%t\t%s\t%s\t%s\n",
-			channel.ID, backends[channel.BackendID], channel.Joined,
+		group := "-"
+		if channel.GroupID != nil {
+			group = groups[*channel.GroupID]
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%t\t%s\t%s\t%s\n",
+			channel.ID, backends[channel.BackendID], group, channel.Joined,
 			formatLastSeen(channel.LastSeen), channel.DisplayName, channel.ExternalID)
 	}
 	return w.Flush()

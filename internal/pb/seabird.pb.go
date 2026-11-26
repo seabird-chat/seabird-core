@@ -78,82 +78,26 @@ func (ChannelState) EnumDescriptor() ([]byte, []int) {
 	return file_seabird_proto_rawDescGZIP(), []int{0}
 }
 
-// Backend is a chat backend connected to core, or one that has been.
-type Backend struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Type          string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
-	Connected     bool                   `protobuf:"varint,3,opt,name=connected,proto3" json:"connected,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Backend) Reset() {
-	*x = Backend{}
-	mi := &file_seabird_proto_msgTypes[0]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Backend) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Backend) ProtoMessage() {}
-
-func (x *Backend) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[0]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Backend.ProtoReflect.Descriptor instead.
-func (*Backend) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{0}
-}
-
-func (x *Backend) GetId() string {
-	if x != nil {
-		return x.Id
-	}
-	return ""
-}
-
-func (x *Backend) GetType() string {
-	if x != nil {
-		return x.Type
-	}
-	return ""
-}
-
-func (x *Backend) GetConnected() bool {
-	if x != nil {
-		return x.Connected
-	}
-	return false
-}
-
-// Channel is a channel on a backend.
+// Channel is a channel plugins can talk in: a channel on a backend, or a
+// channel group. A group's state is JOINED if any member is joined,
+// BACKEND_DISCONNECTED if every member's backend is disconnected, and
+// NOT_JOINED otherwise. A group has no topic.
 type Channel struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	DisplayName   string                 `protobuf:"bytes,2,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
-	Topic         string                 `protobuf:"bytes,3,opt,name=topic,proto3" json:"topic,omitempty"`
-	BackendId     string                 `protobuf:"bytes,4,opt,name=backend_id,json=backendId,proto3" json:"backend_id,omitempty"`
-	State         ChannelState           `protobuf:"varint,5,opt,name=state,proto3,enum=seabird.ChannelState" json:"state,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Id          string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	DisplayName string                 `protobuf:"bytes,2,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	Topic       string                 `protobuf:"bytes,3,opt,name=topic,proto3" json:"topic,omitempty"`
+	State       ChannelState           `protobuf:"varint,5,opt,name=state,proto3,enum=seabird.ChannelState" json:"state,omitempty"`
+	// The backend channels behind this channel. A channel that isn't in a group
+	// lists itself. A group lists its members, and is empty only if it has none.
+	Members       []*ChannelMember `protobuf:"bytes,6,rep,name=members,proto3" json:"members,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Channel) Reset() {
 	*x = Channel{}
-	mi := &file_seabird_proto_msgTypes[1]
+	mi := &file_seabird_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -165,7 +109,7 @@ func (x *Channel) String() string {
 func (*Channel) ProtoMessage() {}
 
 func (x *Channel) ProtoReflect() protoreflect.Message {
-	mi := &file_seabird_proto_msgTypes[1]
+	mi := &file_seabird_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -178,7 +122,7 @@ func (x *Channel) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Channel.ProtoReflect.Descriptor instead.
 func (*Channel) Descriptor() ([]byte, []int) {
-	return file_seabird_proto_rawDescGZIP(), []int{1}
+	return file_seabird_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *Channel) GetId() string {
@@ -202,14 +146,84 @@ func (x *Channel) GetTopic() string {
 	return ""
 }
 
-func (x *Channel) GetBackendId() string {
+func (x *Channel) GetState() ChannelState {
+	if x != nil {
+		return x.State
+	}
+	return ChannelState_CHANNEL_STATE_UNSPECIFIED
+}
+
+func (x *Channel) GetMembers() []*ChannelMember {
+	if x != nil {
+		return x.Members
+	}
+	return nil
+}
+
+// ChannelMember is a backend channel behind a Channel. Its ID refers to the
+// whole Channel, so sending to it reaches every member.
+type ChannelMember struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	BackendId     string                 `protobuf:"bytes,2,opt,name=backend_id,json=backendId,proto3" json:"backend_id,omitempty"`
+	DisplayName   string                 `protobuf:"bytes,3,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	State         ChannelState           `protobuf:"varint,4,opt,name=state,proto3,enum=seabird.ChannelState" json:"state,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ChannelMember) Reset() {
+	*x = ChannelMember{}
+	mi := &file_seabird_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ChannelMember) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ChannelMember) ProtoMessage() {}
+
+func (x *ChannelMember) ProtoReflect() protoreflect.Message {
+	mi := &file_seabird_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ChannelMember.ProtoReflect.Descriptor instead.
+func (*ChannelMember) Descriptor() ([]byte, []int) {
+	return file_seabird_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ChannelMember) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *ChannelMember) GetBackendId() string {
 	if x != nil {
 		return x.BackendId
 	}
 	return ""
 }
 
-func (x *Channel) GetState() ChannelState {
+func (x *ChannelMember) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
+}
+
+func (x *ChannelMember) GetState() ChannelState {
 	if x != nil {
 		return x.State
 	}
@@ -1489,7 +1503,8 @@ func (*JoinChannelResponse) Descriptor() ([]byte, []int) {
 	return file_seabird_proto_rawDescGZIP(), []int{20}
 }
 
-// Request to leave a channel.
+// Request to leave a channel. Channel groups can't be left, and fail with
+// FAILED_PRECONDITION.
 type LeaveChannelRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ChannelId     string                 `protobuf:"bytes,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
@@ -1775,7 +1790,9 @@ func (x *BackendInfoResponse) GetMetadata() map[string]string {
 }
 
 // Request to list channels. An empty backend_id lists every backend's
-// channels. Only joined channels are listed unless include_inactive is set.
+// channels, and otherwise only channels with a member on that backend are
+// listed. Channel groups are listed in place of their members. Only joined
+// channels are listed unless include_inactive is set.
 type ListChannelsRequest struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	BackendId       string                 `protobuf:"bytes,1,opt,name=backend_id,json=backendId,proto3" json:"backend_id,omitempty"`
@@ -1961,6 +1978,8 @@ func (x *ChannelInfoResponse) GetChannel() *Channel {
 	return nil
 }
 
+// Request to update a channel's info. Channel groups can't be updated, and fail
+// with FAILED_PRECONDITION.
 type UpdateChannelInfoRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ChannelId     string                 `protobuf:"bytes,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
@@ -2231,18 +2250,20 @@ var File_seabird_proto protoreflect.FileDescriptor
 
 const file_seabird_proto_rawDesc = "" +
 	"\n" +
-	"\rseabird.proto\x12\aseabird\x1a\fcommon.proto\"K\n" +
-	"\aBackend\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
-	"\x04type\x18\x02 \x01(\tR\x04type\x12\x1c\n" +
-	"\tconnected\x18\x03 \x01(\bR\tconnected\"\x9e\x01\n" +
+	"\rseabird.proto\x12\aseabird\x1a\fcommon.proto\"\xc3\x01\n" +
 	"\aChannel\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12!\n" +
 	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x12\x14\n" +
-	"\x05topic\x18\x03 \x01(\tR\x05topic\x12\x1d\n" +
+	"\x05topic\x18\x03 \x01(\tR\x05topic\x12+\n" +
+	"\x05state\x18\x05 \x01(\x0e2\x15.seabird.ChannelStateR\x05state\x120\n" +
+	"\amembers\x18\x06 \x03(\v2\x16.seabird.ChannelMemberR\amembersJ\x04\b\x04\x10\x05R\n" +
+	"backend_id\"\x8e\x01\n" +
+	"\rChannelMember\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
-	"backend_id\x18\x04 \x01(\tR\tbackendId\x12+\n" +
-	"\x05state\x18\x05 \x01(\x0e2\x15.seabird.ChannelStateR\x05state\"\x93\a\n" +
+	"backend_id\x18\x02 \x01(\tR\tbackendId\x12!\n" +
+	"\fdisplay_name\x18\x03 \x01(\tR\vdisplayName\x12+\n" +
+	"\x05state\x18\x04 \x01(\x0e2\x15.seabird.ChannelStateR\x05state\"\x93\a\n" +
 	"\x05Event\x120\n" +
 	"\amessage\x18\x01 \x01(\v2\x14.common.MessageEventH\x00R\amessage\x12F\n" +
 	"\x0fprivate_message\x18\x02 \x01(\v2\x1b.common.PrivateMessageEventH\x00R\x0eprivateMessage\x120\n" +
@@ -2261,9 +2282,9 @@ const file_seabird_proto_rawDesc = "" +
 	"\tTagsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\a\n" +
-	"\x05inner\"A\n" +
-	"\x13BackendUpdatedEvent\x12*\n" +
-	"\abackend\x18\x01 \x01(\v2\x10.seabird.BackendR\abackend\"A\n" +
+	"\x05inner\"@\n" +
+	"\x13BackendUpdatedEvent\x12)\n" +
+	"\abackend\x18\x01 \x01(\v2\x0f.common.BackendR\abackend\"A\n" +
 	"\x13ChannelUpdatedEvent\x12*\n" +
 	"\achannel\x18\x01 \x01(\v2\x10.seabird.ChannelR\achannel\"\xb4\x01\n" +
 	"\x13StreamEventsRequest\x12F\n" +
@@ -2363,14 +2384,14 @@ const file_seabird_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x16\n" +
 	"\x14LeaveChannelResponse\"H\n" +
 	"\x13ListBackendsRequest\x121\n" +
-	"\x14include_disconnected\x18\x01 \x01(\bR\x13includeDisconnected\"D\n" +
-	"\x14ListBackendsResponse\x12,\n" +
-	"\bbackends\x18\x01 \x03(\v2\x10.seabird.BackendR\bbackends\"3\n" +
+	"\x14include_disconnected\x18\x01 \x01(\bR\x13includeDisconnected\"C\n" +
+	"\x14ListBackendsResponse\x12+\n" +
+	"\bbackends\x18\x01 \x03(\v2\x0f.common.BackendR\bbackends\"3\n" +
 	"\x12BackendInfoRequest\x12\x1d\n" +
 	"\n" +
-	"backend_id\x18\x01 \x01(\tR\tbackendId\"\xc6\x01\n" +
-	"\x13BackendInfoResponse\x12*\n" +
-	"\abackend\x18\x01 \x01(\v2\x10.seabird.BackendR\abackend\x12F\n" +
+	"backend_id\x18\x01 \x01(\tR\tbackendId\"\xc5\x01\n" +
+	"\x13BackendInfoResponse\x12)\n" +
+	"\abackend\x18\x01 \x01(\v2\x0f.common.BackendR\abackend\x12F\n" +
 	"\bmetadata\x18\x02 \x03(\v2*.seabird.BackendInfoResponse.MetadataEntryR\bmetadata\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
@@ -2443,8 +2464,8 @@ var file_seabird_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_seabird_proto_msgTypes = make([]protoimpl.MessageInfo, 48)
 var file_seabird_proto_goTypes = []any{
 	(ChannelState)(0),                    // 0: seabird.ChannelState
-	(*Backend)(nil),                      // 1: seabird.Backend
-	(*Channel)(nil),                      // 2: seabird.Channel
+	(*Channel)(nil),                      // 1: seabird.Channel
+	(*ChannelMember)(nil),                // 2: seabird.ChannelMember
 	(*Event)(nil),                        // 3: seabird.Event
 	(*BackendUpdatedEvent)(nil),          // 4: seabird.BackendUpdatedEvent
 	(*ChannelUpdatedEvent)(nil),          // 5: seabird.ChannelUpdatedEvent
@@ -2497,82 +2518,85 @@ var file_seabird_proto_goTypes = []any{
 	(*CommandEvent)(nil),                 // 52: common.CommandEvent
 	(*ActionEvent)(nil),                  // 53: common.ActionEvent
 	(*PrivateActionEvent)(nil),           // 54: common.PrivateActionEvent
-	(*Block)(nil),                        // 55: common.Block
+	(*Backend)(nil),                      // 55: common.Backend
+	(*Block)(nil),                        // 56: common.Block
 }
 var file_seabird_proto_depIdxs = []int32{
 	0,  // 0: seabird.Channel.state:type_name -> seabird.ChannelState
-	49, // 1: seabird.Event.message:type_name -> common.MessageEvent
-	50, // 2: seabird.Event.private_message:type_name -> common.PrivateMessageEvent
-	51, // 3: seabird.Event.mention:type_name -> common.MentionEvent
-	52, // 4: seabird.Event.command:type_name -> common.CommandEvent
-	53, // 5: seabird.Event.action:type_name -> common.ActionEvent
-	54, // 6: seabird.Event.private_action:type_name -> common.PrivateActionEvent
-	16, // 7: seabird.Event.send_message:type_name -> seabird.SendMessageEvent
-	19, // 8: seabird.Event.send_private_message:type_name -> seabird.SendPrivateMessageEvent
-	10, // 9: seabird.Event.perform_action:type_name -> seabird.PerformActionEvent
-	13, // 10: seabird.Event.perform_private_action:type_name -> seabird.PerformPrivateActionEvent
-	4,  // 11: seabird.Event.backend_updated:type_name -> seabird.BackendUpdatedEvent
-	5,  // 12: seabird.Event.channel_updated:type_name -> seabird.ChannelUpdatedEvent
-	38, // 13: seabird.Event.tags:type_name -> seabird.Event.TagsEntry
-	1,  // 14: seabird.BackendUpdatedEvent.backend:type_name -> seabird.Backend
-	2,  // 15: seabird.ChannelUpdatedEvent.channel:type_name -> seabird.Channel
-	39, // 16: seabird.StreamEventsRequest.commands:type_name -> seabird.StreamEventsRequest.CommandsEntry
-	55, // 17: seabird.PerformActionRequest.root_block:type_name -> common.Block
-	40, // 18: seabird.PerformActionRequest.tags:type_name -> seabird.PerformActionRequest.TagsEntry
-	55, // 19: seabird.PerformActionEvent.root_block:type_name -> common.Block
-	55, // 20: seabird.PerformPrivateActionRequest.root_block:type_name -> common.Block
-	41, // 21: seabird.PerformPrivateActionRequest.tags:type_name -> seabird.PerformPrivateActionRequest.TagsEntry
-	55, // 22: seabird.PerformPrivateActionEvent.root_block:type_name -> common.Block
-	55, // 23: seabird.SendMessageRequest.root_block:type_name -> common.Block
-	42, // 24: seabird.SendMessageRequest.tags:type_name -> seabird.SendMessageRequest.TagsEntry
-	55, // 25: seabird.SendMessageEvent.root_block:type_name -> common.Block
-	55, // 26: seabird.SendPrivateMessageRequest.root_block:type_name -> common.Block
-	43, // 27: seabird.SendPrivateMessageRequest.tags:type_name -> seabird.SendPrivateMessageRequest.TagsEntry
-	55, // 28: seabird.SendPrivateMessageEvent.root_block:type_name -> common.Block
-	44, // 29: seabird.JoinChannelRequest.tags:type_name -> seabird.JoinChannelRequest.TagsEntry
-	45, // 30: seabird.LeaveChannelRequest.tags:type_name -> seabird.LeaveChannelRequest.TagsEntry
-	1,  // 31: seabird.ListBackendsResponse.backends:type_name -> seabird.Backend
-	1,  // 32: seabird.BackendInfoResponse.backend:type_name -> seabird.Backend
-	46, // 33: seabird.BackendInfoResponse.metadata:type_name -> seabird.BackendInfoResponse.MetadataEntry
-	2,  // 34: seabird.ListChannelsResponse.channels:type_name -> seabird.Channel
-	2,  // 35: seabird.ChannelInfoResponse.channel:type_name -> seabird.Channel
-	47, // 36: seabird.UpdateChannelInfoRequest.tags:type_name -> seabird.UpdateChannelInfoRequest.TagsEntry
-	48, // 37: seabird.CommandsResponse.commands:type_name -> seabird.CommandsResponse.CommandsEntry
-	7,  // 38: seabird.StreamEventsRequest.CommandsEntry.value:type_name -> seabird.CommandMetadata
-	7,  // 39: seabird.CommandsResponse.CommandsEntry.value:type_name -> seabird.CommandMetadata
-	6,  // 40: seabird.Seabird.StreamEvents:input_type -> seabird.StreamEventsRequest
-	8,  // 41: seabird.Seabird.PerformAction:input_type -> seabird.PerformActionRequest
-	11, // 42: seabird.Seabird.PerformPrivateAction:input_type -> seabird.PerformPrivateActionRequest
-	14, // 43: seabird.Seabird.SendMessage:input_type -> seabird.SendMessageRequest
-	17, // 44: seabird.Seabird.SendPrivateMessage:input_type -> seabird.SendPrivateMessageRequest
-	20, // 45: seabird.Seabird.JoinChannel:input_type -> seabird.JoinChannelRequest
-	22, // 46: seabird.Seabird.LeaveChannel:input_type -> seabird.LeaveChannelRequest
-	32, // 47: seabird.Seabird.UpdateChannelInfo:input_type -> seabird.UpdateChannelInfoRequest
-	24, // 48: seabird.Seabird.ListBackends:input_type -> seabird.ListBackendsRequest
-	26, // 49: seabird.Seabird.GetBackendInfo:input_type -> seabird.BackendInfoRequest
-	28, // 50: seabird.Seabird.ListChannels:input_type -> seabird.ListChannelsRequest
-	30, // 51: seabird.Seabird.GetChannelInfo:input_type -> seabird.ChannelInfoRequest
-	34, // 52: seabird.Seabird.GetCoreInfo:input_type -> seabird.CoreInfoRequest
-	36, // 53: seabird.Seabird.RegisteredCommands:input_type -> seabird.CommandsRequest
-	3,  // 54: seabird.Seabird.StreamEvents:output_type -> seabird.Event
-	9,  // 55: seabird.Seabird.PerformAction:output_type -> seabird.PerformActionResponse
-	12, // 56: seabird.Seabird.PerformPrivateAction:output_type -> seabird.PerformPrivateActionResponse
-	15, // 57: seabird.Seabird.SendMessage:output_type -> seabird.SendMessageResponse
-	18, // 58: seabird.Seabird.SendPrivateMessage:output_type -> seabird.SendPrivateMessageResponse
-	21, // 59: seabird.Seabird.JoinChannel:output_type -> seabird.JoinChannelResponse
-	23, // 60: seabird.Seabird.LeaveChannel:output_type -> seabird.LeaveChannelResponse
-	33, // 61: seabird.Seabird.UpdateChannelInfo:output_type -> seabird.UpdateChannelInfoResponse
-	25, // 62: seabird.Seabird.ListBackends:output_type -> seabird.ListBackendsResponse
-	27, // 63: seabird.Seabird.GetBackendInfo:output_type -> seabird.BackendInfoResponse
-	29, // 64: seabird.Seabird.ListChannels:output_type -> seabird.ListChannelsResponse
-	31, // 65: seabird.Seabird.GetChannelInfo:output_type -> seabird.ChannelInfoResponse
-	35, // 66: seabird.Seabird.GetCoreInfo:output_type -> seabird.CoreInfoResponse
-	37, // 67: seabird.Seabird.RegisteredCommands:output_type -> seabird.CommandsResponse
-	54, // [54:68] is the sub-list for method output_type
-	40, // [40:54] is the sub-list for method input_type
-	40, // [40:40] is the sub-list for extension type_name
-	40, // [40:40] is the sub-list for extension extendee
-	0,  // [0:40] is the sub-list for field type_name
+	2,  // 1: seabird.Channel.members:type_name -> seabird.ChannelMember
+	0,  // 2: seabird.ChannelMember.state:type_name -> seabird.ChannelState
+	49, // 3: seabird.Event.message:type_name -> common.MessageEvent
+	50, // 4: seabird.Event.private_message:type_name -> common.PrivateMessageEvent
+	51, // 5: seabird.Event.mention:type_name -> common.MentionEvent
+	52, // 6: seabird.Event.command:type_name -> common.CommandEvent
+	53, // 7: seabird.Event.action:type_name -> common.ActionEvent
+	54, // 8: seabird.Event.private_action:type_name -> common.PrivateActionEvent
+	16, // 9: seabird.Event.send_message:type_name -> seabird.SendMessageEvent
+	19, // 10: seabird.Event.send_private_message:type_name -> seabird.SendPrivateMessageEvent
+	10, // 11: seabird.Event.perform_action:type_name -> seabird.PerformActionEvent
+	13, // 12: seabird.Event.perform_private_action:type_name -> seabird.PerformPrivateActionEvent
+	4,  // 13: seabird.Event.backend_updated:type_name -> seabird.BackendUpdatedEvent
+	5,  // 14: seabird.Event.channel_updated:type_name -> seabird.ChannelUpdatedEvent
+	38, // 15: seabird.Event.tags:type_name -> seabird.Event.TagsEntry
+	55, // 16: seabird.BackendUpdatedEvent.backend:type_name -> common.Backend
+	1,  // 17: seabird.ChannelUpdatedEvent.channel:type_name -> seabird.Channel
+	39, // 18: seabird.StreamEventsRequest.commands:type_name -> seabird.StreamEventsRequest.CommandsEntry
+	56, // 19: seabird.PerformActionRequest.root_block:type_name -> common.Block
+	40, // 20: seabird.PerformActionRequest.tags:type_name -> seabird.PerformActionRequest.TagsEntry
+	56, // 21: seabird.PerformActionEvent.root_block:type_name -> common.Block
+	56, // 22: seabird.PerformPrivateActionRequest.root_block:type_name -> common.Block
+	41, // 23: seabird.PerformPrivateActionRequest.tags:type_name -> seabird.PerformPrivateActionRequest.TagsEntry
+	56, // 24: seabird.PerformPrivateActionEvent.root_block:type_name -> common.Block
+	56, // 25: seabird.SendMessageRequest.root_block:type_name -> common.Block
+	42, // 26: seabird.SendMessageRequest.tags:type_name -> seabird.SendMessageRequest.TagsEntry
+	56, // 27: seabird.SendMessageEvent.root_block:type_name -> common.Block
+	56, // 28: seabird.SendPrivateMessageRequest.root_block:type_name -> common.Block
+	43, // 29: seabird.SendPrivateMessageRequest.tags:type_name -> seabird.SendPrivateMessageRequest.TagsEntry
+	56, // 30: seabird.SendPrivateMessageEvent.root_block:type_name -> common.Block
+	44, // 31: seabird.JoinChannelRequest.tags:type_name -> seabird.JoinChannelRequest.TagsEntry
+	45, // 32: seabird.LeaveChannelRequest.tags:type_name -> seabird.LeaveChannelRequest.TagsEntry
+	55, // 33: seabird.ListBackendsResponse.backends:type_name -> common.Backend
+	55, // 34: seabird.BackendInfoResponse.backend:type_name -> common.Backend
+	46, // 35: seabird.BackendInfoResponse.metadata:type_name -> seabird.BackendInfoResponse.MetadataEntry
+	1,  // 36: seabird.ListChannelsResponse.channels:type_name -> seabird.Channel
+	1,  // 37: seabird.ChannelInfoResponse.channel:type_name -> seabird.Channel
+	47, // 38: seabird.UpdateChannelInfoRequest.tags:type_name -> seabird.UpdateChannelInfoRequest.TagsEntry
+	48, // 39: seabird.CommandsResponse.commands:type_name -> seabird.CommandsResponse.CommandsEntry
+	7,  // 40: seabird.StreamEventsRequest.CommandsEntry.value:type_name -> seabird.CommandMetadata
+	7,  // 41: seabird.CommandsResponse.CommandsEntry.value:type_name -> seabird.CommandMetadata
+	6,  // 42: seabird.Seabird.StreamEvents:input_type -> seabird.StreamEventsRequest
+	8,  // 43: seabird.Seabird.PerformAction:input_type -> seabird.PerformActionRequest
+	11, // 44: seabird.Seabird.PerformPrivateAction:input_type -> seabird.PerformPrivateActionRequest
+	14, // 45: seabird.Seabird.SendMessage:input_type -> seabird.SendMessageRequest
+	17, // 46: seabird.Seabird.SendPrivateMessage:input_type -> seabird.SendPrivateMessageRequest
+	20, // 47: seabird.Seabird.JoinChannel:input_type -> seabird.JoinChannelRequest
+	22, // 48: seabird.Seabird.LeaveChannel:input_type -> seabird.LeaveChannelRequest
+	32, // 49: seabird.Seabird.UpdateChannelInfo:input_type -> seabird.UpdateChannelInfoRequest
+	24, // 50: seabird.Seabird.ListBackends:input_type -> seabird.ListBackendsRequest
+	26, // 51: seabird.Seabird.GetBackendInfo:input_type -> seabird.BackendInfoRequest
+	28, // 52: seabird.Seabird.ListChannels:input_type -> seabird.ListChannelsRequest
+	30, // 53: seabird.Seabird.GetChannelInfo:input_type -> seabird.ChannelInfoRequest
+	34, // 54: seabird.Seabird.GetCoreInfo:input_type -> seabird.CoreInfoRequest
+	36, // 55: seabird.Seabird.RegisteredCommands:input_type -> seabird.CommandsRequest
+	3,  // 56: seabird.Seabird.StreamEvents:output_type -> seabird.Event
+	9,  // 57: seabird.Seabird.PerformAction:output_type -> seabird.PerformActionResponse
+	12, // 58: seabird.Seabird.PerformPrivateAction:output_type -> seabird.PerformPrivateActionResponse
+	15, // 59: seabird.Seabird.SendMessage:output_type -> seabird.SendMessageResponse
+	18, // 60: seabird.Seabird.SendPrivateMessage:output_type -> seabird.SendPrivateMessageResponse
+	21, // 61: seabird.Seabird.JoinChannel:output_type -> seabird.JoinChannelResponse
+	23, // 62: seabird.Seabird.LeaveChannel:output_type -> seabird.LeaveChannelResponse
+	33, // 63: seabird.Seabird.UpdateChannelInfo:output_type -> seabird.UpdateChannelInfoResponse
+	25, // 64: seabird.Seabird.ListBackends:output_type -> seabird.ListBackendsResponse
+	27, // 65: seabird.Seabird.GetBackendInfo:output_type -> seabird.BackendInfoResponse
+	29, // 66: seabird.Seabird.ListChannels:output_type -> seabird.ListChannelsResponse
+	31, // 67: seabird.Seabird.GetChannelInfo:output_type -> seabird.ChannelInfoResponse
+	35, // 68: seabird.Seabird.GetCoreInfo:output_type -> seabird.CoreInfoResponse
+	37, // 69: seabird.Seabird.RegisteredCommands:output_type -> seabird.CommandsResponse
+	56, // [56:70] is the sub-list for method output_type
+	42, // [42:56] is the sub-list for method input_type
+	42, // [42:42] is the sub-list for extension type_name
+	42, // [42:42] is the sub-list for extension extendee
+	0,  // [0:42] is the sub-list for field type_name
 }
 
 func init() { file_seabird_proto_init() }

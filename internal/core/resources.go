@@ -25,12 +25,18 @@ func channelProto(c Channel, backendConnected bool) *pb.Channel {
 		state = pb.ChannelState_CHANNEL_STATE_NOT_JOINED
 	}
 
+	// A channel that isn't in a group is its own only member.
 	return &pb.Channel{
 		Id:          c.ID,
 		DisplayName: c.DisplayName,
 		Topic:       c.Topic,
-		BackendId:   c.BackendID,
 		State:       state,
+		Members: []*pb.ChannelMember{{
+			Id:          c.ID,
+			BackendId:   c.BackendID,
+			DisplayName: c.DisplayName,
+			State:       state,
+		}},
 	}
 }
 

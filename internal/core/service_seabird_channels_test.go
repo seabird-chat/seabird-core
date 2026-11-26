@@ -206,12 +206,20 @@ func (e *testEnv) listChannels(t *testing.T, includeInactive bool) []*pb.Channel
 func (e *testEnv) channel(t *testing.T, externalID, name, topic string, state pb.ChannelState) *pb.Channel {
 	t.Helper()
 
+	return ungroupedChannel(e.channelIDFor(t, e.backendID, externalID), e.backendID, name, topic, state)
+}
+
+// ungroupedChannel is how plugins see a channel that isn't in a group, which
+// is its own only member.
+func ungroupedChannel(id, backendID, name, topic string, state pb.ChannelState) *pb.Channel {
 	return &pb.Channel{
-		Id:          e.channelIDFor(t, e.backendID, externalID),
+		Id:          id,
 		DisplayName: name,
 		Topic:       topic,
-		BackendId:   e.backendID,
 		State:       state,
+		Members: []*pb.ChannelMember{{
+			Id: id, BackendId: backendID, DisplayName: name, State: state,
+		}},
 	}
 }
 
@@ -301,9 +309,9 @@ func TestListChannelsAcrossBackends(t *testing.T) {
 
 	resp, err = env.plugin.ListChannels(env.ctx, &pb.ListChannelsRequest{BackendId: otherID, IncludeInactive: true})
 	assert.NoError(t, err)
-	assertProtosEqual(t, []*pb.Channel{{
-		Id: otherChannel, DisplayName: "#other", BackendId: otherID, State: disconnected,
-	}}, resp.GetChannels())
+	assertProtosEqual(t, []*pb.Channel{
+		ungroupedChannel(otherChannel, otherID, "#other", "", disconnected),
+	}, resp.GetChannels())
 }
 
 func TestChannelUpdates(t *testing.T) {
@@ -405,6 +413,7 @@ func TestGetChannelInfo(t *testing.T) {
 	env.backend.cancel()
 	env.waitForBackend(t, testBackendKey, false)
 	joinedChannel.State = disconnected
+	joinedChannel.Members[0].State = disconnected
 	assertProtoEqual(t, joinedChannel, info(joinedChannel.GetId()))
 }
 

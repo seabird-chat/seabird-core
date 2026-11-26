@@ -66,3 +66,29 @@ calls its channels and users:
 ```sh
 seabird-core channel list --database-url seabird-core.db
 ```
+
+## Channel groups
+
+A channel group bridges channels across backends, such as an IRC channel and a
+Discord channel, into one conversation. Plugins see the group as a single
+channel with an ID like `sbg_8d3kq0x2m7vnc`, and a member channel's own ID
+refers to its whole group. Chat in any member is relayed to the others, and
+anything a plugin sends to the group goes to every member.
+
+Groups are managed with the `group` subcommands, which take the same
+`--database-url` as `serve`:
+
+```sh
+seabird-core group create --database-url seabird-core.db main
+seabird-core group add --database-url seabird-core.db main sbc_r7mn7h863jvb8 sbc_jhh1jvfqh8ntg
+seabird-core group list --database-url seabird-core.db
+```
+
+`remove` takes channels back out of a group, and `delete` removes a group,
+leaving its channels ungrouped. A channel can only be in one group. A running
+core sees changes the next time it looks a channel up, but plugins aren't sent
+updates for them, so they may need restarting.
+
+Relayed messages name their author. Backends that support it show the author
+themselves, such as by posting under their name, and the rest get it at the
+start of the message, as in "alice (discord): hi".

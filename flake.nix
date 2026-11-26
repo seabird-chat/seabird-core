@@ -33,7 +33,7 @@
               pname = "seabird-core";
               version = "0.4.1-dev";
               src = ./.;
-              vendorHash = "sha256-TYgEPcGyqfep1hv5hAAiBtRcGeuszjRqVcd5z1uGyBc=";
+              vendorHash = "sha256-r7tDqtkLHf8zPqusExJd3JLlaIhtzzvS7FODrkLtXHA=";
               subPackages = [ "cmd/seabird-core" ];
 
               ldflags = [

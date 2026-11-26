@@ -5,6 +5,7 @@ go 1.26.0
 require (
 	github.com/alecthomas/assert/v2 v2.11.0
 	github.com/belak/x v0.0.0-20260929221658-aee2021080d9
+	github.com/georgysavva/scany/v2 v2.1.4
 	github.com/ncruces/go-sqlite3 v0.38.0
 	github.com/peterbourgon/ff/v4 v4.0.0-beta.1
 	github.com/seabird-chat/seabird-go v0.6.1

@@ -10,6 +10,7 @@ import (
 
 	"github.com/belak/x/migrate"
 	"github.com/belak/x/slogx"
+	"github.com/georgysavva/scany/v2/sqlscan"
 	_ "github.com/ncruces/go-sqlite3/driver"
 )
 
@@ -22,8 +23,8 @@ var ErrNotFound = errors.New("not found")
 // AuthToken is a row of seabird_auth_tokens. Name is the username requests
 // made with the token are attributed to.
 type AuthToken struct {
-	ID   int64
-	Name string
+	ID   int64  `db:"id"`
+	Name string `db:"name"`
 }
 
 // DB owns the connection pool used by core.
@@ -86,16 +87,12 @@ func (d *DB) Close() error {
 // matches.
 func (d *DB) GetAuthToken(ctx context.Context, key string) (*AuthToken, error) {
 	var token AuthToken
-
-	err := d.inner.QueryRowContext(ctx,
-		"SELECT id, name FROM seabird_auth_tokens WHERE key = ?", key,
-	).Scan(&token.ID, &token.Name)
-	if errors.Is(err, sql.ErrNoRows) {
+	err := sqlscan.Get(ctx, d.inner, &token, "SELECT id, name FROM seabird_auth_tokens WHERE key = ?", key)
+	if sqlscan.NotFound(err) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("query auth token: %w", err)
 	}
-
 	return &token, nil
 }

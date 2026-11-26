@@ -25,12 +25,29 @@ Every flag can also be set with a `SEABIRD_` environment variable:
 
 - `SEABIRD_DATABASE_URL` (required) - the SQLite database holding auth tokens,
   as a filename or a `file:` URI. Tokens are rows in its `seabird_auth_tokens`
-  table, added with the sqlite CLI. Core also records every backend, channel and
-  user it sees in `seabird_backends`, `seabird_channels` and `seabird_users`,
-  giving each a stable seabird ID such as `sbc_5k2q8mzx7v1rc`.
+  table, managed with `seabird-core token` (see below). Core also records every
+  backend, channel and user it sees in `seabird_backends`, `seabird_channels`
+  and `seabird_users`, giving each a stable seabird ID such as
+  `sbc_5k2q8mzx7v1rc`.
 - `SEABIRD_BIND_HOST` (optional, defaults to `:11235`) - which host/port to bind
   the gRPC service to. It isn't TLS encrypted, so you may want to put it behind a
   reverse proxy.
 - `SEABIRD_LOG_LEVEL` and `SEABIRD_LOG_FORMAT` (optional, default `info` and
   `json`) - the log level (`debug`, `info`, `warn` or `error`) and format
   (`json`, `pretty` or `text`).
+
+## Auth tokens
+
+Every plugin and backend authenticates with a token. The `token` subcommands
+take the same `--database-url` as `serve`:
+
+```sh
+seabird-core token create --database-url seabird-core.db my-plugin
+seabird-core token list --database-url seabird-core.db
+seabird-core token delete --database-url seabird-core.db 3
+```
+
+`create` prints the new token, which starts with `sbt_`; `list` never shows
+keys. A name can have several tokens, so a token can be replaced without
+downtime by creating the new one before deleting the old.
+

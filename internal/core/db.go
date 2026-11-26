@@ -102,6 +102,49 @@ func (d *DB) GetAuthToken(ctx context.Context, key string) (*AuthToken, error) {
 	return &token, nil
 }
 
+// CreateAuthToken adds a token for name and returns its key. The key can't be
+// looked up again, so it must be handed to whoever needs it now.
+func (d *DB) CreateAuthToken(ctx context.Context, name string) (string, error) {
+	if name == "" {
+		return "", errors.New("token name must not be empty")
+	}
+
+	key := newToken()
+	_, err := d.inner.ExecContext(ctx,
+		"INSERT INTO seabird_auth_tokens (name, key) VALUES (?, ?)", name, key)
+	if err != nil {
+		return "", fmt.Errorf("insert auth token: %w", err)
+	}
+	return key, nil
+}
+
+// ListAuthTokens returns every token, ordered by ID, without their keys.
+func (d *DB) ListAuthTokens(ctx context.Context) ([]AuthToken, error) {
+	var tokens []AuthToken
+	err := sqlscan.Select(ctx, d.inner, &tokens, "SELECT id, name FROM seabird_auth_tokens ORDER BY id")
+	if err != nil {
+		return nil, fmt.Errorf("query auth tokens: %w", err)
+	}
+	return tokens, nil
+}
+
+// DeleteAuthToken removes the token with the given ID. It returns ErrNotFound
+// if there is none.
+func (d *DB) DeleteAuthToken(ctx context.Context, id int64) error {
+	result, err := d.inner.ExecContext(ctx, "DELETE FROM seabird_auth_tokens WHERE id = ?", id)
+	if err != nil {
+		return fmt.Errorf("delete auth token: %w", err)
+	}
+	deleted, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("delete auth token: %w", err)
+	}
+	if deleted == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // Backend is a chat backend core has seen or been told about, as stored in
 // seabird_backends. Backends identify themselves by Type and NativeID, the
 // type and ID in their hello.

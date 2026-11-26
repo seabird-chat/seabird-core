@@ -71,6 +71,7 @@ func newRootCommand() *ff.Command {
 		Flags: fs,
 		Subcommands: []*ff.Command{
 			newServeCommand(fs, rootConfig),
+			newTokenCommand(fs, rootConfig),
 			newVersionCommand(),
 		},
 	}

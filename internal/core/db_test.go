@@ -257,3 +257,40 @@ func recordTestBackend(t *testing.T, db *DB, nativeID string) string {
 	assert.NoError(t, err)
 	return backend.ID
 }
+
+func TestAuthTokenLifecycle(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	db := openTestDB(t)
+
+	_, err := db.CreateAuthToken(ctx, "")
+	assert.Error(t, err)
+
+	// A name can have more than one token, so one can be rotated out.
+	first, err := db.CreateAuthToken(ctx, "plugin")
+	assert.NoError(t, err)
+	second, err := db.CreateAuthToken(ctx, "plugin")
+	assert.NoError(t, err)
+	assert.NotEqual(t, first, second)
+
+	suffix, ok := strings.CutPrefix(first, tokenPrefix+"_")
+	assert.True(t, ok, "%q doesn't start with %s_", first, tokenPrefix)
+	assert.Equal(t, 26, len(suffix))
+
+	token, err := db.GetAuthToken(ctx, first)
+	assert.NoError(t, err)
+	assert.Equal(t, "plugin", token.Name)
+
+	tokens, err := db.ListAuthTokens(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, []AuthToken{{ID: token.ID, Name: "plugin"}, {ID: token.ID + 1, Name: "plugin"}}, tokens)
+
+	assert.NoError(t, db.DeleteAuthToken(ctx, token.ID))
+	_, err = db.GetAuthToken(ctx, first)
+	assert.IsError(t, err, ErrNotFound)
+	_, err = db.GetAuthToken(ctx, second)
+	assert.NoError(t, err, "deleting one token leaves the others")
+
+	assert.IsError(t, db.DeleteAuthToken(ctx, token.ID), ErrNotFound)
+}

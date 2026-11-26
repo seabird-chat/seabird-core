@@ -183,6 +183,44 @@ func TestRecordUser(t *testing.T) {
 	assert.NotEqual(t, user.ID, other.ID, "the same name on another backend is another user")
 }
 
+func TestSeed(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	db := openTestDB(t)
+
+	backend, err := db.SeedBackend(ctx, "irc", "libera")
+	assert.NoError(t, err)
+	assertSeabirdID(t, backendIDPrefix, backend.ID)
+	assert.Zero(t, backend.LastSeen, "seeding doesn't count as being seen")
+
+	channel, err := db.SeedChannel(ctx, backend.ID, "#chan")
+	assert.NoError(t, err)
+	assertSeabirdID(t, channelIDPrefix, channel.ID)
+	assert.Zero(t, channel.LastSeen)
+
+	user, err := db.SeedUser(ctx, backend.ID, "alice")
+	assert.NoError(t, err)
+	assertSeabirdID(t, userIDPrefix, user.ID)
+	assert.Zero(t, user.LastSeen)
+
+	// Recording what was seeded keeps its ID.
+	recordedBackend, err := db.RecordBackend(ctx, "irc", "libera")
+	assert.NoError(t, err)
+	assert.Equal(t, backend.ID, recordedBackend.ID)
+	recordedChannel, err := db.RecordChannel(ctx, backend.ID, "#chan", "Chan")
+	assert.NoError(t, err)
+	assert.Equal(t, channel.ID, recordedChannel.ID)
+
+	// Seeding what was recorded leaves it alone.
+	seededChannel, err := db.SeedChannel(ctx, backend.ID, "#chan")
+	assert.NoError(t, err)
+	assert.Equal(t, *recordedChannel, *seededChannel)
+	seededBackend, err := db.SeedBackend(ctx, "irc", "libera")
+	assert.NoError(t, err)
+	assert.Equal(t, *recordedBackend, *seededBackend)
+}
+
 func TestListRecorded(t *testing.T) {
 	t.Parallel()
 

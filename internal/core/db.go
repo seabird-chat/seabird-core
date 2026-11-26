@@ -215,6 +215,39 @@ func (d *DB) RecordUser(ctx context.Context, backendID, nativeID, displayName st
 		backendID, nativeID, displayName)
 }
 
+// The seed queries update a column to itself on conflict, rather than doing
+// nothing, so RETURNING includes rows that already exist.
+
+// SeedBackend returns a backend, creating it if it doesn't exist. Unlike
+// RecordBackend, it doesn't mark the backend as seen.
+func (d *DB) SeedBackend(ctx context.Context, backendType, nativeID string) (*Backend, error) {
+	return insertWithNewID[Backend](ctx, d, backendIDPrefix, `
+		INSERT INTO seabird_backends (id, type, native_id) VALUES (?, ?, ?)
+		ON CONFLICT (type, native_id) DO UPDATE SET id = id
+		RETURNING *`,
+		backendType, nativeID)
+}
+
+// SeedChannel returns a channel, creating it if it doesn't exist. Unlike
+// RecordChannel, it doesn't mark the channel as seen.
+func (d *DB) SeedChannel(ctx context.Context, backendID, nativeID string) (*Channel, error) {
+	return insertWithNewID[Channel](ctx, d, channelIDPrefix, `
+		INSERT INTO seabird_channels (id, backend_id, native_id) VALUES (?, ?, ?)
+		ON CONFLICT (backend_id, native_id) DO UPDATE SET id = id
+		RETURNING *`,
+		backendID, nativeID)
+}
+
+// SeedUser returns a user, creating them if they don't exist. Unlike
+// RecordUser, it doesn't mark the user as seen.
+func (d *DB) SeedUser(ctx context.Context, backendID, nativeID string) (*User, error) {
+	return insertWithNewID[User](ctx, d, userIDPrefix, `
+		INSERT INTO seabird_users (id, backend_id, native_id) VALUES (?, ?, ?)
+		ON CONFLICT (backend_id, native_id) DO UPDATE SET id = id
+		RETURNING *`,
+		backendID, nativeID)
+}
+
 // ListBackends returns every backend, ordered by type and native ID.
 func (d *DB) ListBackends(ctx context.Context) ([]Backend, error) {
 	var backends []Backend

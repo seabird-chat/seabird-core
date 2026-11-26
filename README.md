@@ -51,3 +51,17 @@ seabird-core token delete --database-url seabird-core.db 3
 keys. A name can have several tokens, so a token can be replaced without
 downtime by creating the new one before deleting the old.
 
+## Seabird IDs
+
+`backend list`, `channel list` and `user list` show each seabird ID next to the
+address plugins currently use for it, like `irc://libera/%23chan`. `backend
+seed`, `channel seed` and `user seed` create one ahead of time for an address
+core hasn't seen yet, and print its ID. Anything that already has an ID keeps
+it:
+
+```sh
+seabird-core channel seed --database-url seabird-core.db 'irc://libera/%23chan'
+seabird-core channel list --database-url seabird-core.db
+```
+
+Seeded rows show a last seen of `never` until a backend reports them.

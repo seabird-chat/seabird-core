@@ -203,11 +203,11 @@ func (e *testEnv) listChannels(t *testing.T, includeInactive bool) []*pb.Channel
 
 // channel describes one of env's backend's channels as plugins see it, by what
 // the backend calls it.
-func (e *testEnv) channel(t *testing.T, nativeID, name, topic string, state pb.ChannelState) *pb.Channel {
+func (e *testEnv) channel(t *testing.T, externalID, name, topic string, state pb.ChannelState) *pb.Channel {
 	t.Helper()
 
 	return &pb.Channel{
-		Id:          e.channelIDFor(t, e.backendID, nativeID),
+		Id:          e.channelIDFor(t, e.backendID, externalID),
 		DisplayName: name,
 		Topic:       topic,
 		BackendId:   e.backendID,

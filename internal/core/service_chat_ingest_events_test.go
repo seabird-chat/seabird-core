@@ -12,7 +12,7 @@ import (
 func TestIngestEventsPublishesChat(t *testing.T) {
 	t.Parallel()
 
-	// Expected events are described with the backend's IDs, since nativeIDs
+	// Expected events are described with the backend's IDs, since externalIDs
 	// translates what plugins see back to them.
 	aliceSource := chatSource("#chan", "alice", "Alice")
 	wantSource := aliceSource
@@ -124,7 +124,7 @@ func TestIngestEventsPublishesChat(t *testing.T) {
 
 			env.backend.send(tt.in)
 
-			assertProtoEqual(t, tt.want, env.nativeIDs(t, env.events.next(t)))
+			assertProtoEqual(t, tt.want, env.externalIDs(t, env.events.next(t)))
 		})
 	}
 }
@@ -186,14 +186,14 @@ func TestIngestEventsRecordIDs(t *testing.T) {
 	backends, err := env.server.DB.ListBackends(env.ctx, true)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(backends))
-	assert.Equal(t, "libera", backends[0].NativeID)
+	assert.Equal(t, "libera", backends[0].Name)
 
 	channels, err := env.server.DB.ListChannels(env.ctx, "", true)
 	assert.NoError(t, err)
 	channelNames := map[string]string{}
 	for _, channel := range channels {
 		assert.Equal(t, backends[0].ID, channel.BackendID)
-		channelNames[channel.NativeID] = channel.DisplayName
+		channelNames[channel.ExternalID] = channel.DisplayName
 	}
 	assert.Equal(t, map[string]string{testChannelPath: testChannelPath, "#quiet": "Quiet"}, channelNames)
 
@@ -202,15 +202,15 @@ func TestIngestEventsRecordIDs(t *testing.T) {
 	userNames := map[string]string{}
 	for _, user := range users {
 		assert.Equal(t, backends[0].ID, user.BackendID)
-		userNames[user.NativeID] = user.DisplayName
+		userNames[user.ExternalID] = user.DisplayName
 	}
 	assert.Equal(t, map[string]string{"alice": "Alice", "bob": "Bob"}, userNames)
 }
 
-// nativeIDs returns a copy of a chat event with the channel and user IDs
+// externalIDs returns a copy of a chat event with the channel and user IDs
 // plugins see replaced by what the backend calls them, failing the test if an
 // ID isn't one core recorded.
-func (e *testEnv) nativeIDs(t *testing.T, event *pb.Event) *pb.Event {
+func (e *testEnv) externalIDs(t *testing.T, event *pb.Event) *pb.Event {
 	t.Helper()
 
 	event = proto.Clone(event).(*pb.Event)
@@ -220,13 +220,13 @@ func (e *testEnv) nativeIDs(t *testing.T, event *pb.Event) *pb.Event {
 		}
 		recorded, err := e.server.DB.GetUser(context.Background(), u.GetId())
 		assert.NoError(t, err, "user %q", u.GetId())
-		u.Id = recorded.NativeID
+		u.Id = recorded.ExternalID
 	}
 	source := func(s *pb.ChannelSource) {
 		if s.GetChannelId() != "" {
 			recorded, err := e.server.DB.GetChannel(context.Background(), s.GetChannelId())
 			assert.NoError(t, err, "channel %q", s.GetChannelId())
-			s.ChannelId = recorded.NativeID
+			s.ChannelId = recorded.ExternalID
 		}
 		user(s.GetUser())
 	}

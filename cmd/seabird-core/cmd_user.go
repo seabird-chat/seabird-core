@@ -39,12 +39,12 @@ func listUsers(ctx context.Context, db *core.DB, args []string) error {
 		return err
 	}
 
-	// Names and IDs on the backend can contain spaces, so they come last.
+	// Names and external IDs can contain spaces, so they come last.
 	w := newTable()
-	fmt.Fprintln(w, "ID\tBACKEND\tLAST SEEN\tNAME\tON BACKEND")
+	fmt.Fprintln(w, "ID\tBACKEND\tLAST SEEN\tNAME\tEXTERNAL ID")
 	for _, user := range users {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
-			user.ID, backends[user.BackendID], formatLastSeen(user.LastSeen), user.DisplayName, user.NativeID)
+			user.ID, backends[user.BackendID], formatLastSeen(user.LastSeen), user.DisplayName, user.ExternalID)
 	}
 	return w.Flush()
 }

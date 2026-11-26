@@ -86,7 +86,7 @@ func (s *Server) PerformAction(
 				return nil, nil, err
 			}
 			return b, &pb.ChatRequest{Inner: &pb.ChatRequest_PerformAction{PerformAction: &pb.PerformActionChatRequest{
-				ChannelId: target.NativeID,
+				ChannelId: target.ExternalID,
 				Text:      block.GetPlain(),
 				RootBlock: block,
 				Tags:      req.GetTags(),
@@ -127,7 +127,7 @@ func (s *Server) PerformPrivateAction(
 				return nil, nil, err
 			}
 			return b, &pb.ChatRequest{Inner: &pb.ChatRequest_PerformPrivateAction{PerformPrivateAction: &pb.PerformPrivateActionChatRequest{
-				UserId:    target.NativeID,
+				UserId:    target.ExternalID,
 				Text:      block.GetPlain(),
 				RootBlock: block,
 				Tags:      req.GetTags(),
@@ -168,7 +168,7 @@ func (s *Server) SendMessage(
 				return nil, nil, err
 			}
 			return b, &pb.ChatRequest{Inner: &pb.ChatRequest_SendMessage{SendMessage: &pb.SendMessageChatRequest{
-				ChannelId: target.NativeID,
+				ChannelId: target.ExternalID,
 				Text:      block.GetPlain(),
 				RootBlock: block,
 				Tags:      req.GetTags(),
@@ -209,7 +209,7 @@ func (s *Server) SendPrivateMessage(
 				return nil, nil, err
 			}
 			return b, &pb.ChatRequest{Inner: &pb.ChatRequest_SendPrivateMessage{SendPrivateMessage: &pb.SendPrivateMessageChatRequest{
-				UserId:    target.NativeID,
+				UserId:    target.ExternalID,
 				Text:      block.GetPlain(),
 				RootBlock: block,
 				Tags:      req.GetTags(),
@@ -261,7 +261,7 @@ func (s *Server) LeaveChannel(
 
 	reply, err := s.issueRequest(ctx, b, &pb.ChatRequest{
 		Inner: &pb.ChatRequest_LeaveChannel{LeaveChannel: &pb.LeaveChannelChatRequest{
-			ChannelId: channel.NativeID,
+			ChannelId: channel.ExternalID,
 			Tags:      req.GetTags(),
 		}},
 	})
@@ -287,7 +287,7 @@ func (s *Server) UpdateChannelInfo(
 
 	reply, err := s.issueRequest(ctx, b, &pb.ChatRequest{
 		Inner: &pb.ChatRequest_UpdateChannelInfo{UpdateChannelInfo: &pb.UpdateChannelInfoChatRequest{
-			ChannelId: channel.NativeID,
+			ChannelId: channel.ExternalID,
 			Topic:     req.GetTopic(),
 			Tags:      req.GetTags(),
 		}},

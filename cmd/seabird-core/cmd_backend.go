@@ -46,7 +46,7 @@ func listBackends(ctx context.Context, db *core.DB, args []string) error {
 
 // backendName describes a backend by the type and name it connects with.
 func backendName(backend core.Backend) string {
-	return backend.Type + ":" + backend.NativeID
+	return backend.Type + ":" + backend.Name
 }
 
 // backendNames returns every backend's name, by ID.

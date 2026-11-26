@@ -19,7 +19,7 @@ func TestConnectBackend(t *testing.T) {
 	assert.NoError(t, err)
 	assertSeabirdID(t, backendIDPrefix, backend.ID)
 	assert.Equal(t, "irc", backend.Type)
-	assert.Equal(t, "libera", backend.NativeID)
+	assert.Equal(t, "libera", backend.Name)
 	assert.True(t, backend.Connected)
 	assert.NotZero(t, backend.LastSeen)
 
@@ -111,7 +111,7 @@ func TestChannelWrites(t *testing.T) {
 	joined := check("first join", true)(db.JoinChannel(ctx, libera, "#chan", "Chan", "hi"))
 	assertSeabirdID(t, channelIDPrefix, joined.ID)
 	assert.Equal(t, Channel{
-		ID: joined.ID, BackendID: libera, NativeID: "#chan", DisplayName: "Chan", Topic: "hi", Joined: true,
+		ID: joined.ID, BackendID: libera, ExternalID: "#chan", DisplayName: "Chan", Topic: "hi", Joined: true,
 		FirstSeen: joined.FirstSeen, LastSeen: joined.LastSeen,
 	}, *joined)
 
@@ -156,7 +156,7 @@ func TestRecordUser(t *testing.T) {
 	assert.NoError(t, err)
 	assertSeabirdID(t, userIDPrefix, user.ID)
 	assert.Equal(t, User{
-		ID: user.ID, BackendID: libera, NativeID: "alice", DisplayName: "Alice",
+		ID: user.ID, BackendID: libera, ExternalID: "alice", DisplayName: "Alice",
 		FirstSeen: user.FirstSeen, LastSeen: user.LastSeen,
 	}, *user)
 	assert.NotZero(t, user.LastSeen)
@@ -246,7 +246,7 @@ func TestInsertWithNewIDRetriesTakenIDs(t *testing.T) {
 
 	// Each connection hands out the taken ID collisions times before a fresh
 	// one.
-	connect := func(nativeID string, collisions int) (int, error) {
+	connect := func(name string, collisions int) (int, error) {
 		attempts := 0
 		db.newID = func(prefix string) string {
 			attempts++
@@ -255,7 +255,7 @@ func TestInsertWithNewIDRetriesTakenIDs(t *testing.T) {
 			}
 			return newSeabirdID(prefix)
 		}
-		_, err := db.ConnectBackend(ctx, "irc", nativeID)
+		_, err := db.ConnectBackend(ctx, "irc", name)
 		return attempts, err
 	}
 
@@ -281,10 +281,10 @@ func assertSeabirdID(t *testing.T, prefix, id string) {
 }
 
 // connectTestBackend connects an IRC backend and returns its ID.
-func connectTestBackend(t *testing.T, db *DB, nativeID string) string {
+func connectTestBackend(t *testing.T, db *DB, name string) string {
 	t.Helper()
 
-	backend, err := db.ConnectBackend(context.Background(), "irc", nativeID)
+	backend, err := db.ConnectBackend(context.Background(), "irc", name)
 	assert.NoError(t, err)
 	return backend.ID
 }

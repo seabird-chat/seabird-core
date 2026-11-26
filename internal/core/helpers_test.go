@@ -174,7 +174,7 @@ func (e *testEnv) waitForBackend(t *testing.T, key backendKey, connected bool) {
 		backends, err := e.server.DB.ListBackends(context.Background(), false)
 		assert.NoError(t, err)
 		for _, backend := range backends {
-			if backend.Type == key.Type && backend.NativeID == key.Name {
+			if backend.Type == key.Type && backend.Name == key.Name {
 				return connected
 			}
 		}
@@ -189,7 +189,7 @@ func (e *testEnv) backendIDFor(t *testing.T, key backendKey) string {
 	backends, err := e.server.DB.ListBackends(context.Background(), true)
 	assert.NoError(t, err)
 	for _, backend := range backends {
-		if backend.Type == key.Type && backend.NativeID == key.Name {
+		if backend.Type == key.Type && backend.Name == key.Name {
 			return backend.ID
 		}
 	}
@@ -199,31 +199,31 @@ func (e *testEnv) backendIDFor(t *testing.T, key backendKey) string {
 
 // channelIDFor returns the ID plugins use for a channel, by what its backend
 // calls it.
-func (e *testEnv) channelIDFor(t *testing.T, backendID, nativeID string) string {
+func (e *testEnv) channelIDFor(t *testing.T, backendID, externalID string) string {
 	t.Helper()
 
 	channels, err := e.server.DB.ListChannels(context.Background(), backendID, true)
 	assert.NoError(t, err)
 	for _, channel := range channels {
-		if channel.NativeID == nativeID {
+		if channel.ExternalID == externalID {
 			return channel.ID
 		}
 	}
-	t.Fatalf("channel %q was never recorded", nativeID)
+	t.Fatalf("channel %q was never recorded", externalID)
 	return ""
 }
 
 // waitForChannel waits until a backend's channel is recorded, and returns the
 // ID plugins use for it.
-func (e *testEnv) waitForChannel(t *testing.T, backendID, nativeID string) string {
+func (e *testEnv) waitForChannel(t *testing.T, backendID, externalID string) string {
 	t.Helper()
 
 	var id string
-	eventually(t, "channel "+nativeID+" to be recorded", func() bool {
+	eventually(t, "channel "+externalID+" to be recorded", func() bool {
 		channels, err := e.server.DB.ListChannels(context.Background(), backendID, true)
 		assert.NoError(t, err)
 		for _, channel := range channels {
-			if channel.NativeID == nativeID {
+			if channel.ExternalID == externalID {
 				id = channel.ID
 				return true
 			}
@@ -235,17 +235,17 @@ func (e *testEnv) waitForChannel(t *testing.T, backendID, nativeID string) strin
 
 // userIDFor returns the ID plugins use for a user, by what their backend calls
 // them.
-func (e *testEnv) userIDFor(t *testing.T, backendID, nativeID string) string {
+func (e *testEnv) userIDFor(t *testing.T, backendID, externalID string) string {
 	t.Helper()
 
 	users, err := e.server.DB.ListUsers(context.Background())
 	assert.NoError(t, err)
 	for _, user := range users {
-		if user.BackendID == backendID && user.NativeID == nativeID {
+		if user.BackendID == backendID && user.ExternalID == externalID {
 			return user.ID
 		}
 	}
-	t.Fatalf("user %q was never recorded", nativeID)
+	t.Fatalf("user %q was never recorded", externalID)
 	return ""
 }
 

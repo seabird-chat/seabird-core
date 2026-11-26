@@ -13,22 +13,22 @@ import (
 )
 
 // Backend is a chat backend that is or was connected to core, as stored in
-// seabird_backends. Type and NativeID are the type and name from its hello.
+// seabird_backends. Type and Name are the type and name from its hello.
 type Backend struct {
 	ID        string     `db:"id"`
 	Type      string     `db:"type"`
-	NativeID  string     `db:"native_id"`
+	Name      string     `db:"name"`
 	FirstSeen time.Time  `db:"first_seen"`
 	LastSeen  *time.Time `db:"last_seen"` // nil if it has never connected
 	Connected bool       `db:"connected"`
 }
 
-// Channel is a channel on a backend, as stored in seabird_channels. NativeID
+// Channel is a channel on a backend, as stored in seabird_channels. ExternalID
 // is what the backend calls it.
 type Channel struct {
 	ID          string     `db:"id"`
 	BackendID   string     `db:"backend_id"`
-	NativeID    string     `db:"native_id"`
+	ExternalID  string     `db:"external_id"`
 	DisplayName string     `db:"display_name"`
 	Topic       string     `db:"topic"`
 	FirstSeen   time.Time  `db:"first_seen"`
@@ -36,12 +36,12 @@ type Channel struct {
 	Joined      bool       `db:"joined"`
 }
 
-// User is a user on a backend, as stored in seabird_users. NativeID is what
+// User is a user on a backend, as stored in seabird_users. ExternalID is what
 // the backend calls them.
 type User struct {
 	ID          string     `db:"id"`
 	BackendID   string     `db:"backend_id"`
-	NativeID    string     `db:"native_id"`
+	ExternalID  string     `db:"external_id"`
 	DisplayName string     `db:"display_name"`
 	FirstSeen   time.Time  `db:"first_seen"`
 	LastSeen    *time.Time `db:"last_seen"` // nil if the backend has never reported them
@@ -67,17 +67,17 @@ func (d *DB) ResetConnections(ctx context.Context) error {
 
 // ConnectBackend marks a backend as connected, creating it the first time it
 // is seen.
-func (d *DB) ConnectBackend(ctx context.Context, backendType, nativeID string) (*Backend, error) {
+func (d *DB) ConnectBackend(ctx context.Context, backendType, name string) (*Backend, error) {
 	return insertWithNewID[Backend](ctx, d.inner, d.newID, backendIDPrefix, `
-		INSERT INTO seabird_backends (id, type, native_id, last_seen, connected)
+		INSERT INTO seabird_backends (id, type, name, last_seen, connected)
 		VALUES (?, ?, ?, CURRENT_TIMESTAMP, 1)
-		ON CONFLICT (type, native_id) DO UPDATE SET last_seen = CURRENT_TIMESTAMP, connected = 1
+		ON CONFLICT (type, name) DO UPDATE SET last_seen = CURRENT_TIMESTAMP, connected = 1
 		RETURNING *`,
-		backendType, nativeID)
+		backendType, name)
 }
 
 // DisconnectBackend marks a backend as disconnected and its channels as not
-// joined. It returns the channels that were joined, ordered by native ID.
+// joined. It returns the channels that were joined, ordered by external ID.
 func (d *DB) DisconnectBackend(ctx context.Context, backendID string) ([]Channel, error) {
 	tx, err := d.inner.BeginTx(ctx, nil)
 	if err != nil {
@@ -99,7 +99,7 @@ func (d *DB) DisconnectBackend(ctx context.Context, backendID string) ([]Channel
 		return nil, fmt.Errorf("commit: %w", err)
 	}
 
-	slices.SortFunc(left, func(a, b Channel) int { return strings.Compare(a.NativeID, b.NativeID) })
+	slices.SortFunc(left, func(a, b Channel) int { return strings.Compare(a.ExternalID, b.ExternalID) })
 	return left, nil
 }
 
@@ -108,11 +108,11 @@ func (d *DB) DisconnectBackend(ctx context.Context, backendID string) ([]Channel
 
 // JoinChannel notes that a backend joined a channel, creating it the first time
 // it is seen. An empty displayName keeps the one already known.
-func (d *DB) JoinChannel(ctx context.Context, backendID, nativeID, displayName, topic string) (*Channel, bool, error) {
-	return d.writeChannel(ctx, backendID, nativeID, true, `
-		INSERT INTO seabird_channels (id, backend_id, native_id, display_name, topic, joined, last_seen)
+func (d *DB) JoinChannel(ctx context.Context, backendID, externalID, displayName, topic string) (*Channel, bool, error) {
+	return d.writeChannel(ctx, backendID, externalID, true, `
+		INSERT INTO seabird_channels (id, backend_id, external_id, display_name, topic, joined, last_seen)
 		VALUES (?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
-		ON CONFLICT (backend_id, native_id) DO UPDATE SET
+		ON CONFLICT (backend_id, external_id) DO UPDATE SET
 			display_name = coalesce(nullif(excluded.display_name, ''), display_name),
 			topic = excluded.topic,
 			joined = 1,
@@ -124,11 +124,11 @@ func (d *DB) JoinChannel(ctx context.Context, backendID, nativeID, displayName, 
 // ChangeChannel updates a channel's display name and topic, creating the
 // channel the first time it is seen. An empty displayName keeps the one
 // already known.
-func (d *DB) ChangeChannel(ctx context.Context, backendID, nativeID, displayName, topic string) (*Channel, bool, error) {
-	return d.writeChannel(ctx, backendID, nativeID, true, `
-		INSERT INTO seabird_channels (id, backend_id, native_id, display_name, topic, last_seen)
+func (d *DB) ChangeChannel(ctx context.Context, backendID, externalID, displayName, topic string) (*Channel, bool, error) {
+	return d.writeChannel(ctx, backendID, externalID, true, `
+		INSERT INTO seabird_channels (id, backend_id, external_id, display_name, topic, last_seen)
 		VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-		ON CONFLICT (backend_id, native_id) DO UPDATE SET
+		ON CONFLICT (backend_id, external_id) DO UPDATE SET
 			display_name = coalesce(nullif(excluded.display_name, ''), display_name),
 			topic = excluded.topic,
 			last_seen = CURRENT_TIMESTAMP
@@ -138,28 +138,28 @@ func (d *DB) ChangeChannel(ctx context.Context, backendID, nativeID, displayName
 
 // RecordChannel notes that a backend reported a channel, such as by sending a
 // message from it, creating it the first time it is seen.
-func (d *DB) RecordChannel(ctx context.Context, backendID, nativeID string) (*Channel, bool, error) {
-	return d.writeChannel(ctx, backendID, nativeID, true, `
-		INSERT INTO seabird_channels (id, backend_id, native_id, last_seen)
+func (d *DB) RecordChannel(ctx context.Context, backendID, externalID string) (*Channel, bool, error) {
+	return d.writeChannel(ctx, backendID, externalID, true, `
+		INSERT INTO seabird_channels (id, backend_id, external_id, last_seen)
 		VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-		ON CONFLICT (backend_id, native_id) DO UPDATE SET last_seen = CURRENT_TIMESTAMP
+		ON CONFLICT (backend_id, external_id) DO UPDATE SET last_seen = CURRENT_TIMESTAMP
 		RETURNING *`)
 }
 
 // LeaveChannel notes that a backend left a channel. A channel that has never
 // been seen is ignored, and nil is returned for it.
-func (d *DB) LeaveChannel(ctx context.Context, backendID, nativeID string) (*Channel, bool, error) {
-	return d.writeChannel(ctx, backendID, nativeID, false, `
+func (d *DB) LeaveChannel(ctx context.Context, backendID, externalID string) (*Channel, bool, error) {
+	return d.writeChannel(ctx, backendID, externalID, false, `
 		UPDATE seabird_channels SET joined = 0, last_seen = CURRENT_TIMESTAMP
-		WHERE backend_id = ? AND native_id = ?
+		WHERE backend_id = ? AND external_id = ?
 		RETURNING *`)
 }
 
-// writeChannel runs write, which takes backendID, nativeID and then args, and
+// writeChannel runs write, which takes backendID, externalID and then args, and
 // returns the channel and whether it changed. Writes that can create channels
 // also take a new ID first. Unknown channels are left alone otherwise.
 func (d *DB) writeChannel(
-	ctx context.Context, backendID, nativeID string, creates bool, write string, args ...any,
+	ctx context.Context, backendID, externalID string, creates bool, write string, args ...any,
 ) (*Channel, bool, error) {
 	tx, err := d.inner.BeginTx(ctx, nil)
 	if err != nil {
@@ -169,7 +169,7 @@ func (d *DB) writeChannel(
 
 	var before Channel
 	err = sqlscan.Get(ctx, tx, &before,
-		"SELECT * FROM seabird_channels WHERE backend_id = ? AND native_id = ?", backendID, nativeID)
+		"SELECT * FROM seabird_channels WHERE backend_id = ? AND external_id = ?", backendID, externalID)
 	existed := err == nil
 	if err != nil && !sqlscan.NotFound(err) {
 		return nil, false, fmt.Errorf("look up channel: %w", err)
@@ -178,7 +178,7 @@ func (d *DB) writeChannel(
 		return nil, false, nil
 	}
 
-	args = append([]any{backendID, nativeID}, args...)
+	args = append([]any{backendID, externalID}, args...)
 	var after *Channel
 	if creates {
 		after, err = insertWithNewID[Channel](ctx, tx, d.newID, channelIDPrefix, write, args...)
@@ -202,15 +202,15 @@ func (d *DB) writeChannel(
 
 // RecordUser notes that a backend reported a user, creating them the first
 // time they are seen. An empty displayName keeps the one already known.
-func (d *DB) RecordUser(ctx context.Context, backendID, nativeID, displayName string) (*User, error) {
+func (d *DB) RecordUser(ctx context.Context, backendID, externalID, displayName string) (*User, error) {
 	return insertWithNewID[User](ctx, d.inner, d.newID, userIDPrefix, `
-		INSERT INTO seabird_users (id, backend_id, native_id, display_name, last_seen)
+		INSERT INTO seabird_users (id, backend_id, external_id, display_name, last_seen)
 		VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-		ON CONFLICT (backend_id, native_id) DO UPDATE SET
+		ON CONFLICT (backend_id, external_id) DO UPDATE SET
 			display_name = coalesce(nullif(excluded.display_name, ''), display_name),
 			last_seen = CURRENT_TIMESTAMP
 		RETURNING *`,
-		backendID, nativeID, displayName)
+		backendID, externalID, displayName)
 }
 
 // GetBackend returns the backend with the given ID, or ErrNotFound.
@@ -229,11 +229,11 @@ func (d *DB) GetUser(ctx context.Context, id string) (*User, error) {
 }
 
 // ListBackends returns the connected backends, or every backend if
-// includeDisconnected is set, ordered by type and native ID.
+// includeDisconnected is set, ordered by type and name.
 func (d *DB) ListBackends(ctx context.Context, includeDisconnected bool) ([]Backend, error) {
 	var backends []Backend
 	err := sqlscan.Select(ctx, d.inner, &backends,
-		"SELECT * FROM seabird_backends WHERE connected OR ? ORDER BY type, native_id", includeDisconnected)
+		"SELECT * FROM seabird_backends WHERE connected OR ? ORDER BY type, name", includeDisconnected)
 	if err != nil {
 		return nil, fmt.Errorf("query backends: %w", err)
 	}
@@ -242,13 +242,13 @@ func (d *DB) ListBackends(ctx context.Context, includeDisconnected bool) ([]Back
 
 // ListChannels returns the joined channels on a backend, or on every backend
 // if backendID is empty. includeInactive adds the channels that aren't
-// joined. They are ordered by backend and native ID.
+// joined. They are ordered by backend and external ID.
 func (d *DB) ListChannels(ctx context.Context, backendID string, includeInactive bool) ([]Channel, error) {
 	var channels []Channel
 	err := sqlscan.Select(ctx, d.inner, &channels, `
 		SELECT * FROM seabird_channels
 		WHERE (? = '' OR backend_id = ?) AND (joined OR ?)
-		ORDER BY backend_id, native_id`,
+		ORDER BY backend_id, external_id`,
 		backendID, backendID, includeInactive)
 	if err != nil {
 		return nil, fmt.Errorf("query channels: %w", err)
@@ -256,10 +256,10 @@ func (d *DB) ListChannels(ctx context.Context, backendID string, includeInactive
 	return channels, nil
 }
 
-// ListUsers returns every user, ordered by backend and native ID.
+// ListUsers returns every user, ordered by backend and external ID.
 func (d *DB) ListUsers(ctx context.Context) ([]User, error) {
 	var users []User
-	err := sqlscan.Select(ctx, d.inner, &users, "SELECT * FROM seabird_users ORDER BY backend_id, native_id")
+	err := sqlscan.Select(ctx, d.inner, &users, "SELECT * FROM seabird_users ORDER BY backend_id, external_id")
 	if err != nil {
 		return nil, fmt.Errorf("query users: %w", err)
 	}

@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"time"
@@ -62,6 +63,13 @@ func (s *Server) Serve(ctx context.Context, listener net.Listener) error {
 		return errors.New("server needs a DB and a Broker")
 	}
 	s.startedAt = time.Now()
+
+	// Backends announce themselves and their channels again when they
+	// reconnect, so nothing is connected until they do.
+	// It's quick, so it runs even if ctx is already done.
+	if err := s.DB.ResetConnections(context.WithoutCancel(ctx)); err != nil {
+		return fmt.Errorf("reset connections: %w", err)
+	}
 
 	server := grpc.NewServer(
 		grpc.UnaryInterceptor(s.serveUnary),

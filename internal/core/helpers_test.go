@@ -29,12 +29,12 @@ const (
 	testUsername = "test-plugin"
 )
 
-// testChannel is a channel on the testEnv backend, as plugins write it and as
-// the backend knows it.
-const (
-	testChannel     = "irc://libera/%23chan"
-	testChannelPath = "#chan"
-)
+// testChannelPath is the channel the testEnv backend joins, as the backend
+// knows it.
+const testChannelPath = "#chan"
+
+// testBackendKey is how the testEnv backend introduces itself.
+var testBackendKey = backendKey{Type: "irc", Name: "libera"}
 
 // newTestServer returns a Server with an in-memory database holding one token
 // (testToken).
@@ -112,17 +112,21 @@ func pluginContext(t *testing.T, token string) context.Context {
 	return ctx
 }
 
-// testEnv is a running server with the backend irc://libera connected and a
-// plugin reading events.
+// testEnv is a running server with an IRC backend connected and in
+// testChannelPath, and a plugin reading events.
 type testEnv struct {
 	server  *Server
 	conn    *grpc.ClientConn
 	stop    func() error
 	plugin  pb.SeabirdClient
 	ctx     context.Context
-	id      BackendID
 	backend *fakeBackend
 	events  *eventStream
+
+	// backendID and channelID are the backend and testChannelPath as plugins
+	// refer to them.
+	backendID string
+	channelID string
 }
 
 // startTestEnv starts a testEnv, applying configure to the server before it
@@ -142,37 +146,107 @@ func startTestEnv(t *testing.T, configure ...func(*Server)) *testEnv {
 		stop:   stop,
 		plugin: pb.NewSeabirdClient(conn),
 		ctx:    pluginContext(t, testToken),
-		id:     BackendID{Type: "irc", ID: "libera"},
 	}
-	env.backend = env.connectBackend(t, env.id)
+	env.backend, env.backendID = env.connectBackend(t, testBackendKey)
+	env.backend.send(joinEvent(testChannelPath, testChannelPath, ""))
+	// Opening the stream waits until the join has been handled.
 	env.events, _ = env.openEvents(t, nil)
+	env.channelID = env.channelIDFor(t, env.backendID, testChannelPath)
 	return env
 }
 
-// connectBackend connects a backend and waits until plugins can see it.
-func (e *testEnv) connectBackend(t *testing.T, id BackendID) *fakeBackend {
+// connectBackend connects a backend, waits until plugins can see it, and
+// returns it with its ID.
+func (e *testEnv) connectBackend(t *testing.T, key backendKey) (*fakeBackend, string) {
 	t.Helper()
 
 	f := dialBackend(t, e.conn)
-	f.send(helloEvent(id))
-	e.waitForBackend(t, id, true)
-	return f
+	f.send(helloEvent(key))
+	e.waitForBackend(t, key, true)
+	return f, e.backendIDFor(t, key)
 }
 
-// waitForBackend waits until ListBackends does, or doesn't, include id.
-func (e *testEnv) waitForBackend(t *testing.T, id BackendID, listed bool) {
+// waitForBackend waits until the backend with key is, or isn't, connected.
+func (e *testEnv) waitForBackend(t *testing.T, key backendKey, connected bool) {
 	t.Helper()
 
-	eventually(t, "backend "+id.String()+" to be listed or not", func() bool {
-		resp, err := e.plugin.ListBackends(e.ctx, &pb.ListBackendsRequest{})
+	eventually(t, "backend "+key.Name+" to be connected or not", func() bool {
+		backends, err := e.server.DB.ListBackends(context.Background(), false)
 		assert.NoError(t, err)
-		for _, backend := range resp.GetBackends() {
-			if backend.GetId() == id.String() {
-				return listed
+		for _, backend := range backends {
+			if backend.Type == key.Type && backend.NativeID == key.Name {
+				return connected
 			}
 		}
-		return !listed
+		return !connected
 	})
+}
+
+// backendIDFor returns the ID plugins use for the backend with key.
+func (e *testEnv) backendIDFor(t *testing.T, key backendKey) string {
+	t.Helper()
+
+	backends, err := e.server.DB.ListBackends(context.Background(), true)
+	assert.NoError(t, err)
+	for _, backend := range backends {
+		if backend.Type == key.Type && backend.NativeID == key.Name {
+			return backend.ID
+		}
+	}
+	t.Fatalf("backend %s %q was never recorded", key.Type, key.Name)
+	return ""
+}
+
+// channelIDFor returns the ID plugins use for a channel, by what its backend
+// calls it.
+func (e *testEnv) channelIDFor(t *testing.T, backendID, nativeID string) string {
+	t.Helper()
+
+	channels, err := e.server.DB.ListChannels(context.Background(), backendID, true)
+	assert.NoError(t, err)
+	for _, channel := range channels {
+		if channel.NativeID == nativeID {
+			return channel.ID
+		}
+	}
+	t.Fatalf("channel %q was never recorded", nativeID)
+	return ""
+}
+
+// waitForChannel waits until a backend's channel is recorded, and returns the
+// ID plugins use for it.
+func (e *testEnv) waitForChannel(t *testing.T, backendID, nativeID string) string {
+	t.Helper()
+
+	var id string
+	eventually(t, "channel "+nativeID+" to be recorded", func() bool {
+		channels, err := e.server.DB.ListChannels(context.Background(), backendID, true)
+		assert.NoError(t, err)
+		for _, channel := range channels {
+			if channel.NativeID == nativeID {
+				id = channel.ID
+				return true
+			}
+		}
+		return false
+	})
+	return id
+}
+
+// userIDFor returns the ID plugins use for a user, by what their backend calls
+// them.
+func (e *testEnv) userIDFor(t *testing.T, backendID, nativeID string) string {
+	t.Helper()
+
+	users, err := e.server.DB.ListUsers(context.Background())
+	assert.NoError(t, err)
+	for _, user := range users {
+		if user.BackendID == backendID && user.NativeID == nativeID {
+			return user.ID
+		}
+	}
+	t.Fatalf("user %q was never recorded", nativeID)
+	return ""
 }
 
 // openEvents starts an event stream for a plugin and waits until the server is
@@ -223,10 +297,10 @@ func (e *testEnv) assertNothingPublished(t *testing.T) {
 	assert.Equal(t, "sentinel", got.GetCommand().GetCommand(), "an event was published first: %v", got)
 }
 
-// sendMessage sends text to testChannel in the background, as the test plugin.
+// sendMessage sends text to testChannelPath in the background, as the test plugin.
 func (e *testEnv) sendMessage(ctx context.Context, text string) <-chan error {
 	return callAsync(func() error {
-		_, err := e.plugin.SendMessage(ctx, &pb.SendMessageRequest{ChannelId: testChannel, Text: text})
+		_, err := e.plugin.SendMessage(ctx, &pb.SendMessageRequest{ChannelId: e.channelID, Text: text})
 		return err
 	})
 }
@@ -246,6 +320,10 @@ func syncEvent(token string) *pb.ChatEvent {
 // an event can time out without losing it.
 type eventStream struct {
 	ch chan result[*pb.Event]
+
+	// updates makes recv return backend and channel updates. Most tests don't
+	// care about them, so they're skipped by default.
+	updates bool
 }
 
 // newEventStream starts reading stream until it ends or the test does.
@@ -278,14 +356,21 @@ func (s *eventStream) recv(t *testing.T) (*pb.Event, error) {
 
 	for {
 		got := waitFor(t, s.ch, "an event")
-		if got.err != nil || got.value.GetTags()[syncTag] == "" {
-			return got.value, got.err
+		if got.err != nil {
+			return nil, got.err
 		}
+		if got.value.GetTags()[syncTag] != "" {
+			continue
+		}
+		if !s.updates && (got.value.GetBackendUpdated() != nil || got.value.GetChannelUpdated() != nil) {
+			continue
+		}
+		return got.value, nil
 	}
 }
 
-// next returns the next event that isn't a sync event, failing the test if the
-// stream ends.
+// next returns the next event recv returns, failing the test if the stream
+// ends.
 func (s *eventStream) next(t *testing.T) *pb.Event {
 	t.Helper()
 
@@ -314,10 +399,10 @@ func dialBackend(t *testing.T, conn *grpc.ClientConn) *fakeBackend {
 	return &fakeBackend{t: t, stream: stream, cancel: cancel}
 }
 
-// helloEvent is the first event a backend with the given ID sends.
-func helloEvent(id BackendID) *pb.ChatEvent {
+// helloEvent is the first event a backend sends.
+func helloEvent(key backendKey) *pb.ChatEvent {
 	return &pb.ChatEvent{Inner: &pb.ChatEvent_Hello{Hello: &pb.HelloChatEvent{
-		BackendInfo: &pb.HelloChatEvent_Backend{Type: id.Type, Id: id.ID},
+		BackendInfo: &pb.HelloChatEvent_Backend{Type: key.Type, Id: key.Name},
 	}}}
 }
 

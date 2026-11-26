@@ -65,8 +65,7 @@ func (s *Server) PerformAction(
 	if err != nil {
 		return nil, err
 	}
-	target, err := parseFullIDArg("channel_id", req.GetChannelId())
-	if err != nil {
+	if err := checkID("channel_id", req.GetChannelId(), channelIDPrefix); err != nil {
 		return nil, err
 	}
 	block, err := normalizeBlock(req.GetText(), req.GetRootBlock())
@@ -74,19 +73,25 @@ func (s *Server) PerformAction(
 		return nil, err
 	}
 
-	err = s.forward(ctx, target.Backend,
+	err = s.forward(ctx,
 		&pb.Event{Tags: req.GetTags(), Inner: &pb.Event_PerformAction{PerformAction: &pb.PerformActionEvent{
 			Sender:    username,
 			ChannelId: req.GetChannelId(),
 			Text:      block.GetPlain(),
 			RootBlock: block,
 		}}},
-		&pb.ChatRequest{Inner: &pb.ChatRequest_PerformAction{PerformAction: &pb.PerformActionChatRequest{
-			ChannelId: target.Path,
-			Text:      block.GetPlain(),
-			RootBlock: block,
-			Tags:      req.GetTags(),
-		}}},
+		func() (*backend, *pb.ChatRequest, error) {
+			target, b, err := s.channelTarget(ctx, "channel_id", req.GetChannelId())
+			if err != nil {
+				return nil, nil, err
+			}
+			return b, &pb.ChatRequest{Inner: &pb.ChatRequest_PerformAction{PerformAction: &pb.PerformActionChatRequest{
+				ChannelId: target.NativeID,
+				Text:      block.GetPlain(),
+				RootBlock: block,
+				Tags:      req.GetTags(),
+			}}}, nil
+		},
 	)
 	if err != nil {
 		return nil, err
@@ -101,8 +106,7 @@ func (s *Server) PerformPrivateAction(
 	if err != nil {
 		return nil, err
 	}
-	target, err := parseFullIDArg("user_id", req.GetUserId())
-	if err != nil {
+	if err := checkID("user_id", req.GetUserId(), userIDPrefix); err != nil {
 		return nil, err
 	}
 	block, err := normalizeBlock(req.GetText(), req.GetRootBlock())
@@ -110,19 +114,25 @@ func (s *Server) PerformPrivateAction(
 		return nil, err
 	}
 
-	err = s.forward(ctx, target.Backend,
+	err = s.forward(ctx,
 		&pb.Event{Tags: req.GetTags(), Inner: &pb.Event_PerformPrivateAction{PerformPrivateAction: &pb.PerformPrivateActionEvent{
 			Sender:    username,
 			UserId:    req.GetUserId(),
 			Text:      block.GetPlain(),
 			RootBlock: block,
 		}}},
-		&pb.ChatRequest{Inner: &pb.ChatRequest_PerformPrivateAction{PerformPrivateAction: &pb.PerformPrivateActionChatRequest{
-			UserId:    target.Path,
-			Text:      block.GetPlain(),
-			RootBlock: block,
-			Tags:      req.GetTags(),
-		}}},
+		func() (*backend, *pb.ChatRequest, error) {
+			target, b, err := s.userTarget(ctx, "user_id", req.GetUserId())
+			if err != nil {
+				return nil, nil, err
+			}
+			return b, &pb.ChatRequest{Inner: &pb.ChatRequest_PerformPrivateAction{PerformPrivateAction: &pb.PerformPrivateActionChatRequest{
+				UserId:    target.NativeID,
+				Text:      block.GetPlain(),
+				RootBlock: block,
+				Tags:      req.GetTags(),
+			}}}, nil
+		},
 	)
 	if err != nil {
 		return nil, err
@@ -137,8 +147,7 @@ func (s *Server) SendMessage(
 	if err != nil {
 		return nil, err
 	}
-	target, err := parseFullIDArg("channel_id", req.GetChannelId())
-	if err != nil {
+	if err := checkID("channel_id", req.GetChannelId(), channelIDPrefix); err != nil {
 		return nil, err
 	}
 	block, err := normalizeBlock(req.GetText(), req.GetRootBlock())
@@ -146,19 +155,25 @@ func (s *Server) SendMessage(
 		return nil, err
 	}
 
-	err = s.forward(ctx, target.Backend,
+	err = s.forward(ctx,
 		&pb.Event{Tags: req.GetTags(), Inner: &pb.Event_SendMessage{SendMessage: &pb.SendMessageEvent{
 			Sender:    username,
 			ChannelId: req.GetChannelId(),
 			Text:      block.GetPlain(),
 			RootBlock: block,
 		}}},
-		&pb.ChatRequest{Inner: &pb.ChatRequest_SendMessage{SendMessage: &pb.SendMessageChatRequest{
-			ChannelId: target.Path,
-			Text:      block.GetPlain(),
-			RootBlock: block,
-			Tags:      req.GetTags(),
-		}}},
+		func() (*backend, *pb.ChatRequest, error) {
+			target, b, err := s.channelTarget(ctx, "channel_id", req.GetChannelId())
+			if err != nil {
+				return nil, nil, err
+			}
+			return b, &pb.ChatRequest{Inner: &pb.ChatRequest_SendMessage{SendMessage: &pb.SendMessageChatRequest{
+				ChannelId: target.NativeID,
+				Text:      block.GetPlain(),
+				RootBlock: block,
+				Tags:      req.GetTags(),
+			}}}, nil
+		},
 	)
 	if err != nil {
 		return nil, err
@@ -173,8 +188,7 @@ func (s *Server) SendPrivateMessage(
 	if err != nil {
 		return nil, err
 	}
-	target, err := parseFullIDArg("user_id", req.GetUserId())
-	if err != nil {
+	if err := checkID("user_id", req.GetUserId(), userIDPrefix); err != nil {
 		return nil, err
 	}
 	block, err := normalizeBlock(req.GetText(), req.GetRootBlock())
@@ -182,19 +196,25 @@ func (s *Server) SendPrivateMessage(
 		return nil, err
 	}
 
-	err = s.forward(ctx, target.Backend,
+	err = s.forward(ctx,
 		&pb.Event{Tags: req.GetTags(), Inner: &pb.Event_SendPrivateMessage{SendPrivateMessage: &pb.SendPrivateMessageEvent{
 			Sender:    username,
 			UserId:    req.GetUserId(),
 			Text:      block.GetPlain(),
 			RootBlock: block,
 		}}},
-		&pb.ChatRequest{Inner: &pb.ChatRequest_SendPrivateMessage{SendPrivateMessage: &pb.SendPrivateMessageChatRequest{
-			UserId:    target.Path,
-			Text:      block.GetPlain(),
-			RootBlock: block,
-			Tags:      req.GetTags(),
-		}}},
+		func() (*backend, *pb.ChatRequest, error) {
+			target, b, err := s.userTarget(ctx, "user_id", req.GetUserId())
+			if err != nil {
+				return nil, nil, err
+			}
+			return b, &pb.ChatRequest{Inner: &pb.ChatRequest_SendPrivateMessage{SendPrivateMessage: &pb.SendPrivateMessageChatRequest{
+				UserId:    target.NativeID,
+				Text:      block.GetPlain(),
+				RootBlock: block,
+				Tags:      req.GetTags(),
+			}}}, nil
+		},
 	)
 	if err != nil {
 		return nil, err
@@ -205,12 +225,15 @@ func (s *Server) SendPrivateMessage(
 func (s *Server) JoinChannel(
 	ctx context.Context, req *pb.JoinChannelRequest,
 ) (*pb.JoinChannelResponse, error) {
-	backend, err := parseBackendIDArg("backend_id", req.GetBackendId())
+	_, b, err := s.backendTarget(ctx, "backend_id", req.GetBackendId())
 	if err != nil {
 		return nil, err
 	}
+	if b == nil {
+		return nil, errBackendNotConnected
+	}
 
-	reply, err := s.issueRequest(ctx, backend, &pb.ChatRequest{
+	reply, err := s.issueRequest(ctx, b, &pb.ChatRequest{
 		Inner: &pb.ChatRequest_JoinChannel{JoinChannel: &pb.JoinChannelChatRequest{
 			ChannelName: req.GetChannelName(),
 			Tags:        req.GetTags(),
@@ -231,14 +254,14 @@ func (s *Server) JoinChannel(
 func (s *Server) LeaveChannel(
 	ctx context.Context, req *pb.LeaveChannelRequest,
 ) (*pb.LeaveChannelResponse, error) {
-	channel, err := parseFullIDArg("channel_id", req.GetChannelId())
+	channel, b, err := s.channelTarget(ctx, "channel_id", req.GetChannelId())
 	if err != nil {
 		return nil, err
 	}
 
-	reply, err := s.issueRequest(ctx, channel.Backend, &pb.ChatRequest{
+	reply, err := s.issueRequest(ctx, b, &pb.ChatRequest{
 		Inner: &pb.ChatRequest_LeaveChannel{LeaveChannel: &pb.LeaveChannelChatRequest{
-			ChannelId: channel.Path,
+			ChannelId: channel.NativeID,
 			Tags:      req.GetTags(),
 		}},
 	})
@@ -257,14 +280,14 @@ func (s *Server) LeaveChannel(
 func (s *Server) UpdateChannelInfo(
 	ctx context.Context, req *pb.UpdateChannelInfoRequest,
 ) (*pb.UpdateChannelInfoResponse, error) {
-	channel, err := parseFullIDArg("channel_id", req.GetChannelId())
+	channel, b, err := s.channelTarget(ctx, "channel_id", req.GetChannelId())
 	if err != nil {
 		return nil, err
 	}
 
-	reply, err := s.issueRequest(ctx, channel.Backend, &pb.ChatRequest{
+	reply, err := s.issueRequest(ctx, b, &pb.ChatRequest{
 		Inner: &pb.ChatRequest_UpdateChannelInfo{UpdateChannelInfo: &pb.UpdateChannelInfoChatRequest{
-			ChannelId: channel.Path,
+			ChannelId: channel.NativeID,
 			Topic:     req.GetTopic(),
 			Tags:      req.GetTags(),
 		}},
@@ -284,11 +307,14 @@ func (s *Server) UpdateChannelInfo(
 func (s *Server) ListBackends(
 	ctx context.Context, req *pb.ListBackendsRequest,
 ) (*pb.ListBackendsResponse, error) {
-	ids := s.backends.list()
+	rows, err := s.DB.ListBackends(ctx, req.GetIncludeDisconnected())
+	if err != nil {
+		return nil, err
+	}
 
-	backends := make([]*pb.Backend, 0, len(ids))
-	for _, id := range ids {
-		backends = append(backends, &pb.Backend{Id: id.String(), Type: id.Type})
+	backends := make([]*pb.Backend, 0, len(rows))
+	for _, row := range rows {
+		backends = append(backends, backendProto(row))
 	}
 	return &pb.ListBackendsResponse{Backends: backends}, nil
 }
@@ -296,12 +322,17 @@ func (s *Server) ListBackends(
 func (s *Server) GetBackendInfo(
 	ctx context.Context, req *pb.BackendInfoRequest,
 ) (*pb.BackendInfoResponse, error) {
-	id, err := parseBackendIDArg("backend_id", req.GetBackendId())
+	row, b, err := s.backendTarget(ctx, "backend_id", req.GetBackendId())
 	if err != nil {
 		return nil, err
 	}
 
-	reply, err := s.issueRequest(ctx, id, &pb.ChatRequest{
+	// Only a connected backend can be asked for its metadata.
+	if b == nil {
+		return &pb.BackendInfoResponse{Backend: backendProto(*row)}, nil
+	}
+
+	reply, err := s.issueRequest(ctx, b, &pb.ChatRequest{
 		Inner: &pb.ChatRequest_Metadata{Metadata: &pb.MetadataChatRequest{}},
 	})
 	if err != nil {
@@ -311,7 +342,7 @@ func (s *Server) GetBackendInfo(
 	switch inner := reply.GetInner().(type) {
 	case *pb.ChatEvent_Metadata:
 		return &pb.BackendInfoResponse{
-			Backend:  &pb.Backend{Id: id.String(), Type: id.Type},
+			Backend:  backendProto(*row),
 			Metadata: inner.Metadata.GetValues(),
 		}, nil
 	default:
@@ -322,19 +353,22 @@ func (s *Server) GetBackendInfo(
 func (s *Server) ListChannels(
 	ctx context.Context, req *pb.ListChannelsRequest,
 ) (*pb.ListChannelsResponse, error) {
-	id, err := parseBackendIDArg("backend_id", req.GetBackendId())
+	// An empty backend ID lists every backend's channels.
+	backendID := req.GetBackendId()
+	if backendID != "" {
+		if _, _, err := s.backendTarget(ctx, "backend_id", backendID); err != nil {
+			return nil, err
+		}
+	}
+
+	rows, err := s.DB.ListChannels(ctx, backendID, req.GetIncludeInactive())
 	if err != nil {
 		return nil, err
 	}
-	b := s.backends.get(id)
-	if b == nil {
-		return nil, errBackendNotFound
-	}
 
-	known := b.channelList()
-	channels := make([]*pb.Channel, 0, len(known))
-	for _, channel := range known {
-		channels = append(channels, relativeChannel(id, channel))
+	channels := make([]*pb.Channel, 0, len(rows))
+	for _, row := range rows {
+		channels = append(channels, channelProto(row, s.backends.get(row.BackendID) != nil))
 	}
 	return &pb.ListChannelsResponse{Channels: channels}, nil
 }
@@ -342,20 +376,20 @@ func (s *Server) ListChannels(
 func (s *Server) GetChannelInfo(
 	ctx context.Context, req *pb.ChannelInfoRequest,
 ) (*pb.ChannelInfoResponse, error) {
-	id, err := parseFullIDArg("channel_id", req.GetChannelId())
+	if err := checkID("channel_id", req.GetChannelId(), channelIDPrefix); err != nil {
+		return nil, err
+	}
+	channel, err := s.DB.GetChannel(ctx, req.GetChannelId())
+	if errors.Is(err, ErrNotFound) {
+		return nil, errChannelNotFound
+	}
 	if err != nil {
 		return nil, err
 	}
-	b := s.backends.get(id.Backend)
-	if b == nil {
-		return nil, errBackendNotFound
-	}
-	channel, ok := b.channel(id.Path)
-	if !ok {
-		return nil, status.Error(codes.NotFound, "channel not found")
-	}
 
-	return &pb.ChannelInfoResponse{Channel: relativeChannel(id.Backend, channel)}, nil
+	return &pb.ChannelInfoResponse{
+		Channel: channelProto(*channel, s.backends.get(channel.BackendID) != nil),
+	}, nil
 }
 
 func (s *Server) GetCoreInfo(
@@ -373,17 +407,22 @@ func (s *Server) RegisteredCommands(
 	return &pb.CommandsResponse{Commands: s.commands.list()}, nil
 }
 
-// forward publishes the event for a request a plugin made, then sends the
-// request to the backend and waits for it to be carried out. The event is
-// published every time, whether or not the request succeeds.
+// forward publishes the event for a request a plugin made, then looks up who to
+// send it to, sends it, and waits for it to be carried out. The event is
+// published every time, whether or not the target can be reached or the request
+// succeeds.
 func (s *Server) forward(
-	ctx context.Context, backend BackendID, event *pb.Event, request *pb.ChatRequest,
+	ctx context.Context, event *pb.Event, request func() (*backend, *pb.ChatRequest, error),
 ) error {
 	if err := s.publish(ctx, event); err != nil {
 		return err
 	}
 
-	reply, err := s.issueRequest(ctx, backend, request)
+	b, chatRequest, err := request()
+	if err != nil {
+		return err
+	}
+	reply, err := s.issueRequest(ctx, b, chatRequest)
 	if err != nil {
 		return err
 	}
@@ -405,34 +444,68 @@ func replyError(reply *pb.ChatEvent) error {
 	return status.Error(codes.Internal, "backend sent an unexpected reply")
 }
 
-// parseFullIDArg parses an ID from a plugin's request, naming the field if it
-// is malformed.
-func parseFullIDArg(field, value string) (FullID, error) {
-	id, err := ParseFullID(value)
-	if err != nil {
-		return FullID{}, status.Errorf(codes.InvalidArgument, "invalid %s: %v", field, err)
+var (
+	errBackendNotFound = status.Error(codes.NotFound, "backend not found")
+	errChannelNotFound = status.Error(codes.NotFound, "channel not found")
+	errUserNotFound    = status.Error(codes.NotFound, "user not found")
+)
+
+// backendTarget looks up the backend a plugin's request names in field, and
+// returns it with its connection, which is nil if it isn't connected.
+func (s *Server) backendTarget(ctx context.Context, field, id string) (*Backend, *backend, error) {
+	if err := checkID(field, id, backendIDPrefix); err != nil {
+		return nil, nil, err
 	}
-	return id, nil
+	row, err := s.DB.GetBackend(ctx, id)
+	if errors.Is(err, ErrNotFound) {
+		return nil, nil, errBackendNotFound
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	return row, s.backends.get(row.ID), nil
 }
 
-// parseBackendIDArg parses a backend ID from a plugin's request, naming the
-// field if it is malformed.
-func parseBackendIDArg(field, value string) (BackendID, error) {
-	id, err := ParseBackendID(value)
-	if err != nil {
-		return BackendID{}, status.Errorf(codes.InvalidArgument, "invalid %s: %v", field, err)
+// channelTarget looks up the channel a plugin's request names in field, and the
+// connected backend it is on.
+func (s *Server) channelTarget(ctx context.Context, field, id string) (*Channel, *backend, error) {
+	if err := checkID(field, id, channelIDPrefix); err != nil {
+		return nil, nil, err
 	}
-	return id, nil
+	channel, err := s.DB.GetChannel(ctx, id)
+	if errors.Is(err, ErrNotFound) {
+		return nil, nil, errChannelNotFound
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+
+	b := s.backends.get(channel.BackendID)
+	if b == nil {
+		return nil, nil, errBackendNotConnected
+	}
+	return channel, b, nil
 }
 
-// relativeChannel describes a channel on a backend for a plugin, with an ID that
-// includes the backend.
-func relativeChannel(backend BackendID, channel channelInfo) *pb.Channel {
-	return &pb.Channel{
-		Id:          backend.Relative(channel.ID).String(),
-		DisplayName: channel.DisplayName,
-		Topic:       channel.Topic,
+// userTarget looks up the user a plugin's request names in field, and the
+// connected backend they are on.
+func (s *Server) userTarget(ctx context.Context, field, id string) (*User, *backend, error) {
+	if err := checkID(field, id, userIDPrefix); err != nil {
+		return nil, nil, err
 	}
+	user, err := s.DB.GetUser(ctx, id)
+	if errors.Is(err, ErrNotFound) {
+		return nil, nil, errUserNotFound
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+
+	b := s.backends.get(user.BackendID)
+	if b == nil {
+		return nil, nil, errBackendNotConnected
+	}
+	return user, b, nil
 }
 
 // commandRegistry tracks the commands plugins have registered. Its zero value

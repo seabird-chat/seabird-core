@@ -9,13 +9,13 @@ import (
 	"google.golang.org/grpc/codes"
 )
 
-// sendBlock sends block to testChannel as the test plugin, and returns the
+// sendBlock sends block to testChannelPath as the test plugin, and returns the
 // request the backend got for it.
 func (e *testEnv) sendBlock(t *testing.T, text string, block *pb.Block) *pb.SendMessageChatRequest {
 	t.Helper()
 
 	result := callAsync(func() error {
-		_, err := e.plugin.SendMessage(e.ctx, &pb.SendMessageRequest{ChannelId: testChannel, Text: text, RootBlock: block})
+		_, err := e.plugin.SendMessage(e.ctx, &pb.SendMessageRequest{ChannelId: e.channelID, Text: text, RootBlock: block})
 		return err
 	})
 	request, err := e.backend.recv()
@@ -141,7 +141,7 @@ func TestBlocksRejectInvalid(t *testing.T) {
 
 			env := startTestEnv(t)
 			_, err := env.plugin.SendMessage(env.ctx, &pb.SendMessageRequest{
-				ChannelId: testChannel, Text: "hello", RootBlock: tt.block,
+				ChannelId: env.channelID, Text: "hello", RootBlock: tt.block,
 			})
 			assertStatus(t, err, codes.InvalidArgument, tt.message)
 			env.assertNothingPublished(t)

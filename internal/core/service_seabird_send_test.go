@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -12,9 +13,10 @@ import (
 // sendRPC describes one of the four RPCs that send chat on a plugin's behalf.
 type sendRPC struct {
 	name    string
-	target  string // an ID the plugin can send to
-	path    string // what the backend should be told
-	idField string // the name used when the ID is malformed
+	target  func(t *testing.T, e *testEnv) string // an ID the plugin can send to
+	path    string                                // what the backend should be told
+	idField string                                // the request field holding the ID
+	kind    string                                // what the ID refers to
 	call    func(ctx context.Context, c pb.SeabirdClient, target, text string, block *pb.Block, tags map[string]string) error
 
 	// request and event pull the common fields out of what the backend and the
@@ -23,12 +25,22 @@ type sendRPC struct {
 	event   func(*pb.Event) (sender, target, text string, block *pb.Block, ok bool)
 }
 
+// aliceSmith records a user on e's backend and returns their ID.
+func aliceSmith(t *testing.T, e *testEnv) string {
+	t.Helper()
+
+	user, err := e.server.DB.RecordUser(context.Background(), e.backendID, "alice smith", "Alice Smith")
+	assert.NoError(t, err)
+	return user.ID
+}
+
 var sendRPCs = []sendRPC{
 	{
 		name:    "SendMessage",
-		target:  "irc://libera/%23chan",
-		path:    "#chan",
+		target:  func(t *testing.T, e *testEnv) string { return e.channelID },
+		path:    testChannelPath,
 		idField: "channel_id",
+		kind:    "channel",
 		call: func(ctx context.Context, c pb.SeabirdClient, target, text string, block *pb.Block, tags map[string]string) error {
 			_, err := c.SendMessage(ctx, &pb.SendMessageRequest{ChannelId: target, Text: text, RootBlock: block, Tags: tags})
 			return err
@@ -44,9 +56,10 @@ var sendRPCs = []sendRPC{
 	},
 	{
 		name:    "SendPrivateMessage",
-		target:  "irc://libera/alice%20smith",
+		target:  aliceSmith,
 		path:    "alice smith",
 		idField: "user_id",
+		kind:    "user",
 		call: func(ctx context.Context, c pb.SeabirdClient, target, text string, block *pb.Block, tags map[string]string) error {
 			_, err := c.SendPrivateMessage(ctx, &pb.SendPrivateMessageRequest{UserId: target, Text: text, RootBlock: block, Tags: tags})
 			return err
@@ -62,9 +75,10 @@ var sendRPCs = []sendRPC{
 	},
 	{
 		name:    "PerformAction",
-		target:  "irc://libera/%23chan",
-		path:    "#chan",
+		target:  func(t *testing.T, e *testEnv) string { return e.channelID },
+		path:    testChannelPath,
 		idField: "channel_id",
+		kind:    "channel",
 		call: func(ctx context.Context, c pb.SeabirdClient, target, text string, block *pb.Block, tags map[string]string) error {
 			_, err := c.PerformAction(ctx, &pb.PerformActionRequest{ChannelId: target, Text: text, RootBlock: block, Tags: tags})
 			return err
@@ -80,9 +94,10 @@ var sendRPCs = []sendRPC{
 	},
 	{
 		name:    "PerformPrivateAction",
-		target:  "irc://libera/alice%20smith",
+		target:  aliceSmith,
 		path:    "alice smith",
 		idField: "user_id",
+		kind:    "user",
 		call: func(ctx context.Context, c pb.SeabirdClient, target, text string, block *pb.Block, tags map[string]string) error {
 			_, err := c.PerformPrivateAction(ctx, &pb.PerformPrivateActionRequest{UserId: target, Text: text, RootBlock: block, Tags: tags})
 			return err
@@ -128,8 +143,9 @@ func TestSendRPCsForwardRequests(t *testing.T) {
 					block = variant.block()
 				}
 				tags := map[string]string{"plugin/tag": "x"}
+				target := rpc.target(t, env)
 				result := callAsync(func() error {
-					return rpc.call(env.ctx, env.plugin, rpc.target, variant.text, block, tags)
+					return rpc.call(env.ctx, env.plugin, target, variant.text, block, tags)
 				})
 
 				// The backend is asked to carry it out, with its own ID for the target.
@@ -148,10 +164,10 @@ func TestSendRPCsForwardRequests(t *testing.T) {
 
 				// And plugins are told about it, with the ID the caller used.
 				event := env.events.next(t)
-				sender, target, eventText, eventBlock, ok := rpc.event(event)
+				sender, eventTarget, eventText, eventBlock, ok := rpc.event(event)
 				assert.True(t, ok, "wrong kind of event")
 				assert.Equal(t, testUsername, sender)
-				assert.Equal(t, rpc.target, target)
+				assert.Equal(t, target, eventTarget)
 				assert.Equal(t, variant.wantText, eventText)
 				assertProtoEqual(t, requestBlock, eventBlock)
 				assert.Equal(t, wantTags, event.GetTags())
@@ -166,7 +182,8 @@ func TestSendRPCsReportFailures(t *testing.T) {
 	env := startTestEnv(t)
 	rpc := sendRPCs[0]
 
-	result := callAsync(func() error { return rpc.call(env.ctx, env.plugin, rpc.target, "hi", nil, nil) })
+	target := rpc.target(t, env)
+	result := callAsync(func() error { return rpc.call(env.ctx, env.plugin, target, "hi", nil, nil) })
 	request, err := env.backend.recv()
 	assert.NoError(t, err)
 	env.backend.reply(request, &pb.ChatEvent{Inner: &pb.ChatEvent_Failed{
@@ -186,7 +203,8 @@ func TestSendRPCsRejectUnexpectedReplies(t *testing.T) {
 	rpc := sendRPCs[0]
 
 	// A join answers join requests, not sends.
-	result := callAsync(func() error { return rpc.call(env.ctx, env.plugin, rpc.target, "hi", nil, nil) })
+	target := rpc.target(t, env)
+	result := callAsync(func() error { return rpc.call(env.ctx, env.plugin, target, "hi", nil, nil) })
 	request, err := env.backend.recv()
 	assert.NoError(t, err)
 	env.backend.reply(request, joinEvent("#x", "", ""))
@@ -203,9 +221,10 @@ func TestSendRPCsRejectBadIDs(t *testing.T) {
 
 			env := startTestEnv(t)
 
-			err := rpc.call(env.ctx, env.plugin, "irc://libera", "hi", nil, nil)
+			err := rpc.call(env.ctx, env.plugin, env.backendID, "hi", nil, nil)
 
-			assertStatus(t, err, codes.InvalidArgument, "invalid "+rpc.idField+`: missing "/" before the path`)
+			assertStatus(t, err, codes.InvalidArgument,
+				fmt.Sprintf("invalid %s: %q isn't a %s ID", rpc.idField, env.backendID, rpc.kind))
 			env.assertNothingPublished(t)
 		})
 	}
@@ -217,25 +236,39 @@ func TestSendRPCsRejectBadBlocks(t *testing.T) {
 	env := startTestEnv(t)
 	rpc := sendRPCs[0]
 
-	err := rpc.call(env.ctx, env.plugin, rpc.target, "hi", &pb.Block{}, nil)
+	err := rpc.call(env.ctx, env.plugin, rpc.target(t, env), "hi", &pb.Block{}, nil)
 
 	assertStatus(t, err, codes.InvalidArgument, "unknown block type")
 	env.assertNothingPublished(t)
 }
 
-func TestSendRPCsUnknownBackend(t *testing.T) {
+func TestSendRPCsUnreachableTarget(t *testing.T) {
 	t.Parallel()
 
-	env := startTestEnv(t)
-	rpc := sendRPCs[0]
+	for _, rpc := range sendRPCs {
+		t.Run(rpc.name, func(t *testing.T) {
+			t.Parallel()
 
-	err := rpc.call(env.ctx, env.plugin, "irc://nowhere/x", "hi", nil, nil)
+			env := startTestEnv(t)
+			unknown := idPrefixes[rpc.kind] + "_nowhere"
+			known := rpc.target(t, env)
 
-	assertStatus(t, err, codes.NotFound, "backend not found")
-	// The attempt is still announced.
-	_, target, _, _, ok := rpc.event(env.events.next(t))
-	assert.True(t, ok)
-	assert.Equal(t, "irc://nowhere/x", target)
+			err := rpc.call(env.ctx, env.plugin, unknown, "hi", nil, nil)
+			assertStatus(t, err, codes.NotFound, rpc.kind+" not found")
+
+			env.backend.cancel()
+			env.waitForBackend(t, testBackendKey, false)
+			err = rpc.call(env.ctx, env.plugin, known, "hi", nil, nil)
+			assertStatus(t, err, codes.Unavailable, "backend not connected")
+
+			// The attempts are still announced.
+			for _, want := range []string{unknown, known} {
+				_, target, _, _, ok := rpc.event(env.events.next(t))
+				assert.True(t, ok)
+				assert.Equal(t, want, target)
+			}
+		})
+	}
 }
 
 func TestSendRPCsAreAttributedToTheCaller(t *testing.T) {
@@ -246,7 +279,8 @@ func TestSendRPCsAreAttributedToTheCaller(t *testing.T) {
 	rpc := sendRPCs[0]
 
 	ctx := pluginContext(t, "other-token")
-	result := callAsync(func() error { return rpc.call(ctx, env.plugin, rpc.target, "hi", nil, nil) })
+	target := rpc.target(t, env)
+	result := callAsync(func() error { return rpc.call(ctx, env.plugin, target, "hi", nil, nil) })
 	request, err := env.backend.recv()
 	assert.NoError(t, err)
 	env.backend.reply(request, successEvent(""))

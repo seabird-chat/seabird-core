@@ -1,19 +1,23 @@
 package core
 
 import (
+	"context"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/seabird-chat/seabird-core/internal/pb"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestIngestEventsPublishesChat(t *testing.T) {
 	t.Parallel()
 
+	// Expected events are described with the backend's IDs, since nativeIDs
+	// translates what plugins see back to them.
 	aliceSource := chatSource("#chan", "alice", "Alice")
-	wantSource := chatSource("irc://libera/%23chan", "irc://libera/alice", "Alice")
+	wantSource := aliceSource
 	alice := &pb.User{Id: "alice", DisplayName: "Alice"}
-	wantAlice := &pb.User{Id: "irc://libera/alice", DisplayName: "Alice"}
+	wantAlice := alice
 	backendTags := map[string]string{"backend/tag": "x"}
 
 	text := func(s string) *pb.Block {
@@ -107,7 +111,7 @@ func TestIngestEventsPublishesChat(t *testing.T) {
 				Source: &pb.ChannelSource{ChannelId: "#a b"}, Command: "x",
 			}}},
 			want: &pb.Event{Tags: map[string]string{}, Inner: &pb.Event_Command{Command: &pb.CommandEvent{
-				Source: &pb.ChannelSource{ChannelId: "irc://libera/%23a%20b"}, Command: "x",
+				Source: &pb.ChannelSource{ChannelId: "#a b"}, Command: "x",
 			}}},
 		},
 	}
@@ -120,7 +124,7 @@ func TestIngestEventsPublishesChat(t *testing.T) {
 
 			env.backend.send(tt.in)
 
-			assertProtoEqual(t, tt.want, env.events.next(t))
+			assertProtoEqual(t, tt.want, env.nativeIDs(t, env.events.next(t)))
 		})
 	}
 }
@@ -179,19 +183,19 @@ func TestIngestEventsRecordIDs(t *testing.T) {
 	assert.Equal(t, "hello", env.events.next(t).GetMessage().GetText())
 	assert.Equal(t, "psst", env.events.next(t).GetPrivateMessage().GetText())
 
-	backends, err := env.server.DB.ListBackends(env.ctx)
+	backends, err := env.server.DB.ListBackends(env.ctx, true)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(backends))
 	assert.Equal(t, "libera", backends[0].NativeID)
 
-	channels, err := env.server.DB.ListChannels(env.ctx)
+	channels, err := env.server.DB.ListChannels(env.ctx, "", true)
 	assert.NoError(t, err)
 	channelNames := map[string]string{}
 	for _, channel := range channels {
 		assert.Equal(t, backends[0].ID, channel.BackendID)
 		channelNames[channel.NativeID] = channel.DisplayName
 	}
-	assert.Equal(t, map[string]string{"#quiet": "Quiet", "#chan": ""}, channelNames)
+	assert.Equal(t, map[string]string{testChannelPath: testChannelPath, "#quiet": "Quiet"}, channelNames)
 
 	users, err := env.server.DB.ListUsers(env.ctx)
 	assert.NoError(t, err)
@@ -201,4 +205,45 @@ func TestIngestEventsRecordIDs(t *testing.T) {
 		userNames[user.NativeID] = user.DisplayName
 	}
 	assert.Equal(t, map[string]string{"alice": "Alice", "bob": "Bob"}, userNames)
+}
+
+// nativeIDs returns a copy of a chat event with the channel and user IDs
+// plugins see replaced by what the backend calls them, failing the test if an
+// ID isn't one core recorded.
+func (e *testEnv) nativeIDs(t *testing.T, event *pb.Event) *pb.Event {
+	t.Helper()
+
+	event = proto.Clone(event).(*pb.Event)
+	user := func(u *pb.User) {
+		if u.GetId() == "" {
+			return
+		}
+		recorded, err := e.server.DB.GetUser(context.Background(), u.GetId())
+		assert.NoError(t, err, "user %q", u.GetId())
+		u.Id = recorded.NativeID
+	}
+	source := func(s *pb.ChannelSource) {
+		if s.GetChannelId() != "" {
+			recorded, err := e.server.DB.GetChannel(context.Background(), s.GetChannelId())
+			assert.NoError(t, err, "channel %q", s.GetChannelId())
+			s.ChannelId = recorded.NativeID
+		}
+		user(s.GetUser())
+	}
+
+	switch inner := event.GetInner().(type) {
+	case *pb.Event_Message:
+		source(inner.Message.GetSource())
+	case *pb.Event_Mention:
+		source(inner.Mention.GetSource())
+	case *pb.Event_Action:
+		source(inner.Action.GetSource())
+	case *pb.Event_Command:
+		source(inner.Command.GetSource())
+	case *pb.Event_PrivateMessage:
+		user(inner.PrivateMessage.GetSource())
+	case *pb.Event_PrivateAction:
+		user(inner.PrivateAction.GetSource())
+	}
+	return event
 }

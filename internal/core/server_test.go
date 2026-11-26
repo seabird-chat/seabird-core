@@ -60,8 +60,9 @@ func TestServerDefaults(t *testing.T) {
 		s.HelloTimeout = 0
 	})
 
+	target := sendRPCs[0].target(t, env)
 	result := callAsync(func() error {
-		return sendRPCs[0].call(env.ctx, env.plugin, sendRPCs[0].target, "hi", nil, nil)
+		return sendRPCs[0].call(env.ctx, env.plugin, target, "hi", nil, nil)
 	})
 	request, err := env.backend.recv()
 	assert.NoError(t, err)

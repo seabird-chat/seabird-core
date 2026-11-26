@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -13,41 +14,38 @@ func TestListBackends(t *testing.T) {
 	t.Parallel()
 
 	env := startTestEnv(t)
-	others := []BackendID{{"irc", "irc.libera-chat"}, {"discord", "b"}, {"irc", "a"}}
-	var discord *fakeBackend
-	for _, id := range others {
-		f := env.connectBackend(t, id)
-		if id.Type == "discord" {
-			discord = f
-		}
+	ids := map[backendKey]string{testBackendKey: env.backendID}
+	backends := map[backendKey]*fakeBackend{}
+	for _, key := range []backendKey{{"irc", "irc.libera-chat"}, {"discord", "b"}, {"irc", "a"}} {
+		backends[key], ids[key] = env.connectBackend(t, key)
 	}
+	discord := backendKey{"discord", "b"}
 
-	// Ordered by type and then ID, with IDs written the way plugins use them.
-	assert.Equal(t, []string{
-		"discord discord://b",
-		"irc irc://a",
-		"irc irc://irc%2Elibera%2Dchat",
-		"irc irc://libera",
-	}, env.listBackends(t))
+	// Ordered by type and then the name each backend connected with.
+	want := []*pb.Backend{
+		{Id: ids[discord], Type: "discord", Connected: true},
+		{Id: ids[backendKey{"irc", "a"}], Type: "irc", Connected: true},
+		{Id: ids[backendKey{"irc", "irc.libera-chat"}], Type: "irc", Connected: true},
+		{Id: env.backendID, Type: "irc", Connected: true},
+	}
+	assertProtosEqual(t, want, env.listBackends(t, false))
 
-	// Backends that leave are no longer listed.
-	discord.cancel()
-	env.waitForBackend(t, others[1], false)
-	assert.Equal(t, 3, len(env.listBackends(t)))
+	// Backends that leave are only listed when asked for.
+	backends[discord].cancel()
+	env.waitForBackend(t, discord, false)
+	assertProtosEqual(t, want[1:], env.listBackends(t, false))
+
+	want[0].Connected = false
+	assertProtosEqual(t, want, env.listBackends(t, true))
 }
 
-// listBackends returns ListBackends' answer as "type id" pairs.
-func (e *testEnv) listBackends(t *testing.T) []string {
+// listBackends returns ListBackends' answer.
+func (e *testEnv) listBackends(t *testing.T, includeDisconnected bool) []*pb.Backend {
 	t.Helper()
 
-	resp, err := e.plugin.ListBackends(e.ctx, &pb.ListBackendsRequest{})
+	resp, err := e.plugin.ListBackends(e.ctx, &pb.ListBackendsRequest{IncludeDisconnected: includeDisconnected})
 	assert.NoError(t, err)
-
-	var got []string
-	for _, backend := range resp.GetBackends() {
-		got = append(got, backend.GetType()+" "+backend.GetId())
-	}
-	return got
+	return resp.GetBackends()
 }
 
 func TestGetBackendInfo(t *testing.T) {
@@ -78,7 +76,7 @@ func TestGetBackendInfo(t *testing.T) {
 
 			env := startTestEnv(t)
 			done := runAsync(func() (*pb.BackendInfoResponse, error) {
-				return env.plugin.GetBackendInfo(env.ctx, &pb.BackendInfoRequest{BackendId: "irc://libera"})
+				return env.plugin.GetBackendInfo(env.ctx, &pb.BackendInfoRequest{BackendId: env.backendID})
 			})
 
 			request, err := env.backend.recv()
@@ -92,8 +90,7 @@ func TestGetBackendInfo(t *testing.T) {
 				return
 			}
 			assert.NoError(t, got.err)
-			assert.Equal(t, "irc://libera", got.value.GetBackend().GetId())
-			assert.Equal(t, "irc", got.value.GetBackend().GetType())
+			assertProtoEqual(t, &pb.Backend{Id: env.backendID, Type: "irc", Connected: true}, got.value.GetBackend())
 			assert.Equal(t, map[string]string{"command_prefix": "!"}, got.value.GetMetadata())
 		})
 	}
@@ -105,9 +102,13 @@ func TestGetBackendInfoRejectsBadRequests(t *testing.T) {
 	env := startTestEnv(t)
 
 	_, err := env.plugin.GetBackendInfo(env.ctx, &pb.BackendInfoRequest{BackendId: "nope"})
-	assertStatus(t, err, codes.InvalidArgument, `invalid backend_id: missing "://" after the backend type`)
+	assertStatus(t, err, codes.InvalidArgument, `invalid backend_id: "nope" isn't a backend ID`)
 
-	_, err = env.plugin.GetBackendInfo(env.ctx, &pb.BackendInfoRequest{BackendId: "irc://nowhere"})
+	// A channel's ID isn't a backend's, even though both are real.
+	_, err = env.plugin.GetBackendInfo(env.ctx, &pb.BackendInfoRequest{BackendId: env.channelID})
+	assertStatus(t, err, codes.InvalidArgument, fmt.Sprintf("invalid backend_id: %q isn't a backend ID", env.channelID))
+
+	_, err = env.plugin.GetBackendInfo(env.ctx, &pb.BackendInfoRequest{BackendId: "sbb_nowhere"})
 	assertStatus(t, err, codes.NotFound, "backend not found")
 }
 
@@ -126,25 +127,4 @@ func TestGetCoreInfo(t *testing.T) {
 	assert.True(t, resp.GetStartupTimestamp() <= resp.GetCurrentTimestamp())
 	assert.True(t, resp.GetCurrentTimestamp() <= uint64(after.Unix()))
 	assert.True(t, resp.GetCurrentTimestamp() >= uint64(before.Unix()))
-}
-
-func TestGetBackendInfoAnswersWithTheCanonicalID(t *testing.T) {
-	t.Parallel()
-
-	env := startTestEnv(t)
-	id := BackendID{Type: "irc", ID: "irc.libera-chat"}
-	f := env.connectBackend(t, id)
-
-	// Plugins can write the ID without escaping; the answer uses the escaped form.
-	done := runAsync(func() (*pb.BackendInfoResponse, error) {
-		return env.plugin.GetBackendInfo(env.ctx, &pb.BackendInfoRequest{BackendId: "irc://irc.libera-chat"})
-	})
-	request, err := f.recv()
-	assert.NoError(t, err)
-	f.reply(request, &pb.ChatEvent{Inner: &pb.ChatEvent_Metadata{Metadata: &pb.MetadataChatEvent{}}})
-
-	got := waitFor(t, done, "result")
-	assert.NoError(t, got.err)
-	assert.Equal(t, "irc://irc%2Elibera%2Dchat", got.value.GetBackend().GetId())
-	assert.Equal(t, "irc", got.value.GetBackend().GetType())
 }

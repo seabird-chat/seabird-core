@@ -71,8 +71,10 @@ func TestStuckBackend(t *testing.T) {
 	t.Parallel()
 
 	env := startTestEnv(t, func(s *Server) { s.RequestTimeout = 30 * time.Second })
-	stuckID := BackendID{Type: "irc", ID: "stuck"}
-	stuck := env.connectBackend(t, stuckID)
+	stuckKey := backendKey{Type: "irc", Name: "stuck"}
+	stuck, stuckID := env.connectBackend(t, stuckKey)
+	stuck.send(joinEvent("#x", "#x", ""))
+	stuckChannel := env.waitForChannel(t, stuckID, "#x")
 
 	// Big requests fill the connection's flow-control window and stall sending
 	// to it, with the rest queued or waiting for room. Each is about 3MB on the
@@ -82,7 +84,7 @@ func TestStuckBackend(t *testing.T) {
 	var waiting []<-chan error
 	for range 20 {
 		waiting = append(waiting, callAsync(func() error {
-			_, err := env.plugin.SendMessage(env.ctx, &pb.SendMessageRequest{ChannelId: "irc://stuck/x", Text: huge})
+			_, err := env.plugin.SendMessage(env.ctx, &pb.SendMessageRequest{ChannelId: stuckChannel, Text: huge})
 			return err
 		}))
 	}
@@ -109,5 +111,5 @@ func TestStuckBackend(t *testing.T) {
 	for _, result := range waiting {
 		assertStatus(t, waitFor(t, result, "result"), codes.Unavailable, "backend disconnected")
 	}
-	env.waitForBackend(t, stuckID, false)
+	env.waitForBackend(t, stuckKey, false)
 }

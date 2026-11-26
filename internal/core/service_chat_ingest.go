@@ -31,32 +31,33 @@ func (s *Server) IngestEvents(stream pb.ChatIngest_IngestEventsServer) (err erro
 	recv := make(chan received)
 	go readStream(ctx, stream, recv)
 
-	id, err := receiveHello(ctx, recv, s.helloTimeout())
+	key, err := receiveHello(ctx, recv, s.helloTimeout())
 	if err != nil {
 		return err
 	}
 
-	b, err := s.backends.register(id)
+	// The key is released last, so a backend reconnecting under the same name
+	// can't connect until this stream has finished disconnecting.
+	b, err := s.backends.register(key)
 	if err != nil {
 		return err
 	}
 	defer s.backends.remove(b)
 
 	logger := slogx.FromContext(ctx).With(
-		slogx.String("backend_type", id.Type),
-		slogx.String("backend_id", id.ID),
+		slogx.String("backend_type", key.Type),
+		slogx.String("backend_name", key.Name),
 	)
 	ctx = slogx.WithLogger(ctx, logger)
 
-	logger.InfoContext(ctx, "backend connected")
-
-	// Seabird IDs aren't sent to plugins yet, so failing to record them only
-	// costs the mapping, not the connection.
-	if recorded, recordErr := s.DB.RecordBackend(ctx, id.Type, id.ID); recordErr != nil {
-		logger.WarnContext(ctx, "failed to record backend", slogx.Err(recordErr))
-	} else {
-		b.rowID = recorded.ID
+	row, err := s.DB.ConnectBackend(ctx, key.Type, key.Name)
+	if err != nil {
+		return fmt.Errorf("record backend: %w", err)
 	}
+	s.backends.activate(b, row)
+	defer s.disconnectBackend(ctx, b)
+
+	logger.InfoContext(ctx, "backend connected", slogx.String("backend_id", row.ID))
 	defer func() {
 		if err != nil {
 			logger.InfoContext(ctx, "backend disconnected", slogx.Err(err))
@@ -64,6 +65,10 @@ func (s *Server) IngestEvents(stream pb.ChatIngest_IngestEventsServer) (err erro
 			logger.InfoContext(ctx, "backend disconnected")
 		}
 	}()
+
+	if err := s.publish(ctx, backendUpdatedEvent(*row)); err != nil {
+		return err
+	}
 
 	// This goroutine ends when the stream does, or with the RPC.
 	handled := make(chan error, 1)
@@ -110,31 +115,31 @@ var errBadHello = status.Error(codes.InvalidArgument, "first message must be a h
 // identify it.
 func receiveHello(
 	ctx context.Context, recv <-chan received, timeout time.Duration,
-) (BackendID, error) {
+) (backendKey, error) {
 	var event *pb.ChatEvent
 
 	select {
 	case got := <-recv:
 		if errors.Is(got.err, io.EOF) {
-			return BackendID{}, errBadHello
+			return backendKey{}, errBadHello
 		}
 		if got.err != nil {
-			return BackendID{}, got.err
+			return backendKey{}, got.err
 		}
 		event = got.event
 	case <-time.After(timeout):
-		return BackendID{}, status.Error(codes.DeadlineExceeded, "timed out waiting for hello message")
+		return backendKey{}, status.Error(codes.DeadlineExceeded, "timed out waiting for hello message")
 	case <-ctx.Done():
-		return BackendID{}, ctx.Err()
+		return backendKey{}, ctx.Err()
 	}
 
 	// The getters return zero values for anything missing, so one check covers
 	// a missing hello, backend info, type or ID.
 	info := event.GetHello().GetBackendInfo()
 	if info.GetType() == "" || info.GetId() == "" {
-		return BackendID{}, errBadHello
+		return backendKey{}, errBadHello
 	}
-	return BackendID{Type: info.GetType(), ID: info.GetId()}, nil
+	return backendKey{Type: info.GetType(), Name: info.GetId()}, nil
 }
 
 // receiveEvents handles the backend's events until the stream ends. It returns
@@ -181,80 +186,111 @@ func (s *Server) handleChatEvent(ctx context.Context, b *backend, event *pb.Chat
 	// a channel can be answered by the matching change.
 	case *pb.ChatEvent_JoinChannel:
 		join := inner.JoinChannel
-		s.recordChannel(ctx, b, join.GetChannelId(), join.GetDisplayName())
-		b.joinChannel(channelInfo{ID: join.GetChannelId(), DisplayName: join.GetDisplayName(), Topic: join.GetTopic()})
+		channel, changed, err := s.DB.JoinChannel(ctx, b.row.ID, join.GetChannelId(), join.GetDisplayName(), join.GetTopic())
+		if err != nil {
+			return fmt.Errorf("record join: %w", err)
+		}
+		if err := s.publishChannel(ctx, channel, changed); err != nil {
+			return err
+		}
 		deliverReply(ctx, b, event)
 		return nil
 	case *pb.ChatEvent_LeaveChannel:
-		b.leaveChannel(inner.LeaveChannel.GetChannelId())
+		channel, changed, err := s.DB.LeaveChannel(ctx, b.row.ID, inner.LeaveChannel.GetChannelId())
+		if err != nil {
+			return fmt.Errorf("record leave: %w", err)
+		}
+		if err := s.publishChannel(ctx, channel, changed); err != nil {
+			return err
+		}
 		deliverReply(ctx, b, event)
 		return nil
 	case *pb.ChatEvent_ChangeChannel:
 		change := inner.ChangeChannel
-		s.recordChannel(ctx, b, change.GetChannelId(), change.GetDisplayName())
-		b.changeChannel(channelInfo{ID: change.GetChannelId(), DisplayName: change.GetDisplayName(), Topic: change.GetTopic()})
+		channel, changed, err := s.DB.ChangeChannel(ctx, b.row.ID, change.GetChannelId(), change.GetDisplayName(), change.GetTopic())
+		if err != nil {
+			return fmt.Errorf("record change: %w", err)
+		}
+		if err := s.publishChannel(ctx, channel, changed); err != nil {
+			return err
+		}
 		deliverReply(ctx, b, event)
 		return nil
 
-	// Chat becomes events for plugins, with IDs that say which backend they came
-	// from and with the text and blocks made consistent.
+	// Chat becomes events for plugins, with the IDs plugins use and with the
+	// text and blocks made consistent.
 	case *pb.ChatEvent_Message:
 		message := inner.Message
-		s.recordSource(ctx, b, message.GetSource())
+		source, err := s.resolveSource(ctx, b, message.GetSource())
+		if err != nil {
+			return err
+		}
 		block, err := normalizeBlock(message.GetText(), message.GetRootBlock())
 		if err != nil {
 			return err
 		}
 		return s.publish(ctx, &pb.Event{Tags: event.GetTags(), Inner: &pb.Event_Message{Message: &pb.MessageEvent{
-			Source:    relativeSource(b.id, message.GetSource()),
+			Source:    source,
 			Text:      block.GetPlain(),
 			RootBlock: block,
 		}}})
 	case *pb.ChatEvent_PrivateMessage:
 		message := inner.PrivateMessage
-		s.recordUser(ctx, b, message.GetSource())
+		source, err := s.resolveUser(ctx, b, message.GetSource())
+		if err != nil {
+			return err
+		}
 		block, err := normalizeBlock(message.GetText(), message.GetRootBlock())
 		if err != nil {
 			return err
 		}
 		return s.publish(ctx, &pb.Event{Tags: event.GetTags(), Inner: &pb.Event_PrivateMessage{PrivateMessage: &pb.PrivateMessageEvent{
-			Source:    relativeUser(b.id, message.GetSource()),
+			Source:    source,
 			Text:      block.GetPlain(),
 			RootBlock: block,
 		}}})
 	case *pb.ChatEvent_Mention:
 		mention := inner.Mention
-		s.recordSource(ctx, b, mention.GetSource())
+		source, err := s.resolveSource(ctx, b, mention.GetSource())
+		if err != nil {
+			return err
+		}
 		block, err := normalizeBlock(mention.GetText(), mention.GetRootBlock())
 		if err != nil {
 			return err
 		}
 		return s.publish(ctx, &pb.Event{Tags: event.GetTags(), Inner: &pb.Event_Mention{Mention: &pb.MentionEvent{
-			Source:    relativeSource(b.id, mention.GetSource()),
+			Source:    source,
 			Text:      block.GetPlain(),
 			RootBlock: block,
 		}}})
 	case *pb.ChatEvent_Action:
 		action := inner.Action
-		s.recordSource(ctx, b, action.GetSource())
+		source, err := s.resolveSource(ctx, b, action.GetSource())
+		if err != nil {
+			return err
+		}
 		block, err := normalizeBlock(action.GetText(), action.GetRootBlock())
 		if err != nil {
 			return err
 		}
 		return s.publish(ctx, &pb.Event{Tags: event.GetTags(), Inner: &pb.Event_Action{Action: &pb.ActionEvent{
-			Source:    relativeSource(b.id, action.GetSource()),
+			Source:    source,
 			Text:      block.GetPlain(),
 			RootBlock: block,
 		}}})
 	case *pb.ChatEvent_PrivateAction:
 		action := inner.PrivateAction
-		s.recordUser(ctx, b, action.GetSource())
+		source, err := s.resolveUser(ctx, b, action.GetSource())
+		if err != nil {
+			return err
+		}
 		block, err := normalizeBlock(action.GetText(), action.GetRootBlock())
 		if err != nil {
 			return err
 		}
 		return s.publish(ctx, &pb.Event{Tags: event.GetTags(), Inner: &pb.Event_PrivateAction{PrivateAction: &pb.PrivateActionEvent{
-			Source:    relativeUser(b.id, action.GetSource()),
+			Source:    source,
 			Text:      block.GetPlain(),
 			RootBlock: block,
 		}}})
@@ -262,9 +298,12 @@ func (s *Server) handleChatEvent(ctx context.Context, b *backend, event *pb.Chat
 	// Commands are already split up, so there is no text to normalize.
 	case *pb.ChatEvent_Command:
 		command := inner.Command
-		s.recordSource(ctx, b, command.GetSource())
+		source, err := s.resolveSource(ctx, b, command.GetSource())
+		if err != nil {
+			return err
+		}
 		return s.publish(ctx, &pb.Event{Tags: event.GetTags(), Inner: &pb.Event_Command{Command: &pb.CommandEvent{
-			Source:  relativeSource(b.id, command.GetSource()),
+			Source:  source,
 			Command: command.GetCommand(),
 			Arg:     command.GetArg(),
 		}}})
@@ -294,54 +333,82 @@ func (s *Server) publish(ctx context.Context, event *pb.Event) error {
 	return nil
 }
 
-// recordSource records the channel and user a message came from.
-func (s *Server) recordSource(ctx context.Context, b *backend, source *pb.ChannelSource) {
-	s.recordChannel(ctx, b, source.GetChannelId(), "")
-	s.recordUser(ctx, b, source.GetUser())
-}
+// disconnectBackend marks b as disconnected and tells plugins, including about
+// each channel it was in.
+func (s *Server) disconnectBackend(ctx context.Context, b *backend) {
+	s.backends.deactivate(b)
 
-// recordChannel records a channel the backend reported. Failures are logged
-// rather than ending the stream.
-func (s *Server) recordChannel(ctx context.Context, b *backend, nativeID, displayName string) {
-	if b.rowID == "" || nativeID == "" {
+	// The stream has ended by now, but cleaning up still has to happen.
+	ctx = context.WithoutCancel(ctx)
+	logger := slogx.FromContext(ctx)
+
+	left, err := s.DB.DisconnectBackend(ctx, b.row.ID)
+	if err != nil {
+		logger.WarnContext(ctx, "failed to record backend disconnecting", slogx.Err(err))
 		return
 	}
-	if _, err := s.DB.RecordChannel(ctx, b.rowID, nativeID, displayName); err != nil {
-		slogx.FromContext(ctx).WarnContext(ctx, "failed to record channel",
-			slogx.String("channel_id", nativeID), slogx.Err(err))
+
+	row := *b.row
+	row.Connected = false
+	if err := s.publish(ctx, backendUpdatedEvent(row)); err != nil {
+		logger.WarnContext(ctx, "failed to announce backend disconnecting", slogx.Err(err))
+	}
+	for _, channel := range left {
+		if err := s.publish(ctx, channelUpdatedEvent(channel, false)); err != nil {
+			logger.WarnContext(ctx, "failed to announce channel leaving", slogx.Err(err))
+		}
 	}
 }
 
-// recordUser records a user the backend reported. Failures are logged rather
-// than ending the stream.
-func (s *Server) recordUser(ctx context.Context, b *backend, user *pb.User) {
-	if b.rowID == "" || user.GetId() == "" {
-		return
+// publishChannel tells plugins about a channel on a connected backend, if it
+// changed.
+func (s *Server) publishChannel(ctx context.Context, channel *Channel, changed bool) error {
+	if !changed {
+		return nil
 	}
-	if _, err := s.DB.RecordUser(ctx, b.rowID, user.GetId(), user.GetDisplayName()); err != nil {
-		slogx.FromContext(ctx).WarnContext(ctx, "failed to record user",
-			slogx.String("user_id", user.GetId()), slogx.Err(err))
-	}
+	return s.publish(ctx, channelUpdatedEvent(*channel, true))
 }
 
-// relativeSource rewrites a source from a backend so its IDs include the backend.
-func relativeSource(backend BackendID, source *pb.ChannelSource) *pb.ChannelSource {
+// resolveSource returns a source from a backend with the IDs plugins use,
+// recording its channel and user if they're new.
+func (s *Server) resolveSource(ctx context.Context, b *backend, source *pb.ChannelSource) (*pb.ChannelSource, error) {
 	if source == nil {
-		return nil
+		return nil, nil
 	}
-	return &pb.ChannelSource{
-		ChannelId: backend.Relative(source.GetChannelId()).String(),
-		User:      relativeUser(backend, source.GetUser()),
+
+	user, err := s.resolveUser(ctx, b, source.GetUser())
+	if err != nil {
+		return nil, err
 	}
+	resolved := &pb.ChannelSource{User: user}
+	if source.GetChannelId() == "" {
+		return resolved, nil
+	}
+
+	channel, changed, err := s.DB.RecordChannel(ctx, b.row.ID, source.GetChannelId())
+	if err != nil {
+		return nil, fmt.Errorf("record channel: %w", err)
+	}
+	if err := s.publishChannel(ctx, channel, changed); err != nil {
+		return nil, err
+	}
+	resolved.ChannelId = channel.ID
+	return resolved, nil
 }
 
-// relativeUser rewrites a user from a backend so its ID includes the backend.
-func relativeUser(backend BackendID, user *pb.User) *pb.User {
+// resolveUser returns a user from a backend with the ID plugins use, recording
+// them if they're new.
+func (s *Server) resolveUser(ctx context.Context, b *backend, user *pb.User) (*pb.User, error) {
 	if user == nil {
-		return nil
+		return nil, nil
 	}
-	return &pb.User{
-		Id:          backend.Relative(user.GetId()).String(),
-		DisplayName: user.GetDisplayName(),
+	if user.GetId() == "" {
+		return &pb.User{DisplayName: user.GetDisplayName()}, nil
 	}
+
+	recorded, err := s.DB.RecordUser(ctx, b.row.ID, user.GetId(), user.GetDisplayName())
+	if err != nil {
+		return nil, fmt.Errorf("record user: %w", err)
+	}
+	return &pb.User{Id: recorded.ID, DisplayName: user.GetDisplayName()}, nil
 }

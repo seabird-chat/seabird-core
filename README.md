@@ -31,10 +31,9 @@ Every flag can also be set with a `SEABIRD_` environment variable:
 
 - `SEABIRD_DATABASE_URL` (required) - the SQLite database holding auth tokens,
   as a filename or a `file:` URI. Tokens are rows in its `seabird_auth_tokens`
-  table, managed with `seabird-core token` (see below). Core also records every
-  backend, channel and user it sees in `seabird_backends`, `seabird_channels`
-  and `seabird_users`, giving each a stable seabird ID such as
-  `sbc_5k2q8mzx7v1rc`.
+  table, managed with `seabird-core token` (see below). Backends, channels and
+  users are stored in `seabird_backends`, `seabird_channels` and
+  `seabird_users` (see below).
 - `SEABIRD_BIND_HOST` (optional, defaults to `:11235`) - which host/port to bind
   the gRPC service to. It isn't TLS encrypted, so you may want to put it behind a
   reverse proxy.
@@ -57,17 +56,13 @@ seabird-core token delete --database-url seabird-core.db 3
 keys. A name can have several tokens, so a token can be replaced without
 downtime by creating the new one before deleting the old.
 
-## Seabird IDs
+## Backends, channels and users
 
-`backend list`, `channel list` and `user list` show each seabird ID next to the
-address plugins currently use for it, like `irc://libera/%23chan`. `backend
-seed`, `channel seed` and `user seed` create one ahead of time for an address
-core hasn't seen yet, and print its ID. Anything that already has an ID keeps
-it:
+Core keeps track of every backend, channel and user it has seen, and gives each
+an ID that plugins use to refer to it, such as `sbc_5k2q8mzx7v1rc`. `backend
+list`, `channel list` and `user list` show them, along with what each backend
+calls its channels and users:
 
 ```sh
-seabird-core channel seed --database-url seabird-core.db 'irc://libera/%23chan'
 seabird-core channel list --database-url seabird-core.db
 ```
-
-Seeded rows show a last seen of `never` until a backend reports them.

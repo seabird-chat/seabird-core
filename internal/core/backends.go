@@ -1,12 +1,9 @@
 package core
 
 import (
-	"cmp"
 	"context"
 	"crypto/rand"
 	"errors"
-	"slices"
-	"strings"
 	"sync"
 
 	"github.com/seabird-chat/seabird-core/internal/pb"
@@ -20,86 +17,33 @@ import (
 // only absorbs bursts.
 const backendQueueSize = 10
 
+// backendKey is the type and name a backend gives in its hello. Only one
+// backend can be connected with each.
+type backendKey struct {
+	Type string
+	Name string
+}
+
 // backend is a connected chat backend: the requests waiting to be sent to it
 // and the callers waiting for its replies.
 type backend struct {
-	// id is the type and ID the backend gave in its hello. It keys the registry
-	// and is the base of the IDs plugins see.
-	id BackendID
+	key backendKey
 
-	// rowID is the ID of the backend's row in seabird_backends, which its
-	// channels and users refer to. It is empty if the backend couldn't be
-	// recorded, and set before any events are handled.
-	rowID string
+	// row is the backend as recorded in the database, whose ID plugins use. It
+	// is set before the backend can be found by that ID.
+	row *Backend
 
 	// requests are sent to the backend by its IngestEvents handler.
 	requests chan *pb.ChatRequest
 
-	// done is closed when the backend disconnects.
+	// done is closed when the backend stops taking requests.
 	done      chan struct{}
 	closeOnce sync.Once
 
-	// mu guards pending and channels. issueRequest removes its pending entry
-	// however it ends, so a backend that never replies doesn't leak them.
-	mu       sync.Mutex
-	pending  map[string]chan *pb.ChatEvent // by request ID
-	channels map[string]channelInfo        // by the backend's channel ID
-}
-
-// channelInfo is what a backend has told core about one of its channels.
-type channelInfo struct {
-	ID          string
-	DisplayName string
-	Topic       string
-}
-
-// joinChannel records a channel the backend is in, replacing what was known.
-func (b *backend) joinChannel(channel channelInfo) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	b.channels[channel.ID] = channel
-}
-
-// leaveChannel forgets a channel.
-func (b *backend) leaveChannel(id string) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	delete(b.channels, id)
-}
-
-// changeChannel updates the name and topic of a channel the backend is in. A
-// channel that hasn't been joined is ignored.
-func (b *backend) changeChannel(channel channelInfo) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	if _, ok := b.channels[channel.ID]; ok {
-		b.channels[channel.ID] = channel
-	}
-}
-
-// channel returns what is known about a channel.
-func (b *backend) channel(id string) (channelInfo, bool) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	channel, ok := b.channels[id]
-	return channel, ok
-}
-
-// channelList returns every channel the backend is in, ordered by ID.
-func (b *backend) channelList() []channelInfo {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	channels := make([]channelInfo, 0, len(b.channels))
-	for _, channel := range b.channels {
-		channels = append(channels, channel)
-	}
-	slices.SortFunc(channels, func(a, b channelInfo) int { return strings.Compare(a.ID, b.ID) })
-	return channels
+	// mu guards pending. issueRequest removes its entry however it ends, so a
+	// backend that never replies doesn't leak them.
+	mu      sync.Mutex
+	pending map[string]chan *pb.ChatEvent // by request ID
 }
 
 // expectReply registers a caller waiting for the reply to request id.
@@ -138,83 +82,86 @@ func (b *backend) respond(id string, event *pb.ChatEvent) bool {
 
 // backendRegistry tracks the connected backends. Its zero value is ready to use.
 type backendRegistry struct {
-	mu       sync.Mutex
-	backends map[BackendID]*backend
+	mu    sync.Mutex
+	byKey map[backendKey]*backend
+	byID  map[string]*backend // by row ID, once activated
 }
 
-// register adds a backend. It fails if one with the same ID is connected.
-func (r *backendRegistry) register(id BackendID) (*backend, error) {
+// register reserves key for a new backend. It fails if a backend with the
+// same key is connected, or hasn't finished disconnecting.
+func (r *backendRegistry) register(key backendKey) (*backend, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if _, exists := r.backends[id]; exists {
-		return nil, status.Errorf(codes.AlreadyExists, "backend %s is already connected", id)
+	if _, exists := r.byKey[key]; exists {
+		return nil, status.Errorf(codes.AlreadyExists, "backend %s %q is already connected", key.Type, key.Name)
 	}
-	if r.backends == nil {
-		r.backends = make(map[BackendID]*backend)
+	if r.byKey == nil {
+		r.byKey = make(map[backendKey]*backend)
+		r.byID = make(map[string]*backend)
 	}
 
 	b := &backend{
-		id:       id,
+		key:      key,
 		requests: make(chan *pb.ChatRequest, backendQueueSize),
 		done:     make(chan struct{}),
 		pending:  make(map[string]chan *pb.ChatEvent),
-		channels: make(map[string]channelInfo),
 	}
-	r.backends[id] = b
+	r.byKey[key] = b
 	return b, nil
 }
 
-// get returns the connected backend with the given ID, or nil.
-func (r *backendRegistry) get(id BackendID) *backend {
+// activate makes b reachable by its row's ID.
+func (r *backendRegistry) activate(b *backend, row *Backend) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	return r.backends[id]
+	b.row = row
+	r.byID[row.ID] = b
 }
 
-// list returns the IDs of the connected backends, ordered by type and then ID.
-func (r *backendRegistry) list() []BackendID {
+// get returns the connected backend with the given row ID, or nil.
+func (r *backendRegistry) get(id string) *backend {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	ids := make([]BackendID, 0, len(r.backends))
-	for id := range r.backends {
-		ids = append(ids, id)
-	}
-	slices.SortFunc(ids, func(a, b BackendID) int {
-		return cmp.Or(strings.Compare(a.Type, b.Type), strings.Compare(a.ID, b.ID))
-	})
-	return ids
+	return r.byID[id]
 }
 
-// remove disconnects b, failing any callers still waiting on it. It is safe to
-// call more than once.
-func (r *backendRegistry) remove(b *backend) {
+// deactivate stops b taking requests, failing any callers still waiting on
+// it, but keeps its key reserved. It is safe to call more than once.
+func (r *backendRegistry) deactivate(b *backend) {
 	r.mu.Lock()
-	// A backend that reconnected under the same ID must not be removed.
-	if r.backends[b.id] == b {
-		delete(r.backends, b.id)
+	if b.row != nil && r.byID[b.row.ID] == b {
+		delete(r.byID, b.row.ID)
 	}
 	r.mu.Unlock()
 
 	b.closeOnce.Do(func() { close(b.done) })
 }
 
+// remove deactivates b and releases its key. It is safe to call more than
+// once.
+func (r *backendRegistry) remove(b *backend) {
+	r.deactivate(b)
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.byKey[b.key] == b {
+		delete(r.byKey, b.key)
+	}
+}
+
 // issueRequest sends request to a backend and waits for its reply. The request
 // is copied and given an ID; the caller's message is not modified.
 //
-// Errors are gRPC statuses for the client: NotFound if the backend isn't
-// connected, Unavailable if it disconnects while waiting, and DeadlineExceeded
-// if there is no reply within RequestTimeout.
+// Errors are gRPC statuses for the client: Unavailable if the backend
+// disconnects while waiting, and DeadlineExceeded if there is no reply within
+// RequestTimeout.
 func (s *Server) issueRequest(
-	ctx context.Context, id BackendID, request *pb.ChatRequest,
+	ctx context.Context, b *backend, request *pb.ChatRequest,
 ) (*pb.ChatEvent, error) {
-	b := s.backends.get(id)
-	if b == nil {
-		return nil, errBackendNotFound
-	}
-
 	ctx, cancel := context.WithTimeout(ctx, s.requestTimeout())
 	defer cancel()
 
@@ -243,7 +190,7 @@ func (s *Server) issueRequest(
 }
 
 var (
-	errBackendNotFound     = status.Error(codes.NotFound, "backend not found")
+	errBackendNotConnected = status.Error(codes.Unavailable, "backend not connected")
 	errBackendDisconnected = status.Error(codes.Unavailable, "backend disconnected")
 )
 

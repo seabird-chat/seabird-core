@@ -18,7 +18,7 @@ func TestIngestEventsRejectsBadHello(t *testing.T) {
 		{name: "nothing sent"},
 		{name: "other event first", hello: successEvent("")},
 		{name: "no backend info", hello: &pb.ChatEvent{Inner: &pb.ChatEvent_Hello{Hello: &pb.HelloChatEvent{}}}},
-		{name: "no id", hello: helloEvent(BackendID{Type: "irc"})},
+		{name: "no id", hello: helloEvent(backendKey{Type: "irc"})},
 	}
 
 	for _, tt := range tests {
@@ -58,9 +58,15 @@ func TestIngestEventsBackendLeaves(t *testing.T) {
 	env := startTestEnv(t)
 	env.backend.cancel()
 
-	env.waitForBackend(t, env.id, false)
-	_, err := env.plugin.GetBackendInfo(env.ctx, &pb.BackendInfoRequest{BackendId: env.id.String()})
-	assertStatus(t, err, codes.NotFound, "backend not found")
+	// A backend that leaves is still known, but can't be asked for anything.
+	env.waitForBackend(t, testBackendKey, false)
+	resp, err := env.plugin.GetBackendInfo(env.ctx, &pb.BackendInfoRequest{BackendId: env.backendID})
+	assert.NoError(t, err)
+	assertProtoEqual(t, &pb.Backend{Id: env.backendID, Type: "irc"}, resp.GetBackend())
+	assert.Equal(t, 0, len(resp.GetMetadata()))
+
+	_, err = env.plugin.SendMessage(env.ctx, &pb.SendMessageRequest{ChannelId: env.channelID, Text: "hi"})
+	assertStatus(t, err, codes.Unavailable, "backend not connected")
 }
 
 func TestIngestEventsDuplicateID(t *testing.T) {
@@ -68,11 +74,11 @@ func TestIngestEventsDuplicateID(t *testing.T) {
 
 	env := startTestEnv(t)
 
-	// A second backend can't take the same ID.
+	// A second backend can't take the same name.
 	second := dialBackend(t, env.conn)
-	second.send(helloEvent(env.id))
+	second.send(helloEvent(testBackendKey))
 	_, err := second.recv()
-	assertStatus(t, err, codes.AlreadyExists, "backend irc://libera is already connected")
+	assertStatus(t, err, codes.AlreadyExists, `backend irc "libera" is already connected`)
 
 	// And the first keeps getting the requests.
 	result := env.sendMessage(env.ctx, "still yours")
@@ -82,10 +88,12 @@ func TestIngestEventsDuplicateID(t *testing.T) {
 	env.backend.reply(request, successEvent(""))
 	assert.NoError(t, waitFor(t, result, "result"))
 
-	// Once the first disconnects, its ID can be used again.
+	// Once the first disconnects, its name can be used again, and it's the
+	// same backend.
 	env.backend.cancel()
-	env.waitForBackend(t, env.id, false)
-	env.connectBackend(t, env.id)
+	env.waitForBackend(t, testBackendKey, false)
+	_, id := env.connectBackend(t, testBackendKey)
+	assert.Equal(t, env.backendID, id)
 }
 
 func TestIngestEventsProtocolErrors(t *testing.T) {
@@ -94,7 +102,7 @@ func TestIngestEventsProtocolErrors(t *testing.T) {
 		event   *pb.ChatEvent
 		message string
 	}{
-		{name: "second hello", event: helloEvent(BackendID{Type: "irc", ID: "x"}), message: "unexpected chat event type"},
+		{name: "second hello", event: helloEvent(backendKey{Type: "irc", Name: "x"}), message: "unexpected chat event type"},
 		{name: "event without content", event: &pb.ChatEvent{}, message: "missing inner event"},
 		{
 			name:    "invalid blocks",
@@ -112,7 +120,7 @@ func TestIngestEventsProtocolErrors(t *testing.T) {
 
 			_, err := env.backend.recv()
 			assertStatus(t, err, codes.InvalidArgument, tt.message)
-			env.waitForBackend(t, env.id, false)
+			env.waitForBackend(t, testBackendKey, false)
 		})
 	}
 }

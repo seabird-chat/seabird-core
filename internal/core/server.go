@@ -21,7 +21,7 @@ var (
 const (
 	// DefaultRequestTimeout is how long a request to a backend waits for its
 	// reply unless Server.RequestTimeout says otherwise.
-	DefaultRequestTimeout = time.Second
+	DefaultRequestTimeout = 5 * time.Second
 
 	// DefaultHelloTimeout is how long a backend has to introduce itself unless
 	// Server.HelloTimeout says otherwise.
